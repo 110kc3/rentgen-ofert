@@ -1,0 +1,18 @@
+{
+ "updated": "2026-06-25T15:32:20+00:00",
+ "count": 4815,
+ "raw": 5841,
+ "by_source": {
+  "otodom": 1827,
+  "olx": 766,
+  "gratka": 1222,
+  "morizon": 1220,
+  "nieruchomosci-online": 806
+ },
+ "by_type": {
+  "house": 2076,
+  "flat": 2739
+ },
+ "relisted": 1739,
+ "errors": []
+}

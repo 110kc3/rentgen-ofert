@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rentgen ofert — Gliwice i okolice</title>
+  <meta name="description" content="Wszystkie oferty sprzedaży domów i mieszkań w Gliwicach (Otodom + OLX) w jednym miejscu.">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <h1>Rentgen ofert — Gliwice i okolice</h1>
+    <div class="sub">Domy i mieszkania na sprzedaż z Otodom i OLX — w jednym miejscu, bez duplikatów.</div>
+    <div class="stats" id="stats"></div>
+  </header>
+
+  <div class="controls">
+    <div class="group">
+      <div class="seg" data-key="type">
+        <button data-val="all" class="active">Wszystko</button>
+        <button data-val="house">Domy</button>
+        <button data-val="flat">Mieszkania</button>
+      </div>
+    </div>
+    <div class="group">
+      <div class="seg" data-key="source" id="source-seg"></div>
+    </div>
+    <div class="group">
+      <div class="seg" data-key="owner">
+        <button data-val="all" class="active">Każdy</button>
+        <button data-val="private">Prywatne</button>
+        <button data-val="agency">Biura</button>
+      </div>
+    </div>
+    <div class="group">
+      <div class="seg" data-key="history">
+        <button data-val="all" class="active">Wszystkie</button>
+        <button data-val="relisted">Wystawione ponownie</button>
+        <button data-val="dropped">Z obniżką</button>
+      </div>
+    </div>
+    <div class="group"><label>Odległość od Gliwic</label>
+      <select id="distance">
+        <option value="all">cała okolica</option>
+        <option value="5">≤ 5 km</option>
+        <option value="10">≤ 10 km</option>
+        <option value="15">≤ 15 km</option>
+        <option value="20">≤ 20 km</option>
+        <option value="30">≤ 30 km</option>
+        <option value="40">≤ 40 km</option>
+      </select>
+    </div>
+    <div class="group"><label>Cena</label>
+      <input class="num" id="min-price" type="number" placeholder="od" min="0" step="10000">
+      <input class="num" id="max-price" type="number" placeholder="do" min="0" step="10000">
+    </div>
+    <div class="group"><label>m²</label>
+      <input class="num" id="min-area" type="number" placeholder="od" min="0">
+      <input class="num" id="max-area" type="number" placeholder="do" min="0">
+    </div>
+    <div class="group"><label>Pokoje od</label>
+      <input class="num" id="min-rooms" type="number" placeholder="np. 2" min="0" style="width:70px">
+    </div>
+    <div class="group">
+      <input class="txt" id="q" type="search" placeholder="szukaj: dzielnica, tytuł…">
+    </div>
+    <div class="spacer"></div>
+    <div class="group"><label>Sortuj</label>
+      <select id="sort">
+        <option value="newest">Najnowsze</option>
+        <option value="price_asc">Cena ↑</option>
+        <option value="price_desc">Cena ↓</option>
+        <option value="ppm_asc">zł/m² ↑</option>
+        <option value="area_desc">Powierzchnia ↓</option>
+      </select>
+    </div>
+    <div class="group" id="count" style="color:var(--muted);font-size:13px"></div>
+  </div>
+
+  <main>
+    <div class="grid" id="grid"></div>
+  </main>
+
+  <footer>
+    rentgen-ofert · dane pobierane z publicznych ogłoszeń Otodom i OLX · odświeżane automatycznie przez GitHub Actions
+  </footer>
+
+  <script src="app.js?v=8"></script>
+</body>
+</html>
