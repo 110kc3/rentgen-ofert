@@ -110,18 +110,44 @@ def listing_hashes(listing, session) -> list:
     return out
 
 
-def attach_hashes(listings, max_workers: int = 8, session=None, log=print):
-    """Fetch galleries and set listing['phashes'] for each given listing."""
+def attach_hashes(listings, max_workers: int = 8, session=None, log=print,
+                  cache=None, today=None):
+    """Fetch galleries and set listing['phashes'] for each given listing.
+
+    If a ``cache`` dict (see ``scraper.cache``) is given, listings whose URL is
+    already cached reuse the stored hashes and skip the detail-page + image
+    fetches - the slowest, most rate-limited part of a run. Only successful,
+    non-empty results are written back, so a transient fetch failure is retried
+    next run instead of being cached as "no photos".
+    """
     from . import net
+    from . import cache as cachemod
     session = session or net.session()
 
     def work(l):
-        l["phashes"] = listing_hashes(l, session)
-        return l
+        url = l.get("url")
+        if cache is not None and url:
+            cached = cachemod.get(cache, url)
+            if cached:
+                return (l, cached, True)
+        return (l, listing_hashes(l, session), False)
 
-    done = 0
+    results = []
     with ThreadPoolExecutor(max_workers=max_workers) as ex:
-        for _ in ex.map(work, listings):
-            done += 1
-    log(f"  photo-hashed {done} ambiguous listings "
-        f"({sum(1 for l in listings if l.get('phashes'))} with photos)")
+        for l, hashes, was_cached in ex.map(work, listings):
+            l["phashes"] = hashes
+            results.append((l, hashes, was_cached))
+
+    hits = sum(1 for _, _, c in results if c)
+    if cache is not None and today:
+        for l, hashes, was_cached in results:
+            url = l.get("url")
+            if not url:
+                continue
+            if was_cached:
+                cachemod.touch(cache, url, today)
+            else:
+                cachemod.put(cache, url, hashes, today)  # no-ops on empty
+    log(f"  photo-hashed {len(results)} ambiguous listings "
+        f"({sum(1 for l in listings if l.get('phashes'))} with photos; "
+        f"{hits} reused from cache)")

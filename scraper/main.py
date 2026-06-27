@@ -19,10 +19,12 @@ import os
 import pathlib
 import sys
 
+from . import cache as phcache
 from . import gratka, history, morizon, net, nieruchomosci_online, olx, otodom, photomatch
 from .normalize import dedupe, link_same_size
 
 DATA_DIR = pathlib.Path(__file__).resolve().parents[1] / "site" / "data"
+CACHE_PATH = pathlib.Path(__file__).resolve().parents[1] / "cache" / "phash_cache.json"
 
 SOURCES = (
     ("otodom", otodom),
@@ -38,6 +40,7 @@ def run() -> int:
     delay = float(os.environ.get("RENTGEN_DELAY", "0.7"))
     types = tuple(t.strip() for t in os.environ.get("RENTGEN_TYPES", "house,flat").split(",") if t.strip())
 
+    today = dt.date.today().isoformat()
     raw = []
     errors = []
     http = net.session()
@@ -54,15 +57,21 @@ def run() -> int:
         return 1
 
     # Fingerprint every listing by its gallery photos. Powers both photo-based
-    # de-duplication and the relist/price history below.
+    # de-duplication and the relist/price history below. A committed cache
+    # (cache/phash_cache.json) lets repeat runs reuse hashes by listing URL and
+    # skip the slow detail-page + image fetches.
     if os.environ.get("RENTGEN_PHOTOS", "1") != "0":
         print(f"Photo-hashing {len(raw)} listings (dedupe + history) ...")
-        photomatch.attach_hashes(raw, session=http)
+        pc = phcache.load(CACHE_PATH)
+        photomatch.attach_hashes(raw, session=http, cache=pc, today=today)
+        pruned = phcache.prune(pc, today)
+        phcache.save(CACHE_PATH, pc)
+        print(f"  phash cache: {len(pc.get('entries', {}))} urls "
+              f"({pruned} pruned as stale)")
 
     listings = dedupe(raw)
 
     # Relist + price history: match today's properties to what we've seen before.
-    today = dt.date.today().isoformat()
     hist_path = DATA_DIR / "history.json"
     records = history.load(hist_path)
     history.update(listings, records, today)

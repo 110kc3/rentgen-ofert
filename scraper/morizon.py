@@ -5,6 +5,7 @@ media group), so the parsing mirrors the gratka scraper.
 """
 from __future__ import annotations
 
+import os
 import re
 import time
 
@@ -14,11 +15,11 @@ from bs4 import BeautifulSoup
 from .normalize import to_float, to_int
 
 BASE = "https://www.morizon.pl"
+# Whole-voivodeship search by default; override with RENTGEN_REGION.
+REGION = os.environ.get("RENTGEN_REGION", "slaskie")
 SEARCH = {
-    "house": ["https://www.morizon.pl/domy/gliwice/",
-              "https://www.morizon.pl/domy/powiat-gliwicki/"],
-    "flat": ["https://www.morizon.pl/mieszkania/gliwice/",
-             "https://www.morizon.pl/mieszkania/powiat-gliwicki/"],
+    "house": [f"https://www.morizon.pl/domy/{REGION}/"],
+    "flat": [f"https://www.morizon.pl/mieszkania/{REGION}/"],
 }
 HEADERS = {
     "User-Agent": (
@@ -41,17 +42,25 @@ def _first_price(text):
 
 
 def _locality(location):
+    """City = the broadest (last) breadcrumb part of 'street, district, city',
+    e.g. 'Tarnogórska, Szobiszowice, Gliwice' -> 'Gliwice' (taking the first
+    segment stored street names like 'Tarnogórska' as fake towns)."""
     if not location:
         return None
-    city = location.split(",")[0].strip()
+    parts = [p.strip() for p in location.replace("śląskie", "").split(",") if p.strip()]
+    if not parts:
+        return None
+    city = parts[-1]
     return "Gliwice" if city.startswith("Gliwice") else (city or None)
 
 
 def _district(location):
+    """The narrower part(s) before the city, e.g. 'Tarnogórska, Szobiszowice'."""
     if not location:
         return None
-    toks = location.replace("śląskie", "").strip(" ,")
-    return None if toks in ("", "Gliwice") else toks
+    parts = [p.strip() for p in location.replace("śląskie", "").split(",") if p.strip()]
+    inner = parts[:-1]
+    return ", ".join(inner) if inner else None
 
 
 def _date(text):

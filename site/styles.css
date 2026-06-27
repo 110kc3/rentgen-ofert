@@ -109,4 +109,46 @@ main { max-width: 1280px; margin: 14px auto 60px; padding: 0 18px; }
 .hist .trail { color: var(--text); }
 .hist .since { opacity: .75; }
 .empty { text-align: center; color: var(--muted); padding: 60px 0; }
+/* town multi-select */
+.ms { position: relative; }
+.ms-btn {
+  background: var(--card); color: var(--text); border: 1px solid var(--line);
+  border-radius: 8px; padding: 6px 26px 6px 10px; font-size: 13px; cursor: pointer;
+  max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ms-btn::after { content: "▾"; position: absolute; right: 9px; color: var(--muted); }
+.ms-btn.has-sel { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.ms-pop {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 20; width: 280px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: var(--shadow); padding: 8px; display: flex; flex-direction: column; gap: 6px;
+}
+.ms-pop input[type="search"] {
+  width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--line);
+  border-radius: 7px; padding: 6px 8px; font-size: 13px;
+}
+.ms-list { max-height: 260px; overflow: auto; display: flex; flex-direction: column; }
+.ms-item {
+  display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 6px;
+  font-size: 13px; cursor: pointer;
+}
+.ms-item:hover { background: var(--chip); }
+.ms-item span { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ms-item b { color: var(--muted); font-weight: 500; font-size: 11px; }
+.ms-empty { color: var(--muted); font-size: 13px; padding: 8px 6px; }
+.ms-foot { display: flex; justify-content: flex-end; border-top: 1px solid var(--line); padding-top: 6px; }
+.ms-foot button { background: transparent; border: 0; color: var(--accent); font-size: 12px; cursor: pointer; }
+
+/* active-filter chips */
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px; background: var(--chip);
+  color: var(--text); border: 1px solid var(--line); border-radius: 999px;
+  padding: 4px 10px; font-size: 12.5px; cursor: pointer;
+}
+.chip:hover { border-color: var(--accent); }
+.chip .x { color: var(--muted); font-size: 11px; }
+.chip.reset { background: transparent; color: var(--muted); font-weight: 600; }
+.chip.reset:hover { color: var(--accent); }
+
 footer { text-align: center; color: var(--muted); font-size: 12px; padding: 20px; }

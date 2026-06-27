@@ -3,6 +3,9 @@
 const PLN = new Intl.NumberFormat("pl-PL");
 const SRC_LABEL = { otodom: "Otodom", olx: "OLX", gratka: "Gratka", morizon: "Morizon", "nieruchomosci-online": "n-online" };
 const label = (s) => SRC_LABEL[s] || s;
+const TYPE_LABEL = { house: "Domy", flat: "Mieszkania" };
+const OWNER_LABEL = { private: "Prywatne", agency: "Biura" };
+const HIST_LABEL = { relisted: "Wystawione ponownie", dropped: "Z obniżką" };
 
 // Gliwice neighbourhoods that sometimes arrive as a "locality" -> fold into Gliwice
 const GLIWICE_DISTRICTS = new Set([
@@ -13,7 +16,9 @@ const GLIWICE_DISTRICTS = new Set([
 ]);
 const normLoc = (loc) => (!loc ? null : GLIWICE_DISTRICTS.has(loc) ? "Gliwice" : loc);
 
-// town -> [lat, lon]; distance from Gliwice powers the radius filter
+// town -> [lat, lon]; distance from Gliwice powers the (optional) radius filter.
+// Voivodeship-wide this can't cover every village, so the town filter is the
+// primary geographic control and distance is just a convenience for known towns.
 const GLIWICE = [50.2945, 18.6714];
 const TOWN_COORDS = {
   "Gliwice": [50.2945, 18.6714], "Knurów": [50.2197, 18.6741], "Pyskowice": [50.3958, 18.6286],
@@ -36,7 +41,6 @@ const TOWN_COORDS = {
   "Gaszowice": [50.0728, 18.4544], "Jejkowice": [50.1131, 18.4831], "Lyski": [50.1064, 18.4047],
   "Świerklany": [50.0089, 18.6394], "Marklowice": [50.0292, 18.4956], "Kuźnia Raciborska": [50.2017, 18.3186],
   "Nędza": [50.1900, 18.3320],
-  // wider ring (mostly 20-45 km) so radii are complete and far cities sort out correctly
   "Nakło Śląskie": [50.4486, 18.9050], "Orzech": [50.3833, 18.9333], "Nowe Chechło": [50.4242, 18.8200],
   "Rogoźnik": [50.3922, 19.0100], "Sarnów": [50.3556, 19.1700],
   "Turza Śląska": [50.0181, 18.4500], "Kobiór": [50.0600, 18.9400], "Suszec": [50.0000, 18.7400],
@@ -46,6 +50,10 @@ const TOWN_COORDS = {
   "Myszków": [50.5750, 19.3225], "Goczałkowice-Zdrój": [49.9447, 18.9500], "Skoczów": [49.8000, 18.7900],
   "Bielsko-Biała": [49.8224, 19.0469], "Cieszyn": [49.7497, 18.6300], "Żywiec": [49.6875, 19.1922],
   "Ustroń": [49.7236, 18.8100], "Wisła": [49.6561, 18.8600], "Brenna": [49.7270, 18.9050],
+  // added so the radius filter covers more of the voivodeship's larger towns
+  "Częstochowa": [50.8118, 19.1203], "Zawiercie": [50.4875, 19.4318], "Jaworzno": [50.2050, 19.2742],
+  "Kłobuck": [50.9097, 18.9319], "Łazy": [50.4272, 19.3958], "Poręba": [50.4644, 19.3856],
+  "Blachownia": [50.7758, 19.0289], "Koniecpol": [50.7833, 19.6833], "Lubomia": [50.0386, 18.3300],
 };
 function haversine(a, b) {
   const R = 6371, p = Math.PI / 180;
@@ -59,8 +67,15 @@ function distOf(locality) {
   return c ? haversine(GLIWICE, c) : null;
 }
 
-const state = { all: [], type: "all", source: "all", owner: "all", history: "all", distance: "all", sort: "newest" };
+const state = { all: [], type: "all", source: "all", owner: "all", history: "all", distance: "all", sort: "newest", localities: [] };
+let locOptions = [];                         // [ [name, count], ... ] sorted by count
+const FILTER_KEY = "rentgen.filters.v2";
+
 const $ = (sel) => document.querySelector(sel);
+const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const cssEsc = (s) => (window.CSS && CSS.escape) ? CSS.escape(s) : String(s).replace(/[^a-zA-Z0-9_-]/g, "\\$&");
+const apply = () => { persist(); render(); };
 
 async function boot() {
   try {
@@ -76,7 +91,11 @@ async function boot() {
     return;
   }
   buildSourceFilter();
+  buildLocalityOptions();
   wireControls();
+  wireLocality();
+  wireChips();
+  restoreFilters();
   render();
 }
 
@@ -99,6 +118,71 @@ function buildSourceFilter() {
     present.map((s) => `<button data-val="${s}">${label(s)}</button>`).join("");
 }
 
+// ---- locality (town) multi-select -----------------------------------------
+
+function buildLocalityOptions() {
+  const counts = new Map();
+  for (const l of state.all) {
+    const n = normLoc(l.locality);
+    if (n) counts.set(n, (counts.get(n) || 0) + 1);
+  }
+  locOptions = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "pl"));
+  renderLocalityList("");
+}
+
+function renderLocalityList(term) {
+  const t = (term || "").trim().toLowerCase();
+  const sel = new Set(state.localities);
+  const items = locOptions.filter(([n]) => !t || n.toLowerCase().includes(t)).slice(0, 500);
+  $("#loc-list").innerHTML = items.length
+    ? items.map(([n, c]) =>
+        `<label class="ms-item"><input type="checkbox" value="${escapeHtml(n)}" ${sel.has(n) ? "checked" : ""}>` +
+        `<span>${escapeHtml(n)}</span><b>${PLN.format(c)}</b></label>`).join("")
+    : `<div class="ms-empty">brak miejscowości</div>`;
+}
+
+function syncLocalityLabel() {
+  const n = state.localities.length;
+  const btn = $("#loc-btn");
+  if (!btn) return;
+  btn.textContent = n === 0 ? "Wszystkie" : n === 1 ? state.localities[0] : `${n} miejscowości`;
+  btn.classList.toggle("has-sel", n > 0);
+}
+
+function removeLocality(loc) {
+  state.localities = state.localities.filter((x) => x !== loc);
+  renderLocalityList(($("#loc-search") || {}).value || "");
+}
+
+function wireLocality() {
+  const pop = $("#loc-pop"), btn = $("#loc-btn");
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    pop.hidden = !pop.hidden;
+    if (!pop.hidden) { const s = $("#loc-search"); if (s) s.focus(); }
+  });
+  pop.addEventListener("click", (e) => e.stopPropagation());
+  $("#loc-search").addEventListener("input", (e) => renderLocalityList(e.target.value));
+  $("#loc-list").addEventListener("change", (e) => {
+    const cb = e.target.closest('input[type="checkbox"]');
+    if (!cb) return;
+    const set = new Set(state.localities);
+    cb.checked ? set.add(cb.value) : set.delete(cb.value);
+    state.localities = [...set];
+    apply();
+  });
+  $("#loc-clear").addEventListener("click", () => {
+    state.localities = [];
+    renderLocalityList($("#loc-search").value);
+    apply();
+  });
+  document.addEventListener("click", (e) => {
+    if (!$("#loc-ms").contains(e.target)) pop.hidden = true;
+  });
+}
+
+// ---- standard controls -----------------------------------------------------
+
 function wireControls() {
   document.querySelectorAll(".seg").forEach((seg) => {
     seg.addEventListener("click", (ev) => {
@@ -107,16 +191,132 @@ function wireControls() {
       seg.querySelectorAll("button").forEach((b) => b.classList.remove("active"));
       btn.classList.add("active");
       state[seg.dataset.key] = btn.dataset.val;
-      render();
+      apply();
     });
   });
   ["min-price", "max-price", "min-area", "max-area", "min-rooms", "q"].forEach((id) => {
     const el = $("#" + id);
-    if (el) el.addEventListener("input", render);
+    if (el) el.addEventListener("input", apply);
   });
-  const sort = $("#sort"); if (sort) sort.addEventListener("change", (e) => { state.sort = e.target.value; render(); });
-  const dist = $("#distance"); if (dist) dist.addEventListener("change", (e) => { state.distance = e.target.value; render(); });
+  const sort = $("#sort"); if (sort) sort.addEventListener("change", (e) => { state.sort = e.target.value; apply(); });
+  const dist = $("#distance"); if (dist) dist.addEventListener("change", (e) => { state.distance = e.target.value; apply(); });
 }
+
+// ---- persistence (localStorage + shareable URL) ----------------------------
+
+function snapshot() {
+  return {
+    type: state.type, source: state.source, owner: state.owner, history: state.history,
+    distance: state.distance, sort: state.sort, localities: state.localities,
+    minPrice: $("#min-price").value, maxPrice: $("#max-price").value,
+    minArea: $("#min-area").value, maxArea: $("#max-area").value,
+    minRooms: $("#min-rooms").value, q: $("#q").value,
+  };
+}
+
+function isDefault(s) {
+  return s.type === "all" && s.source === "all" && s.owner === "all" && s.history === "all" &&
+    s.distance === "all" && s.sort === "newest" && (!s.localities || !s.localities.length) &&
+    !s.minPrice && !s.maxPrice && !s.minArea && !s.maxArea && !s.minRooms && !s.q;
+}
+
+function persist() {
+  const snap = snapshot();
+  try { localStorage.setItem(FILTER_KEY, JSON.stringify(snap)); } catch (e) {}
+  try {
+    const url = isDefault(snap)
+      ? location.pathname
+      : location.pathname + "?f=" + encodeURIComponent(JSON.stringify(snap));
+    history.replaceState(null, "", url);
+  } catch (e) {}
+}
+
+function restoreFilters() {
+  let snap = null;
+  try { const p = new URLSearchParams(location.search).get("f"); if (p) snap = JSON.parse(p); } catch (e) {}
+  if (!snap) { try { snap = JSON.parse(localStorage.getItem(FILTER_KEY) || "null"); } catch (e) {} }
+  if (snap) applySnapshot(snap);
+}
+
+function setVal(id, v) { const el = $("#" + id); if (el && v != null) el.value = v; }
+
+function setSeg(key, val) {
+  if (val == null) return;
+  const seg = document.querySelector(`.seg[data-key="${key}"]`);
+  if (!seg) return;
+  const v = seg.querySelector(`button[data-val="${cssEsc(val)}"]`) ? val : "all";
+  state[key] = v;
+  seg.querySelectorAll("button").forEach((b) => b.classList.toggle("active", b.dataset.val === v));
+}
+
+function applySnapshot(s) {
+  ["type", "source", "owner", "history"].forEach((k) => setSeg(k, s[k]));
+  if (s.distance != null) { state.distance = s.distance; const d = $("#distance"); if (d) d.value = s.distance; }
+  if (s.sort != null) { state.sort = s.sort; const so = $("#sort"); if (so) so.value = s.sort; }
+  state.localities = Array.isArray(s.localities) ? s.localities.slice() : [];
+  setVal("min-price", s.minPrice); setVal("max-price", s.maxPrice);
+  setVal("min-area", s.minArea); setVal("max-area", s.maxArea);
+  setVal("min-rooms", s.minRooms); setVal("q", s.q);
+  renderLocalityList("");
+}
+
+function resetAll() {
+  ["type", "source", "owner", "history"].forEach((k) => setSeg(k, "all"));
+  state.distance = "all"; const d = $("#distance"); if (d) d.value = "all";
+  state.sort = "newest"; const so = $("#sort"); if (so) so.value = "newest";
+  state.localities = [];
+  ["min-price", "max-price", "min-area", "max-area", "min-rooms", "q"].forEach((id) => {
+    const el = $("#" + id); if (el) el.value = "";
+  });
+  renderLocalityList(($("#loc-search") || {}).value || "");
+  apply();
+}
+
+// ---- active-filter chips ---------------------------------------------------
+
+function activeFilters() {
+  const out = [];
+  if (state.type !== "all") out.push({ k: "seg:type", label: "Typ: " + (TYPE_LABEL[state.type] || state.type) });
+  if (state.source !== "all") out.push({ k: "seg:source", label: "Źródło: " + label(state.source) });
+  if (state.owner !== "all") out.push({ k: "seg:owner", label: OWNER_LABEL[state.owner] || state.owner });
+  if (state.history !== "all") out.push({ k: "seg:history", label: HIST_LABEL[state.history] || state.history });
+  if (state.distance !== "all") out.push({ k: "distance", label: "≤ " + state.distance + " km od Gliwic" });
+  state.localities.forEach((loc) => out.push({ k: "loc:" + loc, label: loc }));
+  const nf = (id, lab) => { const v = ($("#" + id).value || "").trim(); if (v) out.push({ k: "num:" + id, label: lab + " " + v }); };
+  nf("min-price", "Cena od"); nf("max-price", "Cena do");
+  nf("min-area", "m² od"); nf("max-area", "m² do"); nf("min-rooms", "Pokoje od");
+  const q = ($("#q").value || "").trim();
+  if (q) out.push({ k: "q", label: "„" + q + "”" });
+  return out;
+}
+
+function renderChips() {
+  const af = activeFilters();
+  const el = $("#chips");
+  if (!el) return;
+  if (!af.length) { el.innerHTML = ""; el.hidden = true; return; }
+  el.hidden = false;
+  el.innerHTML =
+    af.map((c) => `<button class="chip" data-k="${escapeHtml(c.k)}">${escapeHtml(c.label)} <span class="x">✕</span></button>`).join("") +
+    `<button class="chip reset" data-k="__all__">Wyczyść wszystko</button>`;
+}
+
+function wireChips() {
+  $("#chips").addEventListener("click", (e) => {
+    const b = e.target.closest("button.chip");
+    if (!b) return;
+    const k = b.dataset.k;
+    if (k === "__all__") { resetAll(); return; }
+    if (k.startsWith("seg:")) setSeg(k.slice(4), "all");
+    else if (k === "distance") { state.distance = "all"; const d = $("#distance"); if (d) d.value = "all"; }
+    else if (k.startsWith("loc:")) removeLocality(k.slice(4));
+    else if (k.startsWith("num:")) { const el = $("#" + k.slice(4)); if (el) el.value = ""; }
+    else if (k === "q") { const el = $("#q"); if (el) el.value = ""; }
+    apply();
+  });
+}
+
+// ---- filtering + rendering -------------------------------------------------
 
 function currentFilters() {
   const num = (id) => { const v = parseFloat($("#" + id).value); return Number.isFinite(v) ? v : null; };
@@ -124,6 +324,7 @@ function currentFilters() {
     minPrice: num("min-price"), maxPrice: num("max-price"),
     minArea: num("min-area"), maxArea: num("max-area"),
     minRooms: num("min-rooms"), q: $("#q").value.trim().toLowerCase(),
+    locs: state.localities.length ? new Set(state.localities) : null,
   };
 }
 
@@ -136,6 +337,10 @@ function passes(l, f) {
   if (state.history === "dropped") {
     const ph = (l.price_history || []).map((x) => x.price).filter((x) => x != null);
     if (!(ph.length > 1 && ph[ph.length - 1] < Math.max(...ph))) return false;
+  }
+  if (f.locs) {
+    const n = normLoc(l.locality);
+    if (!n || !f.locs.has(n)) return false;
   }
   if (state.distance !== "all") {
     const d = distOf(l.locality);
@@ -168,6 +373,8 @@ function render() {
   $("#grid").innerHTML = rows.length
     ? rows.map(card).join("")
     : `<div class="empty">Brak ofert dla wybranych filtrów.</div>`;
+  syncLocalityLabel();
+  renderChips();
 }
 
 function priceLabel(l) {

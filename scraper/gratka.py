@@ -6,6 +6,7 @@ BeautifulSoup. Gliwice city and the surrounding powiat are separate search URLs.
 """
 from __future__ import annotations
 
+import os
 import re
 import time
 
@@ -15,15 +16,11 @@ from bs4 import BeautifulSoup
 from .normalize import to_float, to_int
 
 BASE = "https://gratka.pl"
+# Whole-voivodeship search by default; override with RENTGEN_REGION.
+REGION = os.environ.get("RENTGEN_REGION", "slaskie")
 SEARCH = {
-    "house": [
-        "https://gratka.pl/nieruchomosci/domy/gliwice",
-        "https://gratka.pl/nieruchomosci/domy/slaskie/powiat-gliwicki",
-    ],
-    "flat": [
-        "https://gratka.pl/nieruchomosci/mieszkania/gliwice",
-        "https://gratka.pl/nieruchomosci/mieszkania/slaskie/powiat-gliwicki",
-    ],
+    "house": [f"https://gratka.pl/nieruchomosci/domy/{REGION}"],
+    "flat": [f"https://gratka.pl/nieruchomosci/mieszkania/{REGION}"],
 }
 HEADERS = {
     "User-Agent": (
@@ -46,18 +43,26 @@ def _first_price(text):
 
 
 def _locality(location):
-    """The town/city, e.g. 'Pyskowice'; Gliwice districts collapse to 'Gliwice'."""
+    """The city = the broadest (last) part of 'street, district, city', e.g.
+    'Szafirowa, Stare Gliwice, Gliwice' -> 'Gliwice'. Gratka/Morizon order the
+    breadcrumb specific->general, so the city is the last segment, not the first
+    (taking the first stored street names like 'Szafirowa' as fake towns)."""
     if not location:
         return None
-    city = location.split(",")[0].strip()
+    parts = [p.strip() for p in location.replace("śląskie", "").split(",") if p.strip()]
+    if not parts:
+        return None
+    city = parts[-1]
     return "Gliwice" if city.startswith("Gliwice") else (city or None)
 
 
 def _district(location):
+    """The narrower part(s) before the city, e.g. 'Szafirowa, Stare Gliwice'."""
     if not location:
         return None
-    toks = location.replace("śląskie", "").strip(" ,")
-    return None if toks in ("", "Gliwice") else toks
+    parts = [p.strip() for p in location.replace("śląskie", "").split(",") if p.strip()]
+    inner = parts[:-1]
+    return ", ".join(inner) if inner else None
 
 
 def _date(text):

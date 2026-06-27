@@ -1,6 +1,6 @@
 # rentgen-ofert
 
-All **Gliwice** house & flat *sale* listings from five portals — **Otodom**,
+All **Śląskie voivodeship** house & flat *sale* listings from five portals — **Otodom**,
 **OLX**, **gratka**, **Morizon** and **nieruchomości-online** — de-duplicated into one
 searchable page. No server: a GitHub Actions cron job scrapes the portals,
 writes a JSON file, and a static dashboard on GitHub Pages displays it.
@@ -11,10 +11,12 @@ GitHub Actions (cron) → python -m scraper.main → site/data/listings.json →
 
 ## What it does
 
-- Pulls **domy** and **mieszkania** *na sprzedaż* in **Gliwice and the surrounding
-  ~40 km** (Pyskowice, Zbrosławice, Knurów, Gierałtowice, …) from all five portals —
-  via a radius search on Otodom/OLX and powiat + nearby-town pages on the others.
-  Every listing keeps its **town (locality)**, and the dashboard has a town filter.
+- Pulls **domy** and **mieszkania** *na sprzedaż* across the **whole Śląskie
+  voivodeship** (Katowice, Gliwice, Częstochowa, Bielsko-Biała, Rybnik, …) from all
+  five portals — a region-level search on Otodom/OLX/gratka/Morizon and per-city
+  sub-domains on nieruchomości-online. Set `RENTGEN_REGION` to scrape a different
+  voivodeship. Every listing keeps its **town (locality)**, and the dashboard has a
+  searchable **town multi-select** filter.
 - Skips archived / sold listings (e.g. nieruchomości-online *Ogłoszenie archiwalne*).
 - **Relist & price history.** Each run fingerprints every property by its photos and
   records price/date in `site/data/history.json`. When an agent re-posts the same flat
@@ -29,9 +31,12 @@ GitHub Actions (cron) → python -m scraper.main → site/data/listings.json →
   date and **highlights the cheapest**. (Photo checks fetch each ambiguous
   listing's page, so the scrape does extra requests; set `RENTGEN_PHOTOS=0` to
   skip them and fall back to a size+price heuristic.)
-- Dashboard: filter by type / source / private vs agency / price / area / rooms,
-  full-text search, sort by newest, price, zł/m² or area. Every link opens the
-  original ad. No seller contact data is stored.
+- Dashboard: filter by **town** (searchable multi-select), type / source / private
+  vs agency / price / area / rooms, optional distance-from-Gliwice, full-text search,
+  and sort by newest, price, zł/m² or area. Active filters show as removable chips
+  with one-click reset, and your selection is remembered (saved locally and encoded
+  in the URL, so a filtered view is shareable). Every link opens the original ad. No
+  seller contact data is stored.
 
 ## How to run
 
@@ -42,6 +47,11 @@ GitHub Actions (cron) → python -m scraper.main → site/data/listings.json →
 3. **Settings → Actions → General → Workflow permissions: Read and write.**
 4. **Actions tab → "Update listings" → Run workflow** to do the first full scrape.
    It then re-runs automatically twice a day (06:00 & 18:00 UTC).
+
+The **first** voivodeship-wide run is heavy (it fetches photo galleries for every
+look-alike listing to de-duplicate them). After that a committed photo-hash cache
+(`cache/phash_cache.json`) makes repeat runs much faster — each listing's photos are
+hashed once and then reused by URL — and pip downloads are cached in CI too.
 
 Dashboard URL: `https://<your-username>.github.io/rentgen-ofert/`.
 
@@ -67,6 +77,7 @@ RENTGEN_MAX_PAGES=3 RENTGEN_DELAY=0.3 python -m scraper.main
 
 | Env var | Default | Meaning |
 |---|---|---|
+| `RENTGEN_REGION` | slaskie | voivodeship slug to scrape (e.g. `malopolskie`) |
 | `RENTGEN_MAX_PAGES` | 50 | max result pages per portal per type |
 | `RENTGEN_DELAY` | 0.7 | seconds between requests (be polite) |
 | `RENTGEN_PHOTOS` | 1 | photo-match ambiguous listings; `0` skips the detail fetches |
@@ -100,7 +111,10 @@ scraper/
   net.py         shared HTTP session with 429 back-off; history.py  relist/price history
   normalize.py   shared schema, value helpers, cross-portal dedupe
   photomatch.py  perceptual hashing of galleries to confirm same-property merges
+  cache.py       photo-hash cache (URL -> hashes) so repeat runs skip the fetches
   main.py        runs every source, photo-checks look-alikes, writes site/data/*.json
+cache/
+  phash_cache.json   committed gallery-hash cache, reused run-to-run (auto-pruned)
 site/
   index.html  app.js  styles.css      static dashboard (GitHub Pages)
   data/        listings.json, meta.json  (generated)

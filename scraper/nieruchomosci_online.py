@@ -7,6 +7,7 @@ result pages embed a schema.org ``CollectionPage`` JSON-LD block. Archived
 from __future__ import annotations
 
 import json
+import os
 import re
 import time
 
@@ -14,12 +15,24 @@ import requests
 
 from .normalize import to_float, to_int
 
-# Gliwice + powiat gliwicki / nearby towns within ~40 km (sub-domain slugs).
-TOWNS = [
-    "gliwice", "knurow", "pyskowice", "zbroslawice", "gieraltowice",
-    "pilchowice", "sosnicowice", "toszek", "rudziniec", "wielowies",
-    "rzeczyce", "ornontowice",
+# nieruchomosci-online uses one sub-domain per town; a missing sub-domain is
+# skipped gracefully (see scrape()), so this list is deliberately generous.
+# Śląskie: the cities with powiat rights plus major towns. The long tail of
+# villages is still covered by the other portals' region-wide searches.
+REGION = os.environ.get("RENTGEN_REGION", "slaskie")
+SLASKIE_TOWNS = [
+    "katowice", "gliwice", "zabrze", "bytom", "sosnowiec", "czestochowa",
+    "tychy", "rybnik", "dabrowa-gornicza", "bielsko-biala", "ruda-slaska",
+    "jastrzebie-zdroj", "jaworzno", "chorzow", "myslowice",
+    "siemianowice-slaskie", "tarnowskie-gory", "bedzin", "piekary-slaskie",
+    "raciborz", "swietochlowice", "zory", "wodzislaw-slaski", "mikolow",
+    "knurow", "czeladz", "lubliniec", "pszczyna", "czechowice-dziedzice",
+    "zawiercie", "cieszyn", "myszkow", "klobuck", "bierun", "laziska-gorne",
+    "rydultowy", "orzesze", "pyskowice", "ornontowice", "zbroslawice",
+    "pilchowice", "gieraltowice", "sosnicowice", "toszek", "rudziniec",
+    "wielowies", "rzeczyce",
 ]
+TOWNS = SLASKIE_TOWNS if REGION == "slaskie" else [REGION]
 PATHS = {"house": "domy", "flat": "mieszkania"}
 HEADERS = {
     "User-Agent": (

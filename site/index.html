@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Rentgen ofert — Gliwice i okolice</title>
-  <meta name="description" content="Wszystkie oferty sprzedaży domów i mieszkań w Gliwicach (Otodom + OLX) w jednym miejscu.">
+  <title>Rentgen ofert — woj. śląskie</title>
+  <meta name="description" content="Wszystkie oferty sprzedaży domów i mieszkań w województwie śląskim (Otodom, OLX, Gratka, Morizon, n-online) w jednym miejscu.">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <header>
-    <h1>Rentgen ofert — Gliwice i okolice</h1>
-    <div class="sub">Domy i mieszkania na sprzedaż z Otodom i OLX — w jednym miejscu, bez duplikatów.</div>
+    <h1>Rentgen ofert — woj. śląskie</h1>
+    <div class="sub">Domy i mieszkania na sprzedaż z pięciu portali — całe województwo śląskie w jednym miejscu, bez duplikatów.</div>
     <div class="stats" id="stats"></div>
   </header>
 
@@ -24,6 +24,16 @@
     </div>
     <div class="group">
       <div class="seg" data-key="source" id="source-seg"></div>
+    </div>
+    <div class="group"><label>Miejscowość</label>
+      <div class="ms" id="loc-ms">
+        <button type="button" class="ms-btn" id="loc-btn">Wszystkie</button>
+        <div class="ms-pop" id="loc-pop" hidden>
+          <input type="search" id="loc-search" placeholder="szukaj miejscowości…" autocomplete="off">
+          <div class="ms-list" id="loc-list"></div>
+          <div class="ms-foot"><button type="button" id="loc-clear">wyczyść wybór</button></div>
+        </div>
+      </div>
     </div>
     <div class="group">
       <div class="seg" data-key="owner">
@@ -39,9 +49,9 @@
         <button data-val="dropped">Z obniżką</button>
       </div>
     </div>
-    <div class="group"><label>Odległość od Gliwic</label>
+    <div class="group"><label>Odległość od Gliwic (orientacyjnie)</label>
       <select id="distance">
-        <option value="all">cała okolica</option>
+        <option value="all">całe województwo</option>
         <option value="5">≤ 5 km</option>
         <option value="10">≤ 10 km</option>
         <option value="15">≤ 15 km</option>
@@ -78,13 +88,14 @@
   </div>
 
   <main>
+    <div class="chips" id="chips" hidden></div>
     <div class="grid" id="grid"></div>
   </main>
 
   <footer>
-    rentgen-ofert · dane pobierane z publicznych ogłoszeń Otodom i OLX · odświeżane automatycznie przez GitHub Actions
+    rentgen-ofert · dane z publicznych ogłoszeń Otodom, OLX, Gratka, Morizon i n-online · całe woj. śląskie · odświeżane automatycznie przez GitHub Actions
   </footer>
 
-  <script src="app.js?v=8"></script>
+  <script src="app.js?v=9"></script>
 </body>
 </html>

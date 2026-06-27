@@ -7,6 +7,7 @@ browser is needed - a plain GET + JSON parse is enough.
 from __future__ import annotations
 
 import json
+import os
 import re
 import time
 
@@ -15,10 +16,12 @@ import requests
 from .normalize import otodom_rooms, to_int
 
 BASE = "https://www.otodom.pl"
-RADIUS_KM = 50  # search radius around Gliwice (nearest Otodom value covering ~40 km)
+# Whole-voivodeship search by default. Override with RENTGEN_REGION (an Otodom
+# region slug such as "slaskie" or "malopolskie").
+REGION = os.environ.get("RENTGEN_REGION", "slaskie")
 SEARCH = {
-    "house": "/pl/wyniki/sprzedaz/dom/slaskie/gliwice/gliwice/gliwice",
-    "flat": "/pl/wyniki/sprzedaz/mieszkanie/slaskie/gliwice/gliwice/gliwice",
+    "house": f"/pl/wyniki/sprzedaz/dom/{REGION}",
+    "flat": f"/pl/wyniki/sprzedaz/mieszkanie/{REGION}",
 }
 HEADERS = {
     "User-Agent": (
@@ -85,7 +88,7 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
             continue
         page = 1
         while page <= max_pages:
-            url = f"{BASE}{path}?distanceRadius={RADIUS_KM}&page={page}"
+            url = f"{BASE}{path}?page={page}"
             try:
                 r = session.get(url, headers=HEADERS, timeout=30)
                 r.raise_for_status()

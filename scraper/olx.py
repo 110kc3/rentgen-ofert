@@ -11,6 +11,7 @@ from Otodom - this removes the largest source of cross-portal duplicates.
 from __future__ import annotations
 
 import json
+import os
 import re
 import time
 
@@ -18,10 +19,11 @@ import requests
 
 from .normalize import olx_rooms, to_float, to_int
 
-RADIUS_KM = 40  # OLX search radius around Gliwice in km
+# Whole-voivodeship search by default; override with RENTGEN_REGION.
+REGION = os.environ.get("RENTGEN_REGION", "slaskie")
 SEARCH = {
-    "house": "https://www.olx.pl/nieruchomosci/domy/sprzedaz/gliwice/",
-    "flat": "https://www.olx.pl/nieruchomosci/mieszkania/sprzedaz/gliwice/",
+    "house": f"https://www.olx.pl/nieruchomosci/domy/sprzedaz/{REGION}/",
+    "flat": f"https://www.olx.pl/nieruchomosci/mieszkania/sprzedaz/{REGION}/",
 }
 HEADERS = {
     "User-Agent": (
@@ -93,7 +95,7 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
             continue
         page = 1
         while page <= max_pages:
-            url = f"{base_url}?search%5Bdist%5D={RADIUS_KM}&page={page}"
+            url = f"{base_url}?page={page}"
             try:
                 r = session.get(url, headers=HEADERS, timeout=30)
                 r.raise_for_status()
