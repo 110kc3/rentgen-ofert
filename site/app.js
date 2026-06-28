@@ -1,0 +1,451 @@
+"use strict";
+
+const PLN = new Intl.NumberFormat("pl-PL");
+const SRC_LABEL = { otodom: "Otodom", olx: "OLX", gratka: "Gratka", morizon: "Morizon", "nieruchomosci-online": "n-online" };
+const label = (s) => SRC_LABEL[s] || s;
+const TYPE_LABEL = { house: "Domy", flat: "Mieszkania" };
+const OWNER_LABEL = { private: "Prywatne", agency: "Biura" };
+const HIST_LABEL = { relisted: "Wystawione ponownie", dropped: "Z obniżką" };
+
+// Gliwice neighbourhoods that sometimes arrive as a "locality" -> fold into Gliwice
+const GLIWICE_DISTRICTS = new Set([
+  "Śródmieście", "Sośnica", "Trynek", "Łabędy", "Wójtowa Wieś", "Szobiszowice",
+  "Ostropa", "Żerniki", "Brzezinka", "Stare Gliwice", "Wilcze Gardło", "Bojków",
+  "Sikornik", "Zatorze", "Kopernik", "Politechnika", "Obrońców Pokoju",
+  "Ligota Zabrska", "Czechowice", "Baildona", "Sośnica Wschód",
+]);
+const normLoc = (loc) => (!loc ? null : GLIWICE_DISTRICTS.has(loc) ? "Gliwice" : loc);
+
+// town -> [lat, lon]; distance from Gliwice powers the (optional) radius filter.
+// Voivodeship-wide this can't cover every village, so the town filter is the
+// primary geographic control and distance is just a convenience for known towns.
+const GLIWICE = [50.2945, 18.6714];
+const TOWN_COORDS = {
+  "Gliwice": [50.2945, 18.6714], "Knurów": [50.2197, 18.6741], "Pyskowice": [50.3958, 18.6286],
+  "Gierałtowice": [50.2069, 18.7333], "Pilchowice": [50.1814, 18.6047], "Sośnicowice": [50.2206, 18.5378],
+  "Toszek": [50.4586, 18.5219], "Rudziniec": [50.2978, 18.4319], "Wielowieś": [50.4153, 18.5639],
+  "Przyszowice": [50.2331, 18.7039], "Paniówki": [50.2206, 18.6919], "Chudów": [50.1947, 18.7256],
+  "Żernica": [50.2050, 18.6200], "Zbrosławice": [50.3686, 18.7339], "Wieszowa": [50.3650, 18.8050],
+  "Rzeczyce": [50.4000, 18.7200], "Tarnowskie Góry": [50.4456, 18.8625], "Tworóg": [50.4486, 18.7250],
+  "Świerklaniec": [50.4072, 18.9072], "Radzionków": [50.3917, 18.9189], "Miasteczko Śląskie": [50.5036, 18.9558],
+  "Ożarowice": [50.4661, 18.9803], "Kalety": [50.5503, 18.8806], "Zabrze": [50.3249, 18.7857],
+  "Bytom": [50.3483, 18.9157], "Ruda Śląska": [50.2558, 18.8556], "Świętochłowice": [50.2917, 18.9181],
+  "Chorzów": [50.2974, 18.9544], "Katowice": [50.2649, 19.0238], "Siemianowice Śląskie": [50.3079, 19.0292],
+  "Piekary Śląskie": [50.3826, 18.9497], "Mysłowice": [50.2074, 19.1665], "Sosnowiec": [50.2863, 19.1041],
+  "Czeladź": [50.3300, 19.0820], "Będzin": [50.3275, 19.1281], "Dąbrowa Górnicza": [50.3217, 19.1875],
+  "Wojkowice": [50.3667, 19.0333], "Psary": [50.3614, 19.1497], "Bobrowniki": [50.3683, 19.0500],
+  "Mikołów": [50.1672, 18.9006], "Łaziska Górne": [50.1497, 18.8431], "Orzesze": [50.1547, 18.7242],
+  "Ornontowice": [50.1819, 18.7375], "Wyry": [50.1486, 18.9097], "Tychy": [50.1372, 18.9664],
+  "Bieruń": [50.0894, 19.0900], "Lędziny": [50.1453, 19.1339], "Imielin": [50.1417, 19.1869],
+  "Rybnik": [50.0972, 18.5463], "Żory": [50.0469, 18.7008], "Czerwionka-Leszczyny": [50.1497, 18.6747],
+  "Gaszowice": [50.0728, 18.4544], "Jejkowice": [50.1131, 18.4831], "Lyski": [50.1064, 18.4047],
+  "Świerklany": [50.0089, 18.6394], "Marklowice": [50.0292, 18.4956], "Kuźnia Raciborska": [50.2017, 18.3186],
+  "Nędza": [50.1900, 18.3320],
+  "Nakło Śląskie": [50.4486, 18.9050], "Orzech": [50.3833, 18.9333], "Nowe Chechło": [50.4242, 18.8200],
+  "Rogoźnik": [50.3922, 19.0100], "Sarnów": [50.3556, 19.1700],
+  "Turza Śląska": [50.0181, 18.4500], "Kobiór": [50.0600, 18.9400], "Suszec": [50.0000, 18.7400],
+  "Czyżowice": [50.0000, 18.4200], "Wodzisław Śląski": [50.0036, 18.4708], "Jastrzębie-Zdrój": [49.9550, 18.5733],
+  "Racibórz": [50.0917, 18.2192], "Pszczyna": [49.9794, 18.9447], "Czechowice-Dziedzice": [49.9106, 18.9994],
+  "Rydułtowy": [50.0578, 18.4108], "Lubliniec": [50.6678, 18.6886], "Kędzierzyn-Koźle": [50.3494, 18.2261],
+  "Myszków": [50.5750, 19.3225], "Goczałkowice-Zdrój": [49.9447, 18.9500], "Skoczów": [49.8000, 18.7900],
+  "Bielsko-Biała": [49.8224, 19.0469], "Cieszyn": [49.7497, 18.6300], "Żywiec": [49.6875, 19.1922],
+  "Ustroń": [49.7236, 18.8100], "Wisła": [49.6561, 18.8600], "Brenna": [49.7270, 18.9050],
+  // added so the radius filter covers more of the voivodeship's larger towns
+  "Częstochowa": [50.8118, 19.1203], "Zawiercie": [50.4875, 19.4318], "Jaworzno": [50.2050, 19.2742],
+  "Kłobuck": [50.9097, 18.9319], "Łazy": [50.4272, 19.3958], "Poręba": [50.4644, 19.3856],
+  "Blachownia": [50.7758, 19.0289], "Koniecpol": [50.7833, 19.6833], "Lubomia": [50.0386, 18.3300],
+};
+function haversine(a, b) {
+  const R = 6371, p = Math.PI / 180;
+  const dLa = (b[0] - a[0]) * p, dLo = (b[1] - a[1]) * p;
+  const h = Math.sin(dLa / 2) ** 2 + Math.cos(a[0] * p) * Math.cos(b[0] * p) * Math.sin(dLo / 2) ** 2;
+  return Math.round(2 * R * Math.asin(Math.sqrt(h)));
+}
+function distOf(locality) {
+  const n = normLoc(locality);
+  const c = n && TOWN_COORDS[n];
+  return c ? haversine(GLIWICE, c) : null;
+}
+
+const state = { all: [], type: "all", source: "all", owner: "all", history: "all", distance: "all", sort: "newest", localities: [] };
+let locOptions = [];                         // [ [name, count], ... ] sorted by count
+const FILTER_KEY = "rentgen.filters.v2";
+
+const $ = (sel) => document.querySelector(sel);
+const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const cssEsc = (s) => (window.CSS && CSS.escape) ? CSS.escape(s) : String(s).replace(/[^a-zA-Z0-9_-]/g, "\\$&");
+const apply = () => { persist(); render(); };
+
+async function boot() {
+  try {
+    const [listings, meta] = await Promise.all([
+      fetch("data/listings.json", { cache: "no-store" }).then((r) => r.json()),
+      fetch("data/meta.json", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
+    ]);
+    state.all = Array.isArray(listings) ? listings : [];
+    renderStats(meta);
+  } catch (e) {
+    $("#grid").innerHTML =
+      `<div class="empty">Nie udało się wczytać danych (data/listings.json).</div>`;
+    return;
+  }
+  buildSourceFilter();
+  buildLocalityOptions();
+  wireControls();
+  wireLocality();
+  wireChips();
+  restoreFilters();
+  render();
+}
+
+function renderStats(meta) {
+  if (!meta) return;
+  const d = meta.updated ? new Date(meta.updated) : null;
+  const when = d ? d.toLocaleString("pl-PL", { dateStyle: "medium", timeStyle: "short" }) : "—";
+  const bySrc = Object.entries(meta.by_source || {})
+    .map(([s, n]) => `${label(s)} <b>${PLN.format(n)}</b>`).join(" · ");
+  const rel = meta.relisted ? ` · <b>${PLN.format(meta.relisted)}</b> ↻ ponownie` : "";
+  $("#stats").innerHTML =
+    `<b>${PLN.format(meta.count || 0)}</b> ofert · ${bySrc}${rel} · zaktualizowano ${when}`;
+}
+
+function buildSourceFilter() {
+  const present = [...new Set(state.all.flatMap((l) => l.sources || [l.source]))]
+    .sort((a, b) => label(a).localeCompare(label(b)));
+  $("#source-seg").innerHTML =
+    `<button data-val="all" class="active">Wszystkie</button>` +
+    present.map((s) => `<button data-val="${s}">${label(s)}</button>`).join("");
+}
+
+// ---- locality (town) multi-select -----------------------------------------
+
+function buildLocalityOptions() {
+  const counts = new Map();
+  for (const l of state.all) {
+    const n = normLoc(l.locality);
+    if (n) counts.set(n, (counts.get(n) || 0) + 1);
+  }
+  locOptions = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "pl"));
+  renderLocalityList("");
+}
+
+function renderLocalityList(term) {
+  const t = (term || "").trim().toLowerCase();
+  const sel = new Set(state.localities);
+  const items = locOptions.filter(([n]) => !t || n.toLowerCase().includes(t)).slice(0, 500);
+  $("#loc-list").innerHTML = items.length
+    ? items.map(([n, c]) =>
+        `<label class="ms-item"><input type="checkbox" value="${escapeHtml(n)}" ${sel.has(n) ? "checked" : ""}>` +
+        `<span>${escapeHtml(n)}</span><b>${PLN.format(c)}</b></label>`).join("")
+    : `<div class="ms-empty">brak miejscowości</div>`;
+}
+
+function syncLocalityLabel() {
+  const n = state.localities.length;
+  const btn = $("#loc-btn");
+  if (!btn) return;
+  btn.textContent = n === 0 ? "Wszystkie" : n === 1 ? state.localities[0] : `${n} miejscowości`;
+  btn.classList.toggle("has-sel", n > 0);
+}
+
+function removeLocality(loc) {
+  state.localities = state.localities.filter((x) => x !== loc);
+  renderLocalityList(($("#loc-search") || {}).value || "");
+}
+
+function wireLocality() {
+  const pop = $("#loc-pop"), btn = $("#loc-btn");
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    pop.hidden = !pop.hidden;
+    if (!pop.hidden) { const s = $("#loc-search"); if (s) s.focus(); }
+  });
+  pop.addEventListener("click", (e) => e.stopPropagation());
+  $("#loc-search").addEventListener("input", (e) => renderLocalityList(e.target.value));
+  $("#loc-list").addEventListener("change", (e) => {
+    const cb = e.target.closest('input[type="checkbox"]');
+    if (!cb) return;
+    const set = new Set(state.localities);
+    cb.checked ? set.add(cb.value) : set.delete(cb.value);
+    state.localities = [...set];
+    apply();
+  });
+  $("#loc-clear").addEventListener("click", () => {
+    state.localities = [];
+    renderLocalityList($("#loc-search").value);
+    apply();
+  });
+  document.addEventListener("click", (e) => {
+    if (!$("#loc-ms").contains(e.target)) pop.hidden = true;
+  });
+}
+
+// ---- standard controls -----------------------------------------------------
+
+function wireControls() {
+  document.querySelectorAll(".seg").forEach((seg) => {
+    seg.addEventListener("click", (ev) => {
+      const btn = ev.target.closest("button");
+      if (!btn) return;
+      seg.querySelectorAll("button").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      state[seg.dataset.key] = btn.dataset.val;
+      apply();
+    });
+  });
+  ["min-price", "max-price", "min-area", "max-area", "min-rooms", "q"].forEach((id) => {
+    const el = $("#" + id);
+    if (el) el.addEventListener("input", apply);
+  });
+  const sort = $("#sort"); if (sort) sort.addEventListener("change", (e) => { state.sort = e.target.value; apply(); });
+  const dist = $("#distance"); if (dist) dist.addEventListener("change", (e) => { state.distance = e.target.value; apply(); });
+}
+
+// ---- persistence (localStorage + shareable URL) ----------------------------
+
+function snapshot() {
+  return {
+    type: state.type, source: state.source, owner: state.owner, history: state.history,
+    distance: state.distance, sort: state.sort, localities: state.localities,
+    minPrice: $("#min-price").value, maxPrice: $("#max-price").value,
+    minArea: $("#min-area").value, maxArea: $("#max-area").value,
+    minRooms: $("#min-rooms").value, q: $("#q").value,
+  };
+}
+
+function isDefault(s) {
+  return s.type === "all" && s.source === "all" && s.owner === "all" && s.history === "all" &&
+    s.distance === "all" && s.sort === "newest" && (!s.localities || !s.localities.length) &&
+    !s.minPrice && !s.maxPrice && !s.minArea && !s.maxArea && !s.minRooms && !s.q;
+}
+
+function persist() {
+  const snap = snapshot();
+  try { localStorage.setItem(FILTER_KEY, JSON.stringify(snap)); } catch (e) {}
+  try {
+    const url = isDefault(snap)
+      ? location.pathname
+      : location.pathname + "?f=" + encodeURIComponent(JSON.stringify(snap));
+    history.replaceState(null, "", url);
+  } catch (e) {}
+}
+
+function restoreFilters() {
+  let snap = null;
+  try { const p = new URLSearchParams(location.search).get("f"); if (p) snap = JSON.parse(p); } catch (e) {}
+  if (!snap) { try { snap = JSON.parse(localStorage.getItem(FILTER_KEY) || "null"); } catch (e) {} }
+  if (snap) applySnapshot(snap);
+}
+
+function setVal(id, v) { const el = $("#" + id); if (el && v != null) el.value = v; }
+
+function setSeg(key, val) {
+  if (val == null) return;
+  const seg = document.querySelector(`.seg[data-key="${key}"]`);
+  if (!seg) return;
+  const v = seg.querySelector(`button[data-val="${cssEsc(val)}"]`) ? val : "all";
+  state[key] = v;
+  seg.querySelectorAll("button").forEach((b) => b.classList.toggle("active", b.dataset.val === v));
+}
+
+function applySnapshot(s) {
+  ["type", "source", "owner", "history"].forEach((k) => setSeg(k, s[k]));
+  if (s.distance != null) { state.distance = s.distance; const d = $("#distance"); if (d) d.value = s.distance; }
+  if (s.sort != null) { state.sort = s.sort; const so = $("#sort"); if (so) so.value = s.sort; }
+  state.localities = Array.isArray(s.localities) ? s.localities.slice() : [];
+  setVal("min-price", s.minPrice); setVal("max-price", s.maxPrice);
+  setVal("min-area", s.minArea); setVal("max-area", s.maxArea);
+  setVal("min-rooms", s.minRooms); setVal("q", s.q);
+  renderLocalityList("");
+}
+
+function resetAll() {
+  ["type", "source", "owner", "history"].forEach((k) => setSeg(k, "all"));
+  state.distance = "all"; const d = $("#distance"); if (d) d.value = "all";
+  state.sort = "newest"; const so = $("#sort"); if (so) so.value = "newest";
+  state.localities = [];
+  ["min-price", "max-price", "min-area", "max-area", "min-rooms", "q"].forEach((id) => {
+    const el = $("#" + id); if (el) el.value = "";
+  });
+  renderLocalityList(($("#loc-search") || {}).value || "");
+  apply();
+}
+
+// ---- active-filter chips ---------------------------------------------------
+
+function activeFilters() {
+  const out = [];
+  if (state.type !== "all") out.push({ k: "seg:type", label: "Typ: " + (TYPE_LABEL[state.type] || state.type) });
+  if (state.source !== "all") out.push({ k: "seg:source", label: "Źródło: " + label(state.source) });
+  if (state.owner !== "all") out.push({ k: "seg:owner", label: OWNER_LABEL[state.owner] || state.owner });
+  if (state.history !== "all") out.push({ k: "seg:history", label: HIST_LABEL[state.history] || state.history });
+  if (state.distance !== "all") out.push({ k: "distance", label: "≤ " + state.distance + " km od Gliwic" });
+  state.localities.forEach((loc) => out.push({ k: "loc:" + loc, label: loc }));
+  const nf = (id, lab) => { const v = ($("#" + id).value || "").trim(); if (v) out.push({ k: "num:" + id, label: lab + " " + v }); };
+  nf("min-price", "Cena od"); nf("max-price", "Cena do");
+  nf("min-area", "m² od"); nf("max-area", "m² do"); nf("min-rooms", "Pokoje od");
+  const q = ($("#q").value || "").trim();
+  if (q) out.push({ k: "q", label: "„" + q + "”" });
+  return out;
+}
+
+function renderChips() {
+  const af = activeFilters();
+  const el = $("#chips");
+  if (!el) return;
+  if (!af.length) { el.innerHTML = ""; el.hidden = true; return; }
+  el.hidden = false;
+  el.innerHTML =
+    af.map((c) => `<button class="chip" data-k="${escapeHtml(c.k)}">${escapeHtml(c.label)} <span class="x">✕</span></button>`).join("") +
+    `<button class="chip reset" data-k="__all__">Wyczyść wszystko</button>`;
+}
+
+function wireChips() {
+  $("#chips").addEventListener("click", (e) => {
+    const b = e.target.closest("button.chip");
+    if (!b) return;
+    const k = b.dataset.k;
+    if (k === "__all__") { resetAll(); return; }
+    if (k.startsWith("seg:")) setSeg(k.slice(4), "all");
+    else if (k === "distance") { state.distance = "all"; const d = $("#distance"); if (d) d.value = "all"; }
+    else if (k.startsWith("loc:")) removeLocality(k.slice(4));
+    else if (k.startsWith("num:")) { const el = $("#" + k.slice(4)); if (el) el.value = ""; }
+    else if (k === "q") { const el = $("#q"); if (el) el.value = ""; }
+    apply();
+  });
+}
+
+// ---- filtering + rendering -------------------------------------------------
+
+function currentFilters() {
+  const num = (id) => { const v = parseFloat($("#" + id).value); return Number.isFinite(v) ? v : null; };
+  return {
+    minPrice: num("min-price"), maxPrice: num("max-price"),
+    minArea: num("min-area"), maxArea: num("max-area"),
+    minRooms: num("min-rooms"), q: $("#q").value.trim().toLowerCase(),
+    locs: state.localities.length ? new Set(state.localities) : null,
+  };
+}
+
+function passes(l, f) {
+  if (state.type !== "all" && l.type !== state.type) return false;
+  if (state.source !== "all" && !(l.sources || [l.source]).includes(state.source)) return false;
+  if (state.owner === "private" && l.is_private !== true) return false;
+  if (state.owner === "agency" && l.is_private !== false) return false;
+  if (state.history === "relisted" && !l.relisted) return false;
+  if (state.history === "dropped") {
+    const ph = (l.price_history || []).map((x) => x.price).filter((x) => x != null);
+    if (!(ph.length > 1 && ph[ph.length - 1] < Math.max(...ph))) return false;
+  }
+  if (f.locs) {
+    const n = normLoc(l.locality);
+    if (!n || !f.locs.has(n)) return false;
+  }
+  if (state.distance !== "all") {
+    const d = distOf(l.locality);
+    if (d == null || d > Number(state.distance)) return false;
+  }
+  if (f.minPrice != null && (l.price == null || l.price < f.minPrice)) return false;
+  if (f.maxPrice != null && (l.price == null || l.price > f.maxPrice)) return false;
+  if (f.minArea != null && (l.area == null || l.area < f.minArea)) return false;
+  if (f.maxArea != null && (l.area == null || l.area > f.maxArea)) return false;
+  if (f.minRooms != null && (l.rooms == null || l.rooms < f.minRooms)) return false;
+  if (f.q) {
+    const hay = `${l.title || ""} ${l.locality || ""} ${l.district || ""}`.toLowerCase();
+    if (!hay.includes(f.q)) return false;
+  }
+  return true;
+}
+
+const sorters = {
+  newest: (a, b) => (b.created || "").localeCompare(a.created || ""),
+  price_asc: (a, b) => (a.price ?? Infinity) - (b.price ?? Infinity),
+  price_desc: (a, b) => (b.price ?? -Infinity) - (a.price ?? -Infinity),
+  ppm_asc: (a, b) => (a.price_per_m2 ?? Infinity) - (b.price_per_m2 ?? Infinity),
+  area_desc: (a, b) => (b.area ?? -Infinity) - (a.area ?? -Infinity),
+};
+
+function render() {
+  const f = currentFilters();
+  const rows = state.all.filter((l) => passes(l, f)).sort(sorters[state.sort] || sorters.newest);
+  $("#count").textContent = rows.length ? `${PLN.format(rows.length)} wyników` : "";
+  $("#grid").innerHTML = rows.length
+    ? rows.map(card).join("")
+    : `<div class="empty">Brak ofert dla wybranych filtrów.</div>`;
+  syncLocalityLabel();
+  renderChips();
+}
+
+function priceLabel(l) {
+  if (l.price == null) return "Cena: zapytaj";
+  if (l.price_max != null && l.price_max !== l.price)
+    return `<span class="cheap">${PLN.format(l.price)} zł</span><span class="pmax">do ${PLN.format(l.price_max)} zł</span>`;
+  return `${PLN.format(l.price)} zł`;
+}
+
+function offersBlock(l) {
+  const offers = l.offers || [];
+  if (offers.length < 2) return "";
+  const cheapUrl = l.cheapest && l.cheapest.url;
+  const multiPrice = l.price_max != null && l.price_max !== l.price;
+  const rows = offers.map((o) => {
+    const p = o.price != null ? `${PLN.format(o.price)} zł` : "zapytaj";
+    const dd = o.created ? ` · ${o.created.slice(0, 10)}` : "";
+    const best = multiPrice && o.url === cheapUrl ? `<span class="best">najtaniej</span>` : "";
+    return `<a href="${o.url}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${label(o.source)} — ${p}${best}${dd}</a>`;
+  }).join("");
+  return `<div class="offers"><div class="offers-h">Ta sama nieruchomość na ${offers.length} ofertach:</div>${rows}</div>`;
+}
+
+function historyBlock(l) {
+  const bits = [];
+  if (l.relisted) bits.push(`<span class="relist">↻ wystawiane ponownie</span>`);
+  const ph = (l.price_history || []).filter((x) => x.price != null);
+  const also = l.also_listed || [];
+  if (also.length) {
+    const t = also.map((o) => (o.price != null ? `${PLN.format(o.price)} zł` : "?")).join(", ");
+    bits.push(`<span class="trail">także wystawione: ${t}</span>`);
+  } else if (ph.length > 1) {
+    bits.push(`<span class="trail">${ph.map((x) => PLN.format(x.price)).join(" → ")} zł</span>`);
+  } else if (l.relisted && l.prev_price != null) {
+    bits.push(`<span class="trail">wcześniej ${PLN.format(l.prev_price)} zł</span>`);
+  }
+  if (l.first_seen) bits.push(`<span class="since">na rynku od ${l.first_seen}</span>`);
+  return bits.length ? `<div class="hist">${bits.join(" · ")}</div>` : "";
+}
+
+function card(l) {
+  const ppm = l.price_per_m2 != null ? `${PLN.format(l.price_per_m2)} zł/m²` : "";
+  const facts = [
+    l.area != null ? `${PLN.format(l.area)} m²` : null,
+    l.rooms != null ? `${l.rooms} pok.` : null,
+    l.type === "house" && l.plot_area != null ? `działka ${PLN.format(l.plot_area)} m²` : null,
+  ].filter(Boolean).join(" · ");
+  const town = normLoc(l.locality);
+  const td = distOf(l.locality);
+  const townLabel = town ? (td ? `${town} • ${td} km` : town) : null;
+  const loc = [townLabel, l.district].filter(Boolean).join(", ");
+  const img = l.image
+    ? `<img loading="lazy" src="${l.image}" onerror="this.style.display='none'">`
+    : `<div class="noimg">bez zdjęcia</div>`;
+  const owner = l.is_private === true ? "prywatne" : l.is_private === false ? "biuro" : "";
+  const badges = (l.sources || [l.source]).map((s) => `<span class="badge ${s}">${label(s)}</span>`).join("");
+  return `<div class="card" onclick="window.open('${l.url}','_blank','noopener')">
+    <div class="thumb">${img}
+      <div class="badges">${badges}</div>
+      ${owner ? `<span class="tag-priv">${owner}</span>` : ""}
+    </div>
+    <div class="body">
+      <div class="price">${priceLabel(l)}</div>
+      ${ppm ? `<div class="ppm">${ppm}</div>` : ""}
+      ${facts ? `<div class="facts">${facts}</div>` : ""}
+      ${loc ? `<div class="loc">${loc}</div>` : ""}
+      <div class="title">${l.title || ""}</div>
+      ${historyBlock(l)}
+      ${offersBlock(l)}
+    </div>
+  </div>`;
+}
+
+boot();
