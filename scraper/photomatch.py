@@ -98,16 +98,18 @@ def gallery_urls(listing, session) -> list:
         return []
 
 
-def listing_hashes(listing, session) -> list:
-    out = []
+def listing_hashes(listing, session) -> tuple:
+    """(hashes, image_urls) for a listing's gallery."""
+    hashes, urls = [], []
     for url in gallery_urls(listing, session):
         try:
             r = session.get(url, headers=HEADERS, timeout=15)
             r.raise_for_status()
-            out.append(dhash(r.content))
+            hashes.append(dhash(r.content))
+            urls.append(url)
         except Exception:
             continue
-    return out
+    return hashes, urls
 
 
 def attach_hashes(listings, max_workers: int = 8, session=None, log=print,
@@ -129,25 +131,27 @@ def attach_hashes(listings, max_workers: int = 8, session=None, log=print,
         if cache is not None and url:
             cached = cachemod.get(cache, url)
             if cached:
-                return (l, cached, True)
-        return (l, listing_hashes(l, session), False)
+                return (l, cached, cachemod.get_urls(cache, url), True)
+        hashes, img_urls = listing_hashes(l, session)
+        return (l, hashes, img_urls, False)
 
     results = []
     with ThreadPoolExecutor(max_workers=max_workers) as ex:
-        for l, hashes, was_cached in ex.map(work, listings):
+        for l, hashes, img_urls, was_cached in ex.map(work, listings):
             l["phashes"] = hashes
-            results.append((l, hashes, was_cached))
+            l["photo_urls"] = img_urls
+            results.append((l, hashes, img_urls, was_cached))
 
-    hits = sum(1 for _, _, c in results if c)
+    hits = sum(1 for _, _, _, c in results if c)
     if cache is not None and today:
-        for l, hashes, was_cached in results:
+        for l, hashes, img_urls, was_cached in results:
             url = l.get("url")
             if not url:
                 continue
             if was_cached:
                 cachemod.touch(cache, url, today)
             else:
-                cachemod.put(cache, url, hashes, today)  # no-ops on empty
+                cachemod.put(cache, url, hashes, today, image_urls=img_urls)  # no-ops on empty
     log(f"  photo-hashed {len(results)} ambiguous listings "
         f"({sum(1 for l in listings if l.get('phashes'))} with photos; "
         f"{hits} reused from cache)")

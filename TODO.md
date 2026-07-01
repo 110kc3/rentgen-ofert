@@ -1,7 +1,46 @@
 # TODO — rentgen-ofert
 
 > Keep this file and `README.md` updated after each change.
-> Last updated: 2026-06-27
+> Last updated: 2026-07-01
+
+## Done (property lifetime timeline + RCN — this round)
+- [x] **RCN integration (`scraper/rcn.py`).** Pulls all Śląskie flat +
+      residential-building transactions from GUGiK's free WFS
+      (`mapy.geoportal.gov.pl/wss/service/rcn`, public since Feb 2026) into
+      `cache/rcn_snapshot.json.gz` (weekly refresh; ~240k lokale). Matches deeds
+      to tracked properties (town + area ±0.6 m², street match or rooms+floor),
+      conservatively and with a confidence label. Deed before listing =
+      "poprzednio sprzedane"; deed after delisting = "sprzedane wg RCN".
+      Service quirks documented in the module docstring (LIKE-only filters,
+      GML-only output, unreliable sortBy).
+- [x] **Delisting detection (`scraper/delist.py`).** Absence from a scrape is
+      weak evidence (pagination caps), so stale records' URLs are fetched
+      (≤ `RENTGEN_VERIFY_MAX`/run) and only 404/410, archive redirects or
+      "ogłoszenie nieaktualne" markers mark a property delisted. Coming back
+      clears the flag (relist).
+- [x] **n-online archived ads harvested** instead of skipped — direct
+      "this ad ended" evidence, marks the record delisted immediately.
+- [x] **Photo archive.** Gallery URLs (already fetched for hashing) are kept in
+      the phash cache and history records; cards link the archived photos.
+- [x] **Richer history records**: last_seen, display snapshot (locality/street/
+      rooms/floor… — also what RCN matching keys on), sales, delisted.
+- [x] **URL-fallback matching + `history.compact()`** — photo-less listings no
+      longer spawn a fresh record every run; existing duplicates get merged on
+      load (14 475 → 12 625 on current data).
+- [x] **Dashboard**: expandable per-card *Historia nieruchomości* timeline
+      (listed/price/relist/archived/delisted/sold events), "Archiwum /
+      sprzedane" view fed by `site/data/archive.json`, sold/wycofane badges,
+      RCN sale banners, meta counts.
+- [x] Tests: `tests/test_history.py`, `tests/test_rcn.py` (39 total, offline).
+
+## Pending — timeline / RCN
+- [ ] House matching is street-anchored only (budynki records are noisy);
+      consider dzialki-layer cross-checks for houses with plots.
+- [ ] RCN registry lags deeds by weeks-months; re-match on every run keeps
+      catching up — maybe surface "sprzedane, cena jeszcze nieznana" when
+      delisted > 60 days with no deed yet.
+- [ ] Otodom/OLX ship exact lat/lon — capturing them would make RCN matching
+      near-certain (geometry is in the WFS response, currently discarded).
 
 ## Done
 - [x] Otodom scraper (houses + flats) — parses `__NEXT_DATA__` JSON

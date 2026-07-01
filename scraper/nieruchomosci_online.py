@@ -1,8 +1,10 @@
 """nieruchomosci-online.pl scraper for Gliwice + nearby towns.
 
 Each town is a sub-domain (e.g. ``pyskowice.nieruchomosci-online.pl``) whose
-result pages embed a schema.org ``CollectionPage`` JSON-LD block. Archived
-("OutOfStock") and rental listings are skipped.
+result pages embed a schema.org ``CollectionPage`` JSON-LD block. Rental
+listings are skipped; archived ("OutOfStock"/"SoldOut") listings are returned
+with ``archived: True`` — main.py keeps them out of the dashboard but feeds
+them to the history store as evidence the ad ended (likely sold).
 """
 from __future__ import annotations
 
@@ -64,8 +66,7 @@ def parse_offers(offers, typ: str, town: str = ""):
         url = o.get("url") or ""
         if "na-wynajem" in url:
             continue
-        if (o.get("availability") or "").rsplit("/", 1)[-1] in ARCHIVED:
-            continue
+        archived = (o.get("availability") or "").rsplit("/", 1)[-1] in ARCHIVED
         item = o.get("itemOffered") or {}
         addr = item.get("address") or {}
         floor = item.get("floorSize") or {}
@@ -90,6 +91,9 @@ def parse_offers(offers, typ: str, town: str = ""):
             "image": o.get("image"),
             "created": None,
             "also_on": [],
+            # kept (not skipped) so history can record "the portal archived this
+            # ad" — main.py routes archived listings to history, not the dashboard
+            "archived": archived,
         })
     return out
 

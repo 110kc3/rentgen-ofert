@@ -9,10 +9,12 @@ The cache lives in ``cache/phash_cache.json`` (committed, so the GitHub Actions
 job reuses it run-to-run) and self-prunes URLs not seen for ``MAX_AGE_DAYS`` so
 it can't grow without bound:
 
-    {"version": 1, "entries": {url: {"hashes": ["<int>", ...], "seen": "YYYY-MM-DD"}}}
+    {"version": 1, "entries": {url: {"hashes": ["<int>", ...], "seen": "YYYY-MM-DD",
+                                     "urls": ["https://...", ...]}}}
 
 dHashes are 256-bit ints; they're stored as decimal strings so the JSON stays
-portable, and parsed back to int on read.
+portable, and parsed back to int on read. "urls" (the gallery image URLs the
+hashes came from) was added later and is optional — old entries lack it.
 """
 from __future__ import annotations
 
@@ -51,14 +53,20 @@ def get(cache, url):
         return None
 
 
-def put(cache, url, hashes, today: str) -> None:
+def get_urls(cache, url):
+    """Cached gallery image URLs for ``url`` (may be [] for old entries)."""
+    entry = cache.get("entries", {}).get(url)
+    return list(entry.get("urls") or []) if entry else []
+
+
+def put(cache, url, hashes, today: str, image_urls=None) -> None:
     """Store (non-empty) gallery hashes for ``url``, stamped as seen ``today``."""
     if not url or not hashes:
         return
-    cache.setdefault("entries", {})[url] = {
-        "hashes": [str(int(h)) for h in hashes],
-        "seen": today,
-    }
+    entry = {"hashes": [str(int(h)) for h in hashes], "seen": today}
+    if image_urls:
+        entry["urls"] = list(image_urls)
+    cache.setdefault("entries", {})[url] = entry
 
 
 def touch(cache, url, today: str) -> None:

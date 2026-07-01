@@ -137,12 +137,16 @@ def _build(members):
     prices = [o["price"] for o in offers if o["price"] is not None]
     dates = [o["created"] for o in offers if o["created"]]
     primary = members[0]
-    phashes = []
+    phashes, photo_urls = [], []
     for m in members:
         for h in (m.get("phashes") or []):
             if h not in phashes:
                 phashes.append(h)
+        for u in (m.get("photo_urls") or []):
+            if u not in photo_urls:
+                photo_urls.append(u)
     prop["phashes"] = phashes
+    prop["photo_urls"] = photo_urls
     prop.update({
         "source": primary.get("source"),
         "url": primary.get("url"),
