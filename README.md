@@ -17,12 +17,34 @@ GitHub Actions (cron) → python -m scraper.main → site/data/listings.json →
   sub-domains on nieruchomości-online. Set `RENTGEN_REGION` to scrape a different
   voivodeship. Every listing keeps its **town (locality)**, and the dashboard has a
   searchable **town multi-select** filter.
-- Skips archived / sold listings (e.g. nieruchomości-online *Ogłoszenie archiwalne*).
+- Keeps archived / sold listings (e.g. nieruchomości-online *Ogłoszenie archiwalne*)
+  out of the dashboard, but harvests them as history evidence (see below).
 - **Relist & price history.** Each run fingerprints every property by its photos and
   records price/date in `site/data/history.json`. When an agent re-posts the same flat
   under a new URL, the card is flagged "↻ wystawiane ponownie" with the earlier price,
   and shows "na rynku od …" plus a price trail. History builds forward from the first
   run (needs photos on; can't see listings deleted before the tool started).
+- **Per-property lifetime timeline ("rentgen").** Every card has an expandable
+  *Historia nieruchomości*: when it was listed on which portal and for how much,
+  every price change and re-post, links to the archived gallery photos, when the
+  ad disappeared — and, via RCN, when the flat actually changed hands.
+- **Real sale prices from notarial deeds (RCN).** Since Feb 2026 GUGiK publishes
+  the nationwide Rejestr Cen Nieruchomości for free (WFS at
+  `mapy.geoportal.gov.pl/wss/service/rcn`). `scraper/rcn.py` pulls all flat +
+  residential-building transactions for the voivodeship into
+  `cache/rcn_snapshot.json.gz` (refreshed weekly) and matches them to tracked
+  properties by town + area ± street / rooms / floor. A deed *before* a listing
+  shows as "🔑 poprzednio sprzedane … za …"; a deed *after* a listing vanished
+  confirms "✓ sprzedane wg RCN". Matches are conservative and carry a
+  confidence label (wysoka = street-anchored, średnia = attribute-anchored).
+- **Delisting detection.** Listings that stop appearing are not assumed dead
+  (region searches are pagination-capped) — up to `RENTGEN_VERIFY_MAX` stale
+  URLs per run are fetched and only 404s / "ogłoszenie nieaktualne" pages /
+  archive redirects mark a property *wycofane*. n-online's own "Ogłoszenie
+  archiwalne" flags are harvested as immediate evidence.
+- **Archiwum view.** The dashboard's "Archiwum / sprzedane" filter shows
+  properties that left the market, with their last asking price, the RCN sale
+  price when matched, and the full timeline (`site/data/archive.json`).
 - **De-duplicates the same property across portals, including at different prices.**
   Candidates must share an exact size (type + area, + rooms for flats); then a
   perceptual hash (dHash) of each listing's **photo gallery** confirms they are
@@ -82,6 +104,8 @@ RENTGEN_MAX_PAGES=3 RENTGEN_DELAY=0.3 python -m scraper.main
 | `RENTGEN_DELAY` | 0.7 | seconds between requests (be polite) |
 | `RENTGEN_PHOTOS` | 1 | photo-match ambiguous listings; `0` skips the detail fetches |
 | `RENTGEN_TYPES` | house,flat | which to scrape; e.g. `house` for houses only |
+| `RENTGEN_VERIFY_MAX` | 300 | stale listings URL-verified per run (`0` disables) |
+| `RENTGEN_RCN` | 1 | `0` skips RCN; `force` re-pulls the transaction snapshot now |
 
 **Rate limiting (HTTP 429):** the scraper backs off and retries automatically. If a
 portal still rate-limits you (nieruchomości-online is strict, especially on repeat
@@ -108,17 +132,20 @@ python -m pytest -q          # parser + dedupe unit tests (offline, use fixtures
 ```
 scraper/
   otodom.py  olx.py  gratka.py  morizon.py  nieruchomosci_online.py   per-portal scrapers
-  net.py         shared HTTP session with 429 back-off; history.py  relist/price history
+  net.py         shared HTTP session with 429 back-off; history.py  property lifecycle store
   normalize.py   shared schema, value helpers, cross-portal dedupe
   photomatch.py  perceptual hashing of galleries to confirm same-property merges
-  cache.py       photo-hash cache (URL -> hashes) so repeat runs skip the fetches
+  cache.py       photo-hash cache (URL -> hashes + gallery URLs), reused run-to-run
+  delist.py      URL-verifies vanished listings before marking them "wycofane"
+  rcn.py         RCN (notarial-deed prices) WFS pull + probabilistic sale matching
   main.py        runs every source, photo-checks look-alikes, writes site/data/*.json
 cache/
-  phash_cache.json   committed gallery-hash cache, reused run-to-run (auto-pruned)
+  phash_cache.json      committed gallery-hash cache, reused run-to-run (auto-pruned)
+  rcn_snapshot.json.gz  committed RCN transaction snapshot (refreshed weekly)
 site/
   index.html  app.js  styles.css      static dashboard (GitHub Pages)
-  data/        listings.json, meta.json  (generated)
-tests/         parser + dedupe tests with offline fixtures
+  data/        listings.json, archive.json, meta.json  (generated)
+tests/         parser + dedupe + history + RCN tests with offline fixtures
 .github/workflows/update.yml           cron + Pages deploy
 TODO.md        roadmap / pending work (kept in sync with this README)
 ```

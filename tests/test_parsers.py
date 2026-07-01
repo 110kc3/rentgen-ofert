@@ -60,7 +60,9 @@ def test_nieruchomosci_online_filters_rentals():
     assert "na-sprzedaz" in rows[0]["url"]
 
 
-def test_nieruchomosci_online_skips_archived():
+def test_nieruchomosci_online_flags_archived():
+    # archived ads are returned (flagged) so history can record the ad ending;
+    # main.py keeps them out of the dashboard.
     offers = [
         {"url": "https://x/dom,na-sprzedaz/1.html", "price": "500000",
          "availability": "https://schema.org/InStock", "itemOffered": {}},
@@ -68,7 +70,7 @@ def test_nieruchomosci_online_skips_archived():
          "availability": "https://schema.org/OutOfStock", "itemOffered": {}},
     ]
     rows = nol.parse_offers(offers, "house")
-    assert [r["url"] for r in rows] == ["https://x/dom,na-sprzedaz/1.html"]
+    assert [r["archived"] for r in rows] == [False, True]
 
 
 def test_gratka_image_is_real_photo_not_icon():

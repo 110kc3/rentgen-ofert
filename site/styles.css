@@ -152,3 +152,25 @@ main { max-width: 1280px; margin: 14px auto 60px; padding: 0 18px; }
 .chip.reset:hover { color: var(--accent); }
 
 footer { text-align: center; color: var(--muted); font-size: 12px; padding: 20px; }
+
+/* ---- property lifetime timeline + archive (sold/withdrawn) ---- */
+.tl { margin-top: 7px; border-top: 1px dashed var(--line); padding-top: 6px; }
+.tl summary { cursor: pointer; font-size: 12px; color: var(--accent); font-weight: 600;
+  list-style: none; }
+.tl summary::before { content: "▸ "; }
+.tl[open] summary::before { content: "▾ "; }
+.tl-body { margin-top: 5px; display: flex; flex-direction: column; gap: 3px; }
+.tl-row { display: flex; gap: 8px; font-size: 12px; align-items: baseline; }
+.tl-date { color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tl-what { color: var(--text); }
+.tl-sale { color: #1a7f37; }
+.tl-photos { margin-top: 4px; font-size: 12px; color: var(--muted); }
+.tl-photos a { color: var(--accent); text-decoration: none; margin-right: 2px; }
+.soldline { margin-top: 5px; font-size: 12.5px; color: #1a7f37; font-weight: 600; }
+.goneline { margin-top: 5px; font-size: 12.5px; color: #b45309; font-weight: 600; }
+.pastsale { margin-top: 4px; font-size: 12px; color: var(--text); }
+.card.gone .thumb img { filter: grayscale(60%); opacity: .85; }
+.tag-gone { position: absolute; bottom: 8px; left: 8px; background: #6b7280; color: #fff;
+  font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 6px;
+  text-transform: uppercase; letter-spacing: .03em; }
+.tag-gone.sold { background: #1a7f37; }

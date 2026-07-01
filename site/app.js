@@ -5,7 +5,7 @@ const SRC_LABEL = { otodom: "Otodom", olx: "OLX", gratka: "Gratka", morizon: "Mo
 const label = (s) => SRC_LABEL[s] || s;
 const TYPE_LABEL = { house: "Domy", flat: "Mieszkania" };
 const OWNER_LABEL = { private: "Prywatne", agency: "Biura" };
-const HIST_LABEL = { relisted: "Wystawione ponownie", dropped: "Z obniżką" };
+const HIST_LABEL = { relisted: "Wystawione ponownie", dropped: "Z obniżką", sold: "Archiwum / sprzedane" };
 
 // Gliwice neighbourhoods that sometimes arrive as a "locality" -> fold into Gliwice
 const GLIWICE_DISTRICTS = new Set([
@@ -67,7 +67,7 @@ function distOf(locality) {
   return c ? haversine(GLIWICE, c) : null;
 }
 
-const state = { all: [], type: "all", source: "all", owner: "all", history: "all", distance: "all", sort: "newest", localities: [] };
+const state = { all: [], archive: null, type: "all", source: "all", owner: "all", history: "all", distance: "all", sort: "newest", localities: [] };
 let locOptions = [];                         // [ [name, count], ... ] sorted by count
 const FILTER_KEY = "rentgen.filters.v2";
 
@@ -106,8 +106,11 @@ function renderStats(meta) {
   const bySrc = Object.entries(meta.by_source || {})
     .map(([s, n]) => `${label(s)} <b>${PLN.format(n)}</b>`).join(" · ");
   const rel = meta.relisted ? ` · <b>${PLN.format(meta.relisted)}</b> ↻ ponownie` : "";
+  const arch = meta.archive
+    ? ` · <b>${PLN.format(meta.archive)}</b> w archiwum${meta.sold_confirmed ? ` (<b>${PLN.format(meta.sold_confirmed)}</b> sprzedane wg RCN)` : ""}`
+    : "";
   $("#stats").innerHTML =
-    `<b>${PLN.format(meta.count || 0)}</b> ofert · ${bySrc}${rel} · zaktualizowano ${when}`;
+    `<b>${PLN.format(meta.count || 0)}</b> ofert · ${bySrc}${rel}${arch} · zaktualizowano ${when}`;
 }
 
 function buildSourceFilter() {
@@ -329,10 +332,11 @@ function currentFilters() {
 }
 
 function passes(l, f) {
+  const archiveMode = state.history === "sold";
   if (state.type !== "all" && l.type !== state.type) return false;
   if (state.source !== "all" && !(l.sources || [l.source]).includes(state.source)) return false;
-  if (state.owner === "private" && l.is_private !== true) return false;
-  if (state.owner === "agency" && l.is_private !== false) return false;
+  if (!archiveMode && state.owner === "private" && l.is_private !== true) return false;
+  if (!archiveMode && state.owner === "agency" && l.is_private !== false) return false;
   if (state.history === "relisted" && !l.relisted) return false;
   if (state.history === "dropped") {
     const ph = (l.price_history || []).map((x) => x.price).filter((x) => x != null);
@@ -366,9 +370,29 @@ const sorters = {
   area_desc: (a, b) => (b.area ?? -Infinity) - (a.area ?? -Infinity),
 };
 
+async function loadArchive() {
+  if (state.archive) return state.archive;
+  try {
+    const a = await fetch("data/archive.json", { cache: "no-store" }).then((r) => r.json());
+    state.archive = Array.isArray(a) ? a : [];
+  } catch (e) {
+    state.archive = [];
+  }
+  return state.archive;
+}
+
 function render() {
+  if (state.history === "sold" && !state.archive) {
+    $("#grid").innerHTML = `<div class="empty">Wczytywanie archiwum…</div>`;
+    loadArchive().then(render);
+    return;
+  }
   const f = currentFilters();
-  const rows = state.all.filter((l) => passes(l, f)).sort(sorters[state.sort] || sorters.newest);
+  const pool = state.history === "sold" ? state.archive : state.all;
+  const sorter = state.history === "sold" && state.sort === "newest"
+    ? (a, b) => (b.delisted || "").localeCompare(a.delisted || "")
+    : (sorters[state.sort] || sorters.newest);
+  const rows = pool.filter((l) => passes(l, f)).sort(sorter);
   $("#count").textContent = rows.length ? `${PLN.format(rows.length)} wyników` : "";
   $("#grid").innerHTML = rows.length
     ? rows.map(card).join("")
@@ -415,6 +439,69 @@ function historyBlock(l) {
   return bits.length ? `<div class="hist">${bits.join(" · ")}</div>` : "";
 }
 
+// ---- property lifetime timeline ("rentgen" view) ---------------------------
+
+function tlLabel(e) {
+  const p = e.price != null ? `${PLN.format(e.price)} zł` : "";
+  const src = e.source ? label(e.source) : "";
+  switch (e.kind) {
+    case "sale_past":
+      return `<b class="tl-sale">🔑 sprzedane (akt notarialny)</b> ${p}` +
+             (e.market ? ` · rynek ${e.market}` : "") +
+             (e.confidence ? ` · pewność: ${e.confidence}` : "");
+    case "sale":
+      return `<b class="tl-sale">✓ sprzedane wg RCN</b> ${p}` +
+             (e.confidence ? ` · pewność: ${e.confidence}` : "");
+    case "listed":
+      return `wystawione na ${src}${p ? " — " + p : ""}`;
+    case "relist":
+      return `↻ wystawione ponownie (${src})${p ? " — " + p : ""}`;
+    case "price":
+      return `zmiana ceny → <b>${p}</b>${src ? ` (${src})` : ""}`;
+    case "archived":
+      return `ogłoszenie zarchiwizowane${src ? ` (${src})` : ""}`;
+    case "delisted":
+      return `<b>zniknęło z portali</b> — wycofane lub sprzedane`;
+    default:
+      return e.kind;
+  }
+}
+
+function timelineBlock(l) {
+  const tl = l.timeline || [];
+  const photos = l.photo_urls || [];
+  if (tl.length < 2 && !photos.length && !(l.sales || []).length) return "";
+  const rows = tl.map((e) =>
+    `<div class="tl-row"><span class="tl-date">${e.date || ""}</span><span class="tl-what">${tlLabel(e)}</span></div>`
+  ).join("");
+  const ph = photos.length
+    ? `<div class="tl-photos">zdjęcia z ogłoszeń: ${photos.map((u, i) =>
+        `<a href="${u}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${i + 1}</a>`).join(" ")}</div>`
+    : "";
+  return `<details class="tl" onclick="event.stopPropagation()">
+    <summary>Historia nieruchomości (${tl.length})</summary>
+    <div class="tl-body">${rows}${ph}</div>
+  </details>`;
+}
+
+function soldBanner(l) {
+  if (l.sold && l.sold.price != null) {
+    const pm2 = l.sold.price_m2 ? ` (${PLN.format(l.sold.price_m2)} zł/m²)` : "";
+    return `<div class="soldline">✓ sprzedane ${l.sold.date} za <b>${PLN.format(l.sold.price)} zł</b>${pm2} · RCN, pewność: ${l.sold.confidence}</div>`;
+  }
+  if (l.delisted) {
+    return `<div class="goneline">zniknęło z portali ${l.delisted} — wycofane lub sprzedane</div>`;
+  }
+  return "";
+}
+
+function pastSaleLine(l) {
+  const past = (l.sales || []).filter((s) => s.kind === "past" && s.price != null);
+  if (!past.length) return "";
+  const s = past[past.length - 1];
+  return `<div class="pastsale">🔑 poprzednio sprzedane ${s.date} za <b>${PLN.format(s.price)} zł</b> (akt not., pewność: ${s.confidence})</div>`;
+}
+
 function card(l) {
   const ppm = l.price_per_m2 != null ? `${PLN.format(l.price_per_m2)} zł/m²` : "";
   const facts = [
@@ -431,10 +518,12 @@ function card(l) {
     : `<div class="noimg">bez zdjęcia</div>`;
   const owner = l.is_private === true ? "prywatne" : l.is_private === false ? "biuro" : "";
   const badges = (l.sources || [l.source]).map((s) => `<span class="badge ${s}">${label(s)}</span>`).join("");
-  return `<div class="card" onclick="window.open('${l.url}','_blank','noopener')">
+  const gone = !!l.delisted;
+  return `<div class="card${gone ? " gone" : ""}" ${l.url ? `onclick="window.open('${l.url}','_blank','noopener')"` : ""}>
     <div class="thumb">${img}
       <div class="badges">${badges}</div>
       ${owner ? `<span class="tag-priv">${owner}</span>` : ""}
+      ${gone ? `<span class="tag-gone${l.sold ? " sold" : ""}">${l.sold ? "sprzedane" : "wycofane"}</span>` : ""}
     </div>
     <div class="body">
       <div class="price">${priceLabel(l)}</div>
@@ -442,8 +531,11 @@ function card(l) {
       ${facts ? `<div class="facts">${facts}</div>` : ""}
       ${loc ? `<div class="loc">${loc}</div>` : ""}
       <div class="title">${l.title || ""}</div>
+      ${soldBanner(l)}
+      ${pastSaleLine(l)}
       ${historyBlock(l)}
       ${offersBlock(l)}
+      ${timelineBlock(l)}
     </div>
   </div>`;
 }

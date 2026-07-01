@@ -1,0 +1,116 @@
+"""RCN: GML parsing, compaction, street matching and sale attachment. Offline."""
+from scraper import rcn
+
+GML_PAGE = """<?xml version='1.0' encoding="UTF-8" ?>
+<wfs:FeatureCollection
+   xmlns:ms="http://mapserver.gis.umn.edu/mapserver"
+   xmlns:gml="http://www.opengis.net/gml/3.2"
+   xmlns:wfs="http://www.opengis.net/wfs/2.0"
+   numberMatched="unknown" numberReturned="1">
+  <wfs:member>
+    <ms:lokale gml:id="lokale.1">
+      <ms:teryt>2466</ms:teryt>
+      <ms:tran_rodzaj_trans>wolnyRynek</ms:tran_rodzaj_trans>
+      <ms:tran_rodzaj_rynku>wtorny</ms:tran_rodzaj_rynku>
+      <ms:tran_cena_brutto>329333.49</ms:tran_cena_brutto>
+      <ms:dok_data>2021-07-13 02:00:00+02</ms:dok_data>
+      <ms:lok_funkcja>mieszkalna</ms:lok_funkcja>
+      <ms:lok_liczba_izb>2</ms:lok_liczba_izb>
+      <ms:lok_nr_kond>3</ms:lok_nr_kond>
+      <ms:lok_pow_uzyt>39.4</ms:lok_pow_uzyt>
+      <ms:lok_cena_brutto></ms:lok_cena_brutto>
+      <ms:lok_adres>MSC:Gliwice;UL:Adama Asnyka;NR_PORZ:11</ms:lok_adres>
+    </ms:lokale>
+  </wfs:member>
+</wfs:FeatureCollection>"""
+
+
+def test_parse_and_compact_lokale():
+    rows = list(rcn._parse_members(GML_PAGE.encode(), "lokale"))
+    assert len(rows) == 1
+    c = rcn._compact_lok(rows[0])
+    assert c == {"d": "2021-07-13", "c": 329333, "a": 39.4, "izb": 2, "kond": 3,
+                 "rynek": "w", "msc": "Gliwice", "ul": "Adama Asnyka", "nr": "11"}
+
+
+def test_compact_drops_non_market_and_priceless():
+    row = {"dok_data": "2021-01-01", "tran_cena_brutto": "100",
+           "lok_pow_uzyt": "40", "tran_rodzaj_trans": "przetarg"}
+    assert rcn._compact_lok(row) is None
+    row2 = {"dok_data": "2021-01-01", "lok_pow_uzyt": "40",
+            "tran_rodzaj_trans": "wolnyRynek"}
+    assert rcn._compact_lok(row2) is None
+
+
+def test_street_match():
+    assert rcn.street_match("Asnyka", "Adama Asnyka")
+    assert rcn.street_match("ul. Gdańska", "Gdanska")
+    assert rcn.street_match("al. Wojciecha Korfantego", "Korfantego")
+    assert not rcn.street_match("Polna", "Lipowa")
+    assert not rcn.street_match("Jana Pawła II", "Jana Kochanowskiego")
+    assert not rcn.street_match("", "Gdańska")
+
+
+def _rec(**kw):
+    base = {"type": "flat", "area": 39.4, "first_seen": "2026-06-01",
+            "observations": [],
+            "snapshot": {"locality": "Gliwice", "street": "Asnyka",
+                         "rooms": 2, "floor": 2}}
+    base.update(kw)
+    return base
+
+
+def _tx(**kw):
+    base = {"d": "2021-07-13", "c": 329333, "a": 39.4, "izb": 2, "kond": 3,
+            "rynek": "w", "msc": "Gliwice", "ul": "Adama Asnyka", "nr": "11"}
+    base.update(kw)
+    return base
+
+
+def test_match_past_sale_high_confidence():
+    rec = _rec()
+    snap = {"lokale": [_tx()], "budynki": []}
+    assert rcn.match([rec], snap, log=lambda *a: None) == 1
+    (s,) = rec["sales"]
+    assert s["kind"] == "past" and s["price"] == 329333 and s["confidence"] == "wysoka"
+    assert s["price_m2"] == round(329333 / 39.4)
+
+
+def test_match_sold_after_delisting():
+    rec = _rec(delisted="2026-06-15")
+    snap = {"lokale": [_tx(d="2026-07-20", c=310000)], "budynki": []}
+    rcn.match([rec], snap, log=lambda *a: None)
+    kinds = {s["kind"] for s in rec["sales"]}
+    assert "sold" in kinds
+
+
+def test_no_match_when_street_differs():
+    rec = _rec()
+    snap = {"lokale": [_tx(ul="Lipowa")], "budynki": []}
+    assert rcn.match([rec], snap, log=lambda *a: None) == 0
+    assert "sales" not in rec
+
+
+def test_no_street_needs_rooms_and_floor():
+    rec = _rec(snapshot={"locality": "Gliwice", "rooms": 2, "floor": 2})
+    # kond 3 == floor 2 + 1 (parter=1) -> attribute-anchored match
+    snap = {"lokale": [_tx(ul=None)], "budynki": []}
+    assert rcn.match([rec], snap, log=lambda *a: None) == 1
+    assert rec["sales"][0]["confidence"] == "średnia"
+    # rooms alone (no floor) is not enough
+    rec2 = _rec(snapshot={"locality": "Gliwice", "rooms": 2})
+    assert rcn.match([rec2], snap, log=lambda *a: None) == 0
+
+
+def test_area_tolerance():
+    rec = _rec()
+    snap = {"lokale": [_tx(a=41.2)], "budynki": []}   # 1.8 m2 off -> no match
+    assert rcn.match([rec], snap, log=lambda *a: None) == 0
+
+
+def test_ambiguous_sold_not_attached():
+    rec = _rec(delisted="2026-06-15")
+    snap = {"lokale": [_tx(d="2026-07-20"), _tx(d="2026-08-02", nr="13")],
+            "budynki": []}
+    rcn.match([rec], snap, log=lambda *a: None)
+    assert not any(s["kind"] == "sold" for s in rec.get("sales", []))
