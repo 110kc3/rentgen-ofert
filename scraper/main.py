@@ -95,9 +95,82 @@ def run() -> int:
     # Lifecycle bookkeeping, in dependency order:
     #   1. ingest portal-archived ads (direct "this ad ended" evidence)
     #   2. delist sweep — URL-verify records that vanished from scrapes
-    #   3. RCN match — needs `delisted` dates to time-window "sold" deeds
-    #   4. history.update — enriches today's listings from the records
-    #      (timeline / sales / photo archive), so it runs last.
+    #   3. history.update — matches today's listings, builds snapshots
+    #   4. RCN match — needs snapshots + `delisted` dates; cards re-enriched after
     hist_path = DATA_DIR / "history.json"
     records = history.compact(history.load(hist_path))
     active_urls = {o.get("url") for l in listings for o in l.get("offers", [])}
+    active_urls |= {l.get("url") for l in listings}
+    active_urls.discard(None)
+
+    n_arch = history.observe_archived(archived_raw, records, today)
+    if archived_raw:
+        print(f"  archived ads ingested into history: {n_arch}/{len(archived_raw)}")
+    if verify_max > 0:
+        delist.sweep(records, today, http, active_urls=active_urls,
+                     max_checks=verify_max)
+
+    history.update(listings, records, today)
+
+    # Real sale prices from notarial deeds (RCN) matched onto our records.
+    # Runs after update so brand-new records already carry a snapshot
+    # (locality/street/rooms) to match on; the affected cards are re-enriched.
+    if rcn_mode != "0":
+        region = os.environ.get("RENTGEN_REGION", "slaskie")
+        teryt = TERYT.get(region)
+        if teryt:
+            snap = rcn.refresh(RCN_CACHE, http, teryt_prefix=teryt, today=today,
+                               force=(rcn_mode == "force"))
+            if snap:
+                rcn.match(records, snap)
+        else:
+            print(f"RCN: no TERYT mapping for region '{region}', skipping")
+    history.reenrich(listings)   # always: also drops the transient _rec links
+
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    history.save(hist_path, records)
+    link_same_size(listings)   # flag same-area duplicates/relists visible right now
+    relisted = sum(1 for l in listings if l.get("relisted"))
+
+    # newest first when a timestamp is available
+    listings.sort(key=lambda l: (l.get("created") or ""), reverse=True)
+    for p in listings:                 # drop bulky hashes before publishing
+        p.pop("phashes", None)
+
+    (DATA_DIR / "listings.json").write_text(
+        json.dumps(listings, ensure_ascii=False, indent=1), encoding="utf-8")
+
+    # Delisted/sold properties -> their own feed for the "Archiwum" view.
+    archive = history.build_archive(records)
+    (DATA_DIR / "archive.json").write_text(
+        json.dumps(archive, ensure_ascii=False, indent=1), encoding="utf-8")
+
+    by_source = {}
+    for x in raw:
+        by_source[x["source"]] = by_source.get(x["source"], 0) + 1
+
+    meta = {
+        "updated": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
+        "count": len(listings),
+        "raw": len(raw),
+        "by_source": by_source,
+        "by_type": {
+            "house": sum(1 for x in listings if x["type"] == "house"),
+            "flat": sum(1 for x in listings if x["type"] == "flat"),
+        },
+        "relisted": relisted,
+        "archive": len(archive),
+        "sold_confirmed": sum(1 for a in archive if a.get("sold")),
+        "errors": errors,
+    }
+    (DATA_DIR / "meta.json").write_text(
+        json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8")
+
+    summary = ", ".join(f"{k} {v}" for k, v in by_source.items())
+    print(f"Done: {len(listings)} unique properties from {len(raw)} raw ({summary}); "
+          f"{relisted} flagged as relisted; {len(archive)} in archive.")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(run())
