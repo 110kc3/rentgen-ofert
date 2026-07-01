@@ -1,18 +1,18 @@
 {
- "updated": "2026-07-01T10:29:20+00:00",
- "count": 18656,
- "raw": 20556,
+ "updated": "2026-07-01T20:39:25+00:00",
+ "count": 19293,
+ "raw": 21435,
  "by_source": {
-  "otodom": 3337,
-  "olx": 223,
-  "gratka": 3511,
-  "morizon": 3511,
-  "nieruchomosci-online": 9974
+  "otodom": 3324,
+  "olx": 1077,
+  "gratka": 3512,
+  "morizon": 3512,
+  "nieruchomosci-online": 10010
  },
  "by_type": {
-  "house": 6584,
-  "flat": 12072
+  "house": 6703,
+  "flat": 12590
  },
- "relisted": 8508,
+ "relisted": 8654,
  "errors": []
 }
