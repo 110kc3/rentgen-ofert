@@ -1,0 +1,60 @@
+[
+ {
+  "type": "house",
+  "area": 118.0,
+  "title": null,
+  "image": null,
+  "locality": null,
+  "district": null,
+  "rooms": null,
+  "url": "https://gratka.pl/nieruchomosci/dom-tarnogorski-radzionkow/ob/38757195",
+  "source": "gratka",
+  "price": 720000,
+  "first_seen": "2026-06-17",
+  "delisted": "2026-06-17",
+  "sold": null,
+  "timeline": [
+   {
+    "date": "2026-06-17",
+    "kind": "listed",
+    "price": 720000,
+    "source": "gratka",
+    "url": "https://gratka.pl/nieruchomosci/dom-tarnogorski-radzionkow/ob/38757195"
+   },
+   {
+    "date": "2026-06-17",
+    "kind": "delisted"
+   }
+  ],
+  "photo_urls": []
+ },
+ {
+  "type": "house",
+  "area": 97.0,
+  "title": null,
+  "image": null,
+  "locality": null,
+  "district": null,
+  "rooms": null,
+  "url": "https://gratka.pl/nieruchomosci/dom-bielsko-biala/ob/30220247",
+  "source": "gratka",
+  "price": 440040,
+  "first_seen": "2026-06-17",
+  "delisted": "2026-06-17",
+  "sold": null,
+  "timeline": [
+   {
+    "date": "2026-06-17",
+    "kind": "listed",
+    "price": 440040,
+    "source": "gratka",
+    "url": "https://gratka.pl/nieruchomosci/dom-bielsko-biala/ob/30220247"
+   },
+   {
+    "date": "2026-06-17",
+    "kind": "delisted"
+   }
+  ],
+  "photo_urls": []
+ }
+]
