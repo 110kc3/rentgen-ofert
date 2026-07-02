@@ -30,6 +30,35 @@
  },
  {
   "type": "house",
+  "area": 300.0,
+  "title": null,
+  "image": null,
+  "locality": null,
+  "district": null,
+  "rooms": null,
+  "url": "https://gratka.pl/nieruchomosci/dom-tarnogorski-zbroslawice-moniuszki/ob/45776819",
+  "source": "gratka",
+  "price": 849000,
+  "first_seen": "2026-06-17",
+  "delisted": "2026-06-17",
+  "sold": null,
+  "timeline": [
+   {
+    "date": "2026-06-17",
+    "kind": "listed",
+    "price": 849000,
+    "source": "gratka",
+    "url": "https://gratka.pl/nieruchomosci/dom-tarnogorski-zbroslawice-moniuszki/ob/45776819"
+   },
+   {
+    "date": "2026-06-17",
+    "kind": "delisted"
+   }
+  ],
+  "photo_urls": []
+ },
+ {
+  "type": "house",
   "area": 97.0,
   "title": null,
   "image": null,
@@ -49,6 +78,35 @@
     "price": 440040,
     "source": "gratka",
     "url": "https://gratka.pl/nieruchomosci/dom-bielsko-biala/ob/30220247"
+   },
+   {
+    "date": "2026-06-17",
+    "kind": "delisted"
+   }
+  ],
+  "photo_urls": []
+ },
+ {
+  "type": "house",
+  "area": 248.0,
+  "title": null,
+  "image": null,
+  "locality": null,
+  "district": null,
+  "rooms": null,
+  "url": "https://gratka.pl/nieruchomosci/dom-pszczynski-pszczyna-porzeczkowa/ob/38605803",
+  "source": "gratka",
+  "price": 1900000,
+  "first_seen": "2026-06-17",
+  "delisted": "2026-06-17",
+  "sold": null,
+  "timeline": [
+   {
+    "date": "2026-06-17",
+    "kind": "listed",
+    "price": 1900000,
+    "source": "gratka",
+    "url": "https://gratka.pl/nieruchomosci/dom-pszczynski-pszczyna-porzeczkowa/ob/38605803"
    },
    {
     "date": "2026-06-17",
