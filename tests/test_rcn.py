@@ -175,7 +175,18 @@ def test_parcel_extraction_and_decisive_scoring():
     snap = {"lokale": [_tx(ul=None, nr=None, dz="246601_1.0041.1506")], "budynki": []}
     assert rcn.match([rec], snap, log=lambda *a: None) == 1
     assert rec["sales"][0]["confidence"] == "wysoka"
-    # different parcel -> hard reject even though town+area agree
-    rec2 = _rec(snapshot={"locality": "Gliwice", "dzialka_id": "246601_1.0041.9999",
-                          "street": "Asnyka"})
+    # different parcel + no street agreement -> reject
+    rec2 = _rec(snapshot={"locality": "Gliwice", "dzialka_id": "246601_1.0041.9999"})
     assert rcn.match([rec2], snap, log=lambda *a: None) == 0
+
+
+def test_renumbered_parcel_street_nr_still_wins():
+    # 2008 deed on działka 974; today's ULDK says 1506 (renumbered). The
+    # street+number agreement must override the parcel mismatch.
+    deed = _tx(a=None, ul="Ignacego Daszyńskiego", nr="448", dz="246601_1.0041.974")
+    rec = _rec(type="house", area=204.0,
+               snapshot={"locality": "Gliwice", "street": "Ignacego Daszyńskiego",
+                         "nr": "448", "dzialka_id": "246601_1.0041.1506"})
+    assert rcn.match([rec], {"lokale": [], "budynki": [deed]},
+                     log=lambda *a: None) == 1
+    assert rec["sales"][0]["confidence"] == "wysoka"
