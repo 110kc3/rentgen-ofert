@@ -5,7 +5,7 @@ const SRC_LABEL = { otodom: "Otodom", olx: "OLX", gratka: "Gratka", morizon: "Mo
 const label = (s) => SRC_LABEL[s] || s;
 const TYPE_LABEL = { house: "Domy", flat: "Mieszkania" };
 const OWNER_LABEL = { private: "Prywatne", agency: "Biura" };
-const HIST_LABEL = { relisted: "Wystawione ponownie", dropped: "Z obniżką", sold: "Archiwum", sold_rcn: "Sprzedane wg RCN" };
+const HIST_LABEL = { relisted: "Wystawione ponownie", dropped: "Z obniżką", rcn: "Z danymi RCN", sold: "Archiwum", sold_rcn: "Sprzedane wg RCN" };
 const MARKET_LABEL = { secondary: "Rynek wtórny", primary: "Inwestycje (rynek pierwotny)" };
 const inArchive = () => state.history === "sold" || state.history === "sold_rcn";
 
@@ -348,6 +348,7 @@ function passes(l, f) {
   if (!archiveMode && state.owner === "private" && l.is_private !== true) return false;
   if (!archiveMode && state.owner === "agency" && l.is_private !== false) return false;
   if (state.history === "relisted" && !l.relisted) return false;
+  if (state.history === "rcn" && !(l.sales || []).length) return false;
   if (state.history === "dropped") {
     const ph = (l.price_history || []).map((x) => x.price).filter((x) => x != null);
     if (!(ph.length > 1 && ph[ph.length - 1] < Math.max(...ph))) return false;
