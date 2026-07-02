@@ -1,7 +1,7 @@
 # TODO — rentgen-ofert
 
 > Keep this file and `README.md` updated after each change.
-> Last updated: 2026-07-01
+> Last updated: 2026-07-02
 
 ## Done (property lifetime timeline + RCN — this round)
 - [x] **RCN integration (`scraper/rcn.py`).** Pulls all Śląskie flat +
@@ -32,6 +32,20 @@
       sprzedane" view fed by `site/data/archive.json`, sold/wycofane badges,
       RCN sale banners, meta counts.
 - [x] Tests: `tests/test_history.py`, `tests/test_rcn.py` (39 total, offline).
+
+## Done (developer new-builds + UI perf — this round)
+- [x] **Developer new-builds detected and un-merged.** Detection: portal's
+      `market: primary` (Otodom/OLX, now captured), title keywords
+      (deweloper/inwestycja/etap/…), or >=3 same-gallery ads on one portal.
+      A development photo-cluster becomes one card per asking price
+      ("inwestycja" badge) instead of one fake "flat on 12 ofertach"; dev
+      records skip relist flags, the delist sweep, RCN deed matching and the
+      Archiwum (their history is marketing, not a property's life).
+- [x] **Rynek filter** (Oba / Wtórny / Inwestycje) + **"Sprzedane wg RCN"**
+      filter in the dashboard.
+- [x] **Chunked grid rendering** — 60 cards + infinite scroll, debounced
+      inputs, `content-visibility`; filter clicks went from ~seconds of
+      freeze at ~19k cards to ~200 ms.
 
 ## Pending — timeline / RCN
 - [ ] House matching is street-anchored only (budynki records are noisy);

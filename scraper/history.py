@@ -103,7 +103,9 @@ def _observe(rec, p, today, status=None):
 def _match_or_create(records, index, url_idx, p, today):
     hashes = p.get("phashes") or []
     typ, area = p.get("type"), p.get("area")
-    rec = _find(index, typ, area, hashes)
+    # developer ads share marketing photos across many units, so photo identity
+    # is meaningless for them — match by URL only
+    rec = None if p.get("development") else _find(index, typ, area, hashes)
     if rec is None and p.get("url"):
         cand = url_idx.get(p["url"])
         # URL fallback: only trust it when photos don't contradict it
@@ -188,6 +190,9 @@ def update(properties, records, today: str):
         rec = _match_or_create(records, index, url_idx, p, today)
         url = p.get("url")
 
+        if p.get("development"):
+            rec["development"] = True
+
         # the flat is visibly back on the market -> a past "delisted" is stale
         if rec.get("delisted"):
             del rec["delisted"]
@@ -201,7 +206,12 @@ def update(properties, records, today: str):
         pub = sorted((o.get("created") or "")[:10] for o in p.get("offers", []) if o.get("created"))
         p["first_seen"] = min([rec["first_seen"], *pub]) if pub else rec["first_seen"]
         # genuine relist: same property under a DIFFERENT url on an EARLIER day
-        earlier = [o for o in obs if o.get("url") != url and (o.get("date") or "") < today]
+        # (developments excluded — "the same ad again" is just the developer's
+        # rolling marketing, not a flat coming back to the market)
+        if rec.get("development"):
+            earlier = []
+        else:
+            earlier = [o for o in obs if o.get("url") != url and (o.get("date") or "") < today]
         p["relisted"] = bool(earlier)
         p["prev_price"] = next((o["price"] for o in reversed(earlier) if o.get("price")), None)
         # price trail: points where the price changed over time
@@ -309,7 +319,7 @@ def build_archive(records) -> list:
     """Cards for properties that left the market: snapshot + timeline + sales."""
     out = []
     for rec in records:
-        if not rec.get("delisted"):
+        if not rec.get("delisted") or rec.get("development"):
             continue
         snap = rec.get("snapshot") or {}
         sales = [s for s in rec.get("sales") or [] if s.get("kind") == "sold"]

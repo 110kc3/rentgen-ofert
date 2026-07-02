@@ -71,6 +71,8 @@ def parse_items(items, typ: str):
             "district": (loc.get("district") or {}).get("name") if loc.get("district") else None,
             "street": (loc.get("street") or {}).get("name") if loc.get("street") else None,
             "is_private": it.get("isPrivateOwner"),
+            # PRIMARY = new-build/developer, SECONDARY = resale
+            "market": (it.get("market") or "").lower() or None,
             "agency": (it.get("agency") or {}).get("name") if it.get("agency") else None,
             "image": images[0].get("medium") or images[0].get("large") if images else None,
             "created": it.get("dateCreated"),

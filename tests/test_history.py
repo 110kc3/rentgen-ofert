@@ -172,3 +172,28 @@ def test_compact_keeps_conflicting_photo_records_apart():
          "observations": [{"date": "2026-06-02", "url": "u1", "price": 2, "source": "olx"}]},
     ]
     assert len(history.compact(records)) == 2
+
+
+def test_development_records_skip_relist_delist_rcn_archive():
+    from scraper import rcn
+    records = []
+    dev = _prop(development=True, title="Apartamenty Nowe — etap I")
+    history.update([dict(dev)], records, "2026-06-01")
+    rec = records[0]
+    assert rec["development"] is True
+    # same photos under a new URL would normally flag a relist — not for devs
+    p2 = dict(dev, url="https://otodom.pl/other-unit")
+    history.update([p2], records, "2026-06-10")
+    assert p2["relisted"] is False
+    # delist sweep ignores dev records entirely
+    n = delist.sweep(records, "2026-06-30", _FakeSession(_FakeResp(status=404)),
+                     active_urls=set(), log=lambda *a: None)
+    assert n == 0
+    # rcn.match skips dev records
+    snap = {"lokale": [{"d": "2021-01-01", "c": 300000, "a": 50.0, "izb": 2,
+                        "kond": 2, "rynek": "w", "msc": "Gliwice",
+                        "ul": "Asnyka", "nr": "1"}], "budynki": []}
+    assert rcn.match(records, snap, log=lambda *a: None) == 0
+    # and archive excludes them even if delisted
+    rec["delisted"] = "2026-06-30"
+    assert history.build_archive(records) == []

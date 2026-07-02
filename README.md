@@ -42,6 +42,11 @@ GitHub Actions (cron) → python -m scraper.main → site/data/listings.json →
   URLs per run are fetched and only 404s / "ogłoszenie nieaktualne" pages /
   archive redirects mark a property *wycofane*. n-online's own "Ogłoszenie
   archiwalne" flags are harvested as immediate evidence.
+- **Developer new-builds handled separately.** Ads flagged as *rynek
+  pierwotny* (or detected by keywords / many same-gallery ads on one portal)
+  get an "inwestycja" badge, one card per asking price instead of a bogus
+  merged "flat", no relist/sold history, and their own **Rynek** filter —
+  hide them entirely with *Rynek: Wtórny* when hunting resale flats.
 - **Archiwum view.** The dashboard's "Archiwum / sprzedane" filter shows
   properties that left the market, with their last asking price, the RCN sale
   price when matched, and the full timeline (`site/data/archive.json`).

@@ -89,6 +89,8 @@ def sweep(records, today: str, session, active_urls=None,
             continue
         if rec.get("delisted"):
             continue                          # already concluded
+        if rec.get("development"):
+            continue    # a vanished developer ad = unit type sold out, not "the flat sold"
         url = next((o.get("url") for o in reversed(rec.get("observations") or [])
                     if o.get("url")), None)
         if url:
