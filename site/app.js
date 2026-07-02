@@ -640,12 +640,23 @@ async function runRcnCheck(box, btn) {
     const wantNr = nr.toLowerCase().replace(/[^0-9a-z/]/g, "");
     const nrOk = geo.number && geo.number.toLowerCase().replace(/[^0-9a-z/]/g, "") === wantNr;
     let head = `<b>ul. ${escapeHtml(geo.street || ulEl.value)} ${escapeHtml(nr)}, ${escapeHtml(loc)}</b>`;
+    let parcel = null;
     if (nrOk) {
-      const parcel = await uldkParcel(geo.x, geo.y);
+      parcel = await uldkParcel(geo.x, geo.y);
       if (parcel) head += ` · działka ${escapeHtml(parcel.id)}${parcel.obreb ? ` (${escapeHtml(parcel.obreb)})` : ""}`;
     } else {
       head += ` · <i>geokoder nie potwierdził numeru ${escapeHtml(nr)} — wyniki mogą być przybliżone</i>`;
     }
+    // "view it" links: parcel highlighted on the official map (with the RCN
+    // layer, where each deed's full record is browsable) + Street View
+    const links = [];
+    if (parcel) {
+      links.push(`<a href="https://mapy.geoportal.gov.pl/imap/Imgp_2.html?identifyParcel=${encodeURIComponent(parcel.id)}"
+        target="_blank" rel="noopener">📍 działka + rejestr cen na geoportalu</a>`);
+    }
+    links.push(`<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${ulEl.value} ${nr}, ${loc}`)}"
+      target="_blank" rel="noopener">🗺 Google Maps / Street View</a>`);
+    head += `<div class="pin-links">${links.join(" · ")}</div>`;
     const [lok, bud] = await Promise.all([
       rcnDeedsNear(geo.x, geo.y, "lokale"), rcnDeedsNear(geo.x, geo.y, "budynki")]);
     let deeds = [...lok, ...bud];
