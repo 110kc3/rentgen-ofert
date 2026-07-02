@@ -243,20 +243,36 @@ def _street_tokens(s):
     return [t for t in _fold(s).split() if t not in _STREET_NOISE and not t.isdigit()]
 
 
+def _tok_eq(a, b):
+    """Token equality tolerant of Polish declension: 'gdanska' == 'gdanskiej',
+    'polna' == 'polnej', but 'kwiatowa' != 'kwiatkowskiego'."""
+    if a == b:
+        return True
+    short, long_ = (a, b) if len(a) <= len(b) else (b, a)
+    common = 0
+    for x, y in zip(short, long_):
+        if x != y:
+            break
+        common += 1
+    return (common >= 4 and common >= len(short) - 1
+            and len(long_) - common <= 3)
+
+
 def street_match(a, b):
     """True when two street names plausibly refer to the same street.
 
-    Compares the significant last token (surname) and requires any remaining
-    tokens of the shorter name to appear in the longer one, so
-    'Asnyka' == 'Adama Asnyka', but 'Polna' != 'Lipowa'.
+    Compares the significant last token (surname) with declension tolerance
+    and requires any remaining tokens of the shorter name to appear in the
+    longer one, so 'Asnyka' == 'Adama Asnyka', 'ul. Gdanskiej' == 'Gdanska',
+    but 'Polna' != 'Lipowa'.
     """
     ta, tb = _street_tokens(a), _street_tokens(b)
     if not ta or not tb:
         return False
-    if ta[-1] != tb[-1]:
+    if not _tok_eq(ta[-1], tb[-1]):
         return False
     small, big = (ta, tb) if len(ta) <= len(tb) else (tb, ta)
-    return all(t in big for t in small[:-1])
+    return all(any(_tok_eq(t, u) for u in big) for t in small[:-1])
 
 
 def _index_by_town(rows):
@@ -268,14 +284,19 @@ def _index_by_town(rows):
 
 def _candidates(rec, rows_by_town):
     snap = rec.get("snapshot") or {}
-    town = _fold(snap.get("locality"))
-    if not town:
-        return [], snap
     area = rec.get("area")
     if area is None:
         return [], snap
+    rows = ()
+    # portals sometimes put a district (Trynek, Srodmiescie) in `locality` and
+    # the real town in `district` (or vice versa) — try both
+    for key in (snap.get("locality"), snap.get("district")):
+        town = _fold(key)
+        if town and town in rows_by_town:
+            rows = rows_by_town[town]
+            break
     out = []
-    for r in rows_by_town.get(town, ()):
+    for r in rows:
         if abs(r["a"] - area) > AREA_TOL:
             continue
         out.append(r)
@@ -298,8 +319,18 @@ def _floor_int(v):
     return int(m.group()) if m else None
 
 
-def _score(rec, snap, r, is_flat):
-    """(confidence, ok). Confidence: 2 = street-anchored, 1 = attribute-anchored."""
+def _decimal_area(area):
+    """48.63 m2 is near-unique in a town; 50.0 m2 is not."""
+    return area is not None and abs(area - round(area)) > 0.01
+
+
+def _score(rec, snap, r, is_flat, unique=False):
+    """(confidence, ok). Confidence: 2 = street-anchored, 1 = attribute-anchored.
+
+    ``unique`` = this deed is the only area-candidate in the whole town; that
+    lets weaker attribute evidence through (still conservative: mismatching
+    known attributes always reject).
+    """
     street = snap.get("street")
     if street and r.get("ul") and street_match(street, r["ul"]):
         return 2, True
@@ -317,8 +348,20 @@ def _score(rec, snap, r, is_flat):
             if r["kond"] not in (floor, floor + 1):
                 return 0, False
             hits += 1
-        return (1, True) if hits >= 2 else (0, False)
-    # houses without street: area+town alone is too weak
+        if hits >= 2:
+            return 1, True
+        # a to-the-decimal area that exists exactly once in the town is itself
+        # strong evidence — accept with rooms agreeing (or unknown)
+        if unique and _decimal_area(rec.get("area")) and hits >= 0:
+            return 1, True
+        return 0, False
+    # houses: no street -> corroborate with the plot area (deed carries it)
+    plot = _to_f(snap.get("plot_area"))
+    grunt = _to_f(r.get("grunt"))
+    if plot and grunt and abs(plot - grunt) <= 0.1 * max(plot, grunt):
+        return 1, True
+    if unique and _decimal_area(rec.get("area")) and (not plot or not grunt):
+        return 1, True
     return 0, False
 
 
@@ -345,14 +388,21 @@ def match(records, snapshot, log=print):
     by_town = {"flat": _index_by_town(snapshot.get("lokale") or []),
                "house": _index_by_town(snapshot.get("budynki") or [])}
     attached = 0
+    funnel = {"records": 0, "no_location_yet": 0, "no_deed_candidates": 0,
+              "candidates_rejected": 0, "matched": 0}
     for rec in records:
         typ = rec.get("type")
         if typ not in by_town:
             continue
         if rec.get("development"):
             continue   # marketing photos != a specific flat; deeds can't be attributed
+        funnel["records"] += 1
         cands, snap = _candidates(rec, by_town[typ])
         if not cands:
+            if not _fold(snap.get("locality")) and not _fold(snap.get("district")):
+                funnel["no_location_yet"] += 1
+            else:
+                funnel["no_deed_candidates"] += 1
             continue
         first_seen = rec.get("first_seen")
         delisted = rec.get("delisted")
@@ -365,9 +415,10 @@ def match(records, snapshot, log=print):
             if kind == "sold" and not delisted:
                 continue
             window = [r for r in cands if _within(r["d"], lo, hi)]
+            unique = len(cands) == 1
             scored = []
             for r in window:
-                conf, ok = _score(rec, snap, r, typ == "flat")
+                conf, ok = _score(rec, snap, r, typ == "flat", unique=unique)
                 if ok:
                     scored.append((conf, r))
             if not scored:
@@ -397,5 +448,11 @@ def match(records, snapshot, log=print):
                     uniq.append(s)
             rec["sales"] = uniq
             attached += 1
-    log(f"RCN: matched sale events onto {attached} properties")
+            funnel["matched"] += 1
+        else:
+            funnel["candidates_rejected"] += 1
+    funnel["candidates_rejected"] -= funnel["matched"] if False else 0
+    match.last_funnel = funnel
+    log(f"RCN: matched sale events onto {attached} properties "
+        f"(funnel: {funnel})")
     return attached

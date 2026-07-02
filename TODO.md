@@ -47,6 +47,22 @@
       inputs, `content-visibility`; filter clicks went from ~seconds of
       freeze at ~19k cards to ~200 ms.
 
+## Done (RCN matching v2 + validator — this round)
+- [x] **Match-rate overhaul** (measured on real data: 29k records):
+      declension-tolerant street matching (Gdańskiej == Gdańska — was the
+      single biggest false-reject), district↔locality fallback, decimal-area
+      uniqueness rule for flats (48.63 m² occurring once in a town is identity
+      by itself), plot-area corroboration for houses (deed carries
+      nier_pow_gruntu). Result: 1 494 properties with attached deeds
+      (2 632 sale events; 2 520 wysoka / 112 średnia confidence).
+- [x] **Match funnel in meta.json** (`rcn`): records / no_location_yet /
+      no_deed_candidates / candidates_rejected / matched — visible on every run.
+- [x] **`python -m scraper.rcncheck`** — validate a single property by hand:
+      `rcncheck Gliwice 48.63 --ulica Asnyka --pokoje 2` lists all deeds for
+      that size in town and marks which the matcher would accept.
+- [x] Fixed the always-open miejscowość picker (a lost `[hidden]` CSS rule,
+      not a JS bug).
+
 ## Pending — timeline / RCN
 - [ ] House matching is street-anchored only (budynki records are noisy);
       consider dzialki-layer cross-checks for houses with plots.

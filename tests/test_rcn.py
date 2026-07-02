@@ -91,14 +91,41 @@ def test_no_match_when_street_differs():
     assert "sales" not in rec
 
 
-def test_no_street_needs_rooms_and_floor():
+def test_no_street_attribute_and_uniqueness_rules():
     rec = _rec(snapshot={"locality": "Gliwice", "rooms": 2, "floor": 2})
     # kond 3 == floor 2 + 1 (parter=1) -> attribute-anchored match
     snap = {"lokale": [_tx(ul=None)], "budynki": []}
     assert rcn.match([rec], snap, log=lambda *a: None) == 1
     assert rec["sales"][0]["confidence"] == "średnia"
-    # rooms alone (no floor) is not enough
+    # rooms-only IS enough when the area is decimal (39.4) and the deed is the
+    # town's only candidate...
     rec2 = _rec(snapshot={"locality": "Gliwice", "rooms": 2})
+    assert rcn.match([rec2], snap, log=lambda *a: None) == 1
+    # ...but not when the area is a round number (weak identity)
+    rec3 = _rec(area=39.0, snapshot={"locality": "Gliwice", "rooms": 2})
+    snap3 = {"lokale": [_tx(ul=None, a=39.0)], "budynki": []}
+    assert rcn.match([rec3], snap3, log=lambda *a: None) == 0
+    # ...and never when a known attribute disagrees
+    rec4 = _rec(snapshot={"locality": "Gliwice", "rooms": 4})
+    assert rcn.match([rec4], snap, log=lambda *a: None) == 0
+
+
+def test_street_declension_matches():
+    assert rcn.street_match("ul. Gdańskiej", "Gdańska")
+    assert rcn.street_match("Lipowej", "Lipowa")
+    assert not rcn.street_match("Kwiatowa", "Kwiatkowskiego")
+
+
+def test_house_plot_corroboration():
+    rec = _rec(type="house", area=141.5,
+               snapshot={"locality": "Pyskowice", "plot_area": 800})
+    snap = {"lokale": [], "budynki": [
+        {"d": "2020-05-05", "c": 610000, "a": 141.5, "grunt": 812.0,
+         "rynek": "w", "msc": "Pyskowice", "ul": None, "nr": None}]}
+    assert rcn.match([rec], snap, log=lambda *a: None) == 1
+    # plot off by >10% -> no match
+    rec2 = _rec(type="house", area=141.5,
+                snapshot={"locality": "Pyskowice", "plot_area": 400})
     assert rcn.match([rec2], snap, log=lambda *a: None) == 0
 
 
