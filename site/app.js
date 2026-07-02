@@ -559,11 +559,116 @@ function pinBlock(l) {
       <input class="pin-ul" placeholder="ulica, np. Daszyńskiego" value="${escapeHtml(l.street || "")}">
       <input class="pin-nr" placeholder="nr">
       ${extra}
-      <button type="button" class="pin-copy">Kopiuj komendę</button>
-      <div class="pin-hint">wklej w terminalu (katalog repo): pokaże akty notarialne
-        dla tego adresu i przypnie go do ogłoszenia (overrides.json)</div>
+      <button type="button" class="pin-check">Sprawdź w RCN</button>
+      <button type="button" class="pin-copy" title="komenda przypina adres do ogłoszenia na stałe (overrides.json)">📌 Kopiuj</button>
+      <div class="pin-results" hidden></div>
+      <div class="pin-hint">„Sprawdź" działa od razu w przeglądarce (GUGiK: geokoder + działka +
+        akty notarialne). „📌 Kopiuj" daje komendę do terminala, która przypina adres na stałe.</div>
     </div>
   </details>`;
+}
+
+// ---- in-browser RCN check (UUG geocoder -> ULDK parcel -> WFS deeds) --------
+
+async function uugResolve(loc, ul, nr) {
+  const addr = `${loc}, ${ul} ${nr}`.trim();
+  const r = await fetch("https://services.gugik.gov.pl/uug/?request=GetAddress&address=" +
+                        encodeURIComponent(addr));
+  const d = await r.json();
+  const res = d && d.results && d.results["1"];
+  if (!res) return null;
+  return { street: res.street, number: res.number,
+           x: parseFloat(res.x), y: parseFloat(res.y) };
+}
+
+async function uldkParcel(x, y) {
+  const r = await fetch(`https://uldk.gugik.gov.pl/?request=GetParcelByXY&xy=${x},${y},2180&result=id,region`);
+  const lines = (await r.text()).trim().split("\n");
+  if (lines[0].trim() !== "0" || !lines[1]) return null;
+  const p = lines[1].split("|");
+  return { id: p[0].trim(), obreb: (p[1] || "").trim() };
+}
+
+const _MS_NS = "http://mapserver.gis.umn.edu/mapserver";
+
+async function rcnDeedsNear(x, y, layer, radius = 60) {
+  // WFS bbox in the layer's native EPSG:2180 axis order: northing first.
+  // 60 m around the UUG address point covers the building; a bigger radius in
+  // a dense city block overflows the feature cap and silently drops deeds.
+  const bbox = `${y - radius},${x - radius},${y + radius},${x + radius}`;
+  const url = "https://mapy.geoportal.gov.pl/wss/service/rcn?service=WFS&version=2.0.0" +
+              `&request=GetFeature&typeNames=ms:${layer}&count=500&bbox=${bbox}`;
+  const doc = new DOMParser().parseFromString(await (await fetch(url)).text(), "text/xml");
+  const g = (f, n) => { const el = f.getElementsByTagNameNS(_MS_NS, n)[0];
+                        return el ? el.textContent.trim() : ""; };
+  const out = [];
+  for (const f of doc.getElementsByTagNameNS(_MS_NS, layer)) {
+    const pfx = layer === "lokale" ? "lok" : "bud";
+    const trans = g(f, "tran_rodzaj_trans");
+    if (trans && trans !== "wolnyRynek") continue;      // skip auctions etc.
+    out.push({
+      layer,
+      date: g(f, "dok_data").slice(0, 10),
+      price: parseFloat(g(f, `${pfx}_cena_brutto`)) || parseFloat(g(f, "tran_cena_brutto")) || null,
+      area: parseFloat(g(f, `${pfx}_pow_uzyt`)) || null,
+      rooms: layer === "lokale" ? g(f, "lok_liczba_izb") : "",
+      grunt: layer === "budynki" ? g(f, "nier_pow_gruntu") : "",
+      market: g(f, "tran_rodzaj_rynku"),
+      addr: g(f, `${pfx}_adres`),
+    });
+  }
+  return out;
+}
+
+function addrNr(addrStr) {
+  const m = /NR_PORZ:([^;]+)/.exec(addrStr || "");
+  return m ? m[1].trim().toLowerCase().replace(/[^0-9a-z/]/g, "") : null;
+}
+
+async function runRcnCheck(box, btn) {
+  const results = box.querySelector(".pin-results");
+  const ulEl = box.querySelector(".pin-ul");
+  const nr = box.querySelector(".pin-nr").value.trim();
+  const loc = box.dataset.loc;
+  results.hidden = false;
+  if (!ulEl.value.trim() || !nr) { results.innerHTML = "podaj ulicę i numer budynku"; return; }
+  btn.disabled = true; btn.textContent = "Sprawdzam…";
+  try {
+    const geo = await uugResolve(loc, ulEl.value.trim(), nr);
+    if (!geo) { results.innerHTML = "GUGiK nie zna takiego adresu — sprawdź pisownię"; return; }
+    if (geo.street) ulEl.value = geo.street;   // autofill the canonical name
+    const wantNr = nr.toLowerCase().replace(/[^0-9a-z/]/g, "");
+    const nrOk = geo.number && geo.number.toLowerCase().replace(/[^0-9a-z/]/g, "") === wantNr;
+    let head = `<b>ul. ${escapeHtml(geo.street || ulEl.value)} ${escapeHtml(nr)}, ${escapeHtml(loc)}</b>`;
+    if (nrOk) {
+      const parcel = await uldkParcel(geo.x, geo.y);
+      if (parcel) head += ` · działka ${escapeHtml(parcel.id)}${parcel.obreb ? ` (${escapeHtml(parcel.obreb)})` : ""}`;
+    } else {
+      head += ` · <i>geokoder nie potwierdził numeru ${escapeHtml(nr)} — wyniki mogą być przybliżone</i>`;
+    }
+    const [lok, bud] = await Promise.all([
+      rcnDeedsNear(geo.x, geo.y, "lokale"), rcnDeedsNear(geo.x, geo.y, "budynki")]);
+    let deeds = [...lok, ...bud];
+    if (nrOk) deeds = deeds.filter((d) => addrNr(d.addr) === wantNr);
+    deeds.sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+    const rows = deeds.map((d) => {
+      const bits = [d.date,
+        d.price != null ? `<b>${PLN.format(d.price)} zł</b>` : "cena ?",
+        d.area != null ? `${d.area} m²` : null,
+        d.market ? `rynek ${d.market.startsWith("p") ? "pierwotny" : "wtórny"}` : null,
+        d.layer === "lokale" ? (d.rooms ? `${d.rooms} izb` : null)
+                             : (d.grunt ? `działka ${d.grunt} m²` : null),
+      ].filter(Boolean).join(" · ");
+      return `<div class="tl-row"><span class="tl-what">${d.layer === "lokale" ? "🏠" : "🏡"} ${bits}</span></div>`;
+    }).join("");
+    results.innerHTML = head + (deeds.length
+      ? `<div class="pin-deeds">${rows}</div>`
+      : `<div class="pin-deeds">brak aktów notarialnych dla tego ${nrOk ? "budynku" : "miejsca"} w RCN (rejestr od ~2000 r.)</div>`);
+  } catch (err) {
+    results.innerHTML = "błąd połączenia z usługami GUGiK — spróbuj ponownie";
+  } finally {
+    btn.disabled = false; btn.textContent = "Sprawdź w RCN";
+  }
 }
 
 function buildPinCommand(box) {
@@ -584,6 +689,12 @@ function buildPinCommand(box) {
 
 function wirePinButtons() {
   $("#grid").addEventListener("click", async (e) => {
+    const check = e.target.closest(".pin-check");
+    if (check) {
+      e.stopPropagation();
+      runRcnCheck(check.closest(".pin-form"), check);
+      return;
+    }
     const btn = e.target.closest(".pin-copy");
     if (!btn) return;
     e.stopPropagation();
@@ -594,7 +705,7 @@ function wirePinButtons() {
     } catch (err) {
       window.prompt("Skopiuj komendę:", cmd);
     }
-    setTimeout(() => { btn.textContent = "Kopiuj komendę"; }, 2500);
+    setTimeout(() => { btn.textContent = "📌 Kopiuj"; }, 2500);
   });
 }
 
