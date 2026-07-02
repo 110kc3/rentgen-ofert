@@ -201,3 +201,10 @@ footer { text-align: center; color: var(--muted); font-size: 12px; padding: 20px
 .pin-copy { background: var(--accent); color: #fff; border: 0; border-radius: 6px;
   padding: 5px 9px; font-size: 12px; font-weight: 600; cursor: pointer; }
 .pin-hint { flex-basis: 100%; font-size: 11px; color: var(--muted); }
+
+/* ---- in-browser RCN check results ---- */
+.pin-check { background: #1a7f37; color: #fff; border: 0; border-radius: 6px;
+  padding: 5px 9px; font-size: 12px; font-weight: 600; cursor: pointer; }
+.pin-check:disabled { opacity: .6; cursor: wait; }
+.pin-results { flex-basis: 100%; font-size: 12px; margin-top: 4px; color: var(--text); }
+.pin-deeds { margin-top: 4px; display: flex; flex-direction: column; gap: 2px; }
