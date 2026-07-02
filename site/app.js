@@ -97,6 +97,7 @@ async function boot() {
   wireControls();
   wireLocality();
   wireChips();
+  wirePinButtons();
   restoreFilters();
   render();
 }
@@ -542,6 +543,61 @@ function pastSaleLine(l) {
   return `<div class="pastsale">🔑 poprzednio sprzedane ${s.date} za <b>${PLN.format(s.price)} zł</b> (akt not., pewność: ${s.confidence})</div>`;
 }
 
+// ---- "uzupelnij adres" -> ready-to-paste rcncheck --pin command -------------
+
+function pinBlock(l) {
+  if (!l.url) return "";
+  const extra = l.type === "flat"
+    ? `<input class="pin-x" data-flag="--pietro" placeholder="piętro" inputmode="numeric">`
+    : `<input class="pin-x" data-flag="--dzialka" placeholder="działka m²" inputmode="numeric">`;
+  return `<details class="pinbox" onclick="event.stopPropagation()">
+    <summary>📍 znasz adres? sprawdź w RCN</summary>
+    <div class="pin-form"
+         data-url="${escapeHtml(l.url)}" data-area="${l.area ?? ""}"
+         data-type="${l.type}" data-loc="${escapeHtml(normLoc(l.locality) || l.locality || "")}"
+         data-rooms="${l.rooms ?? ""}">
+      <input class="pin-ul" placeholder="ulica, np. Daszyńskiego" value="${escapeHtml(l.street || "")}">
+      <input class="pin-nr" placeholder="nr">
+      ${extra}
+      <button type="button" class="pin-copy">Kopiuj komendę</button>
+      <div class="pin-hint">wklej w terminalu (katalog repo): pokaże akty notarialne
+        dla tego adresu i przypnie go do ogłoszenia (overrides.json)</div>
+    </div>
+  </details>`;
+}
+
+function buildPinCommand(box) {
+  const q = (v) => `"${String(v).replace(/"/g, "")}"`;
+  const val = (sel) => { const el = box.querySelector(sel); return el ? el.value.trim() : ""; };
+  const parts = ["python -m scraper.rcncheck", q(box.dataset.loc || "?")];
+  if (box.dataset.area) parts.push(box.dataset.area);
+  const ul = val(".pin-ul"), nr = val(".pin-nr");
+  if (ul) parts.push("--ulica", q(ul));
+  if (nr) parts.push("--nr", nr);
+  const x = box.querySelector(".pin-x");
+  if (x && x.value.trim()) parts.push(x.dataset.flag, x.value.trim());
+  if (box.dataset.type === "house") parts.push("--typ", "house");
+  else if (box.dataset.rooms) parts.push("--pokoje", box.dataset.rooms);
+  parts.push("--pin", q(box.dataset.url));
+  return parts.join(" ");
+}
+
+function wirePinButtons() {
+  $("#grid").addEventListener("click", async (e) => {
+    const btn = e.target.closest(".pin-copy");
+    if (!btn) return;
+    e.stopPropagation();
+    const cmd = buildPinCommand(btn.closest(".pin-form"));
+    try {
+      await navigator.clipboard.writeText(cmd);
+      btn.textContent = "Skopiowano ✓";
+    } catch (err) {
+      window.prompt("Skopiuj komendę:", cmd);
+    }
+    setTimeout(() => { btn.textContent = "Kopiuj komendę"; }, 2500);
+  });
+}
+
 function card(l) {
   const ppm = l.price_per_m2 != null ? `${PLN.format(l.price_per_m2)} zł/m²` : "";
   const facts = [
@@ -577,6 +633,7 @@ function card(l) {
       ${historyBlock(l)}
       ${offersBlock(l)}
       ${timelineBlock(l)}
+      ${pinBlock(l)}
     </div>
   </div>`;
 }
