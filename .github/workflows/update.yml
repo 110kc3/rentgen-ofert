@@ -11,9 +11,12 @@ on:
         default: "1" 
   push:
     branches: [main]
-    paths-ignore:
-      - "site/data/**"        # don't re-trigger on the data commit below
-      - "cache/**"            # nor on the photo-hash cache commit
+    # only scraper-affecting changes trigger the heavy scrape; pure site/
+    # changes are published by the lightweight deploy.yml instead
+    paths:
+      - "scraper/**"
+      - "overrides.json"
+      - ".github/workflows/update.yml" 
 
 permissions:
   contents: write             # commit refreshed data (price history in git)
@@ -63,3 +66,5 @@ jobs:
           path: site
       - id: deployment
         uses: actions/deploy-pages@v4
+        with:
+          timeout: 1200000   # Pages queue can be slow; wait up to 20 min
