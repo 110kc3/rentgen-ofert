@@ -208,3 +208,6 @@ footer { text-align: center; color: var(--muted); font-size: 12px; padding: 20px
 .pin-check:disabled { opacity: .6; cursor: wait; }
 .pin-results { flex-basis: 100%; font-size: 12px; margin-top: 4px; color: var(--text); }
 .pin-deeds { margin-top: 4px; display: flex; flex-direction: column; gap: 2px; }
+.pin-links { margin-top: 3px; }
+.pin-links a { color: var(--accent); text-decoration: none; font-size: 12px; }
+.pin-links a:hover { text-decoration: underline; }
