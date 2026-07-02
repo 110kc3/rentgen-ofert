@@ -85,7 +85,22 @@ Dashboard URL: `https://<your-username>.github.io/rentgen-ofert/`.
 > First push blocked by a `.git/index.lock`? Delete that file and commit again
 > (a stale lock was left behind — see TODO.md).
 
-### B) Run locally
+### B) Scrape locally, let CI only publish (fastest loop)
+
+All scraper output is committed files, so a local scrape IS the cache — CI
+never needs to repeat it:
+
+```bash
+python -m scraper.main                                   # ~minutes with warm caches
+git add -A site cache && git commit -m "data: local scrape" && git push
+```
+
+Any push touching `site/**` triggers the lightweight **Deploy site** workflow
+(publishes in ~1 min, no scraping). The heavy **Update listings** workflow now
+runs only on its cron, on `scraper/**` changes, or manually (with an `rcn`
+input — set it to `force` to re-pull the RCN transaction snapshot).
+
+### C) Run locally (dashboard preview)
 
 ```bash
 pip install -r scraper/requirements.txt   # requests + beautifulsoup4 + Pillow

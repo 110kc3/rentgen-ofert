@@ -1,0 +1,43 @@
+# Publish site/ to GitHub Pages WITHOUT scraping.
+#
+# Runs when you push anything under site/ (e.g. data scraped locally, or a
+# dashboard tweak) and on demand from the Actions tab. The heavy scrape
+# workflow (update.yml) now only triggers on scraper-code changes and on its
+# cron — so the local flow is:
+#
+#     python -m scraper.main        # scrape locally (caches make it fast)
+#     git add -A site cache && git commit -m "data: local scrape" && git push
+#     -> this workflow publishes it in ~1 minute
+name: Deploy site
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths: ["site/**"]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: rentgen-pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@v4
+        with:
+          timeout: 1200000   # Pages queue can be slow; wait up to 20 min
