@@ -71,6 +71,18 @@
       and the matcher treats street+number as decisive (wysoka), including
       against deeds that lack a usable-area field (kept in the snapshot now).
 
+## Done (address -> parcel resolution — this round)
+- [x] **`scraper/uldk.py`**: address -> canonical street + EPSG:2180 point
+      (UUG geocoder) -> cadastral parcel id (ULDK GetParcelByXY). Free GUGiK
+      services, no keys. Guarded: if the geocoder can't confirm the exact
+      building number, no parcel is claimed.
+- [x] `rcncheck` resolves automatically when --ulica + --nr are given, uses
+      the canonical street for matching, and `--pin` stores dzialka_id + x/y.
+- [x] RCN snapshot now carries the parcel (`dz`, from lok_id_lokalu /
+      bud_id_budynku) and the scorer treats parcel equality as decisive both
+      ways. Takes effect for matching after the next weekly snapshot re-pull
+      (or RENTGEN_RCN=force).
+
 ## Pending — timeline / RCN
 - [ ] House matching is street-anchored only (budynki records are noisy);
       consider dzialki-layer cross-checks for houses with plots.
