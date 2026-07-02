@@ -168,6 +168,7 @@ def _compact_bud(row):
 
 def fetch(session, typename, flt, props, tag, compact, log=print):
     out, start = [], 0
+    seen = set()
     while True:
         page = _get_page(session, typename, flt, props, start)
         n = 0
@@ -175,6 +176,10 @@ def fetch(session, typename, flt, props, tag, compact, log=print):
             n += 1
             c = compact(row)
             if c:
+                key = json.dumps(c, sort_keys=True, ensure_ascii=False)
+                if key in seen:
+                    continue       # WFS emits duplicate rows per linked object
+                seen.add(key)
                 out.append(c)
         if n:
             log(f"  rcn {tag}: {start + n} fetched, {len(out)} kept")
@@ -354,9 +359,11 @@ def _score(rec, snap, r, is_flat, unique=False):
     known attributes always reject).
     """
     dz = snap.get("dzialka_id")
-    if dz and r.get("dz"):
-        # same cadastral parcel -> same building; different parcel -> not it
-        return (2, True) if _fold(dz) == _fold(r["dz"]) else (0, False)
+    if dz and r.get("dz") and _fold(dz) == _fold(r["dz"]):
+        return 2, True             # same cadastral parcel -> same building
+    # NOTE: a parcel MISmatch is not decisive on its own — parcels get
+    # renumbered over the years (real case: a 2008 deed on działka 974 whose
+    # address sits on today's działka 1506). Street+number agreement wins.
     street = snap.get("street")
     nr = _fold(str(snap.get("nr"))) if snap.get("nr") else None
     if street and r.get("ul") and street_match(street, r["ul"]):
@@ -368,6 +375,8 @@ def _score(rec, snap, r, is_flat, unique=False):
         return 2, True
     if street and r.get("ul") and not street_match(street, r["ul"]):
         return 0, False        # both known and different -> different property
+    if dz and r.get("dz"):
+        return 0, False        # parcels differ and no street agreement -> not it
     if r.get("a") is None:
         return 0, False        # area-less deed without street match -> never
     if is_flat:
