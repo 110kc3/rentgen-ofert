@@ -63,6 +63,14 @@
 - [x] Fixed the always-open miejscowość picker (a lost `[hidden]` CSS rule,
       not a JS bug).
 
+## Done (address lookup + manual pinning — this round)
+- [x] `rcncheck` searches by exact address (`--ulica`, `--nr`, area optional,
+      flats+houses) — shows a building's full sale history back to ~2000.
+- [x] **overrides.json + `--pin`**: hand-learned addresses attach to listing
+      URLs; the pipeline applies them to history snapshots (`manual: true`)
+      and the matcher treats street+number as decisive (wysoka), including
+      against deeds that lack a usable-area field (kept in the snapshot now).
+
 ## Pending — timeline / RCN
 - [ ] House matching is street-anchored only (budynki records are noisy);
       consider dzialki-layer cross-checks for houses with plots.

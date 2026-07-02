@@ -197,3 +197,21 @@ def test_development_records_skip_relist_delist_rcn_archive():
     # and archive excludes them even if delisted
     rec["delisted"] = "2026-06-30"
     assert history.build_archive(records) == []
+
+
+def test_overrides_pin_and_apply(tmp_path):
+    from scraper import overrides
+    path = tmp_path / "overrides.json"
+    overrides.pin("https://otodom.pl/a1", path=path,
+                  street="Adama Asnyka", nr="11", floor=3, bogus="dropped")
+    records = []
+    history.update([_prop()], records, "2026-06-01")
+    n = overrides.apply(records, overrides.load(path), log=lambda *a: None)
+    assert n == 1
+    snap = records[0]["snapshot"]
+    assert snap["street"] == "Adama Asnyka" and snap["nr"] == "11" and snap["floor"] == 3
+    assert "bogus" not in snap
+    assert records[0]["manual"] is True
+    # unknown URL -> ignored quietly
+    assert overrides.apply(records, {"https://x/unknown": {"nr": "5"}},
+                           log=lambda *a: None) == 0

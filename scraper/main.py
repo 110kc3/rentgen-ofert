@@ -24,7 +24,7 @@ import pathlib
 import sys
 
 from . import cache as phcache
-from . import delist, gratka, history, morizon, net, nieruchomosci_online, olx, otodom, photomatch, rcn
+from . import delist, gratka, history, morizon, net, nieruchomosci_online, olx, otodom, overrides, photomatch, rcn
 from .normalize import dedupe, link_same_size
 
 DATA_DIR = pathlib.Path(__file__).resolve().parents[1] / "site" / "data"
@@ -111,6 +111,7 @@ def run() -> int:
                      max_checks=verify_max)
 
     history.update(listings, records, today)
+    overrides.apply(records, overrides.load())   # hand-pinned addresses win
 
     # Real sale prices from notarial deeds (RCN) matched onto our records.
     # Runs after update so brand-new records already carry a snapshot

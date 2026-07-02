@@ -141,3 +141,26 @@ def test_ambiguous_sold_not_attached():
             "budynki": []}
     rcn.match([rec], snap, log=lambda *a: None)
     assert not any(s["kind"] == "sold" for s in rec.get("sales", []))
+
+
+def test_pinned_number_is_decisive():
+    # street+nr agree -> wysoka, even if rooms/floor unknown
+    rec = _rec(snapshot={"locality": "Gliwice", "street": "Asnyka", "nr": "11"})
+    snap = {"lokale": [_tx()], "budynki": []}
+    assert rcn.match([rec], snap, log=lambda *a: None) == 1
+    assert rec["sales"][0]["confidence"] == "wysoka"
+    # street agrees but number differs -> reject
+    rec2 = _rec(snapshot={"locality": "Gliwice", "street": "Asnyka", "nr": "13"})
+    assert rcn.match([rec2], snap, log=lambda *a: None) == 0
+
+
+def test_arealess_deed_needs_street_and_nr():
+    deed = _tx(a=None)
+    # with pinned street+nr -> matches despite missing deed area
+    rec = _rec(snapshot={"locality": "Gliwice", "street": "Asnyka", "nr": "11"})
+    assert rcn.match([rec], {"lokale": [deed], "budynki": []},
+                     log=lambda *a: None) == 1
+    # without a pinned nr the area-less deed is never considered
+    rec2 = _rec(snapshot={"locality": "Gliwice", "street": "Asnyka"})
+    assert rcn.match([rec2], {"lokale": [deed], "budynki": []},
+                     log=lambda *a: None) == 0
