@@ -1,3 +1,6 @@
+# Scrape + commit data. Does NOT deploy — deploy.yml picks up every completed
+# run (workflow_run trigger) and publishes, with retries. This keeps exactly
+# one deployment path, so two workflows never race for the Pages queue.
 name: Update listings
 
 on:
@@ -8,7 +11,7 @@ on:
       rcn:
         description: "RCN snapshot: 1 = cache (weekly refresh), force = re-pull now"
         required: false
-        default: "1" 
+        default: "1"
   push:
     branches: [main]
     # only scraper-affecting changes trigger the heavy scrape; pure site/
@@ -16,23 +19,18 @@ on:
     paths:
       - "scraper/**"
       - "overrides.json"
-      - ".github/workflows/update.yml" 
+      - ".github/workflows/update.yml"
 
 permissions:
   contents: write             # commit refreshed data (price history in git)
-  pages: write                # deploy to GitHub Pages
-  id-token: write
 
 concurrency:
-  group: rentgen-pages
+  group: rentgen-scrape
   cancel-in-progress: false
 
 jobs:
-  update-and-deploy:
+  update:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
 
@@ -52,19 +50,11 @@ jobs:
           RENTGEN_RCN: ${{ github.event.inputs.rcn || '1' }}
         run: python -m scraper.main
 
-      - name: Commit refreshed data + photo-hash cache
+      - name: Commit refreshed data + caches
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin main || true
           git add -A site/data cache
           git commit -m "data: refresh Śląskie listings [skip ci]" || echo "no changes to commit"
           git push || echo "nothing to push"
-
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: site
-      - id: deployment
-        uses: actions/deploy-pages@v4
-        with:
-          timeout: 1200000   # Pages queue can be slow; wait up to 20 min

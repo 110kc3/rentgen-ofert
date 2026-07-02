@@ -1,13 +1,9 @@
-# Publish site/ to GitHub Pages WITHOUT scraping.
-#
-# Runs when you push anything under site/ (e.g. data scraped locally, or a
-# dashboard tweak) and on demand from the Actions tab. The heavy scrape
-# workflow (update.yml) now only triggers on scraper-code changes and on its
-# cron — so the local flow is:
-#
-#     python -m scraper.main        # scrape locally (caches make it fast)
-#     git add -A site cache && git commit -m "data: local scrape" && git push
-#     -> this workflow publishes it in ~1 minute
+# The ONLY workflow that touches GitHub Pages. Publishes site/ on:
+#   * push changing site/**  (e.g. data scraped locally, dashboard tweaks)
+#   * completion of "Update listings" (fresh CI data)
+#   * manual dispatch
+# The Pages queue occasionally wedges for ~10 min, so the deploy is retried
+# twice with a pause; concurrency serializes deployments so they never race.
 name: Deploy site
 
 on:
@@ -15,6 +11,9 @@ on:
   push:
     branches: [main]
     paths: ["site/**"]
+  workflow_run:
+    workflows: ["Update listings"]
+    types: [completed]
 
 permissions:
   contents: read
@@ -30,14 +29,27 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.final.outputs.page_url || steps.try1.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main            # workflow_run checks out the triggering sha; we want fresh main (incl. the data commit)
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
-      - id: deployment
+      - name: Deploy (attempt 1)
+        id: try1
+        continue-on-error: true
         uses: actions/deploy-pages@v4
         with:
-          timeout: 1200000   # Pages queue can be slow; wait up to 20 min
+          timeout: 600000      # the action's hard maximum
+      - name: Wait for the Pages queue to clear
+        if: steps.try1.outcome == 'failure'
+        run: sleep 300
+      - name: Deploy (attempt 2)
+        id: final
+        if: steps.try1.outcome == 'failure'
+        uses: actions/deploy-pages@v4
+        with:
+          timeout: 600000
