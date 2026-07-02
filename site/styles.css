@@ -213,3 +213,5 @@ footer { text-align: center; color: var(--muted); font-size: 12px; padding: 20px
 .pin-links a:hover { text-decoration: underline; }
 .tl-src { color: var(--muted); font-size: 11px; }
 .tl-src a { color: var(--accent); text-decoration: none; }
+.hist .drop { background: #166534; color: #fff; font-weight: 700; font-size: 11px;
+  padding: 1px 6px; border-radius: 6px; }
