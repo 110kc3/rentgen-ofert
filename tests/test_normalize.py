@@ -147,3 +147,26 @@ def test_is_development_signals():
     assert is_development({"market": "primary", "title": "Mieszkanie"})
     assert is_development({"title": "Nowa inwestycja — Osiedle Parkowe etap III"})
     assert not is_development({"market": "secondary", "title": "Mieszkanie po remoncie"})
+
+
+def test_cross_size_same_price_same_photos_merges():
+    from scraper.normalize import dedupe
+    H = 21
+    # one house: 204 m2 on otodom, 280 m2 on n-online — same price, same photos
+    a = _l(source="otodom", source_id="1", url="u-oto", type="house",
+           area=204.0, price=999000, locality="Gliwice", phashes=[H])
+    b = _l(source="nieruchomosci-online", source_id="2", url="u-nol", type="house",
+           area=280.0, price=999000, locality="Gliwice", phashes=[H])
+    props = dedupe([a, b])
+    assert len(props) == 1
+    assert len(props[0]["offers"]) == 2
+    assert props[0]["area"] == 204.0          # preferred source's figure wins
+
+
+def test_cross_size_different_photos_stay_apart():
+    from scraper.normalize import dedupe
+    a = _l(source="otodom", source_id="1", url="u1", type="house",
+           area=204.0, price=999000, locality="Gliwice", phashes=[3])
+    b = _l(source="olx", source_id="2", url="u2", type="house",
+           area=280.0, price=999000, locality="Gliwice", phashes=[(1 << 64) - 1])
+    assert len(dedupe([a, b])) == 2

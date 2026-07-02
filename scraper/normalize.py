@@ -227,7 +227,36 @@ def _photo_clusters(members):
     return list(clusters.values())
 
 
+def _cross_size_unify(listings):
+    """Same town + same asking price + same gallery = same property, even when
+    the declared area differs between portals (agents mix usable m2 with total
+    m2 — e.g. 204 m2 on Otodom vs 280 m2 on n-online for one house). The
+    size-first grouping would never compare their photos, so unify the areas
+    up front: every photo-cluster member inherits the preferred source's size.
+    Developments are excluded (same price + photos across sizes there means
+    different unit types, which must stay apart)."""
+    buckets = defaultdict(list)
+    for l in listings:
+        loc = (l.get("locality") or "").strip().lower()
+        if l.get("price") and loc and l.get("phashes") and not is_development(l):
+            buckets[(l.get("type"), loc, l["price"])].append(l)
+    for members in buckets.values():
+        if len(members) < 2:
+            continue
+        for cluster in _photo_clusters(members):
+            sizes = {round(m["area"], 2) for m in cluster if m.get("area") is not None}
+            if len(cluster) < 2 or len(sizes) <= 1:
+                continue
+            best = sorted(cluster, key=_rank)[0]
+            for m in cluster:
+                m["area"] = best.get("area")
+                if m.get("type") == "flat":
+                    m["rooms"] = best.get("rooms")
+    return listings
+
+
 def dedupe(listings):
+    _cross_size_unify(listings)
     groups = defaultdict(list)
     loners = []
     for l in listings:

@@ -3,7 +3,12 @@ name: Update listings
 on:
   schedule:
     - cron: "0 6,18 * * *"   # 06:00 and 18:00 UTC, every day
-  workflow_dispatch: {}       # lets you run it manually from the Actions tab
+  workflow_dispatch:          # lets you run it manually from the Actions tab
+    inputs:
+      rcn:
+        description: "RCN snapshot: 1 = cache (weekly refresh), force = re-pull now"
+        required: false
+        default: "1" 
   push:
     branches: [main]
     paths-ignore:
@@ -41,6 +46,7 @@ jobs:
         env:
           RENTGEN_MAX_PAGES: "50"
           RENTGEN_DELAY: "0.7"
+          RENTGEN_RCN: ${{ github.event.inputs.rcn || '1' }}
         run: python -m scraper.main
 
       - name: Commit refreshed data + photo-hash cache
