@@ -138,8 +138,8 @@ def _compact_bud(row):
     date = (row.get("dok_data") or "")[:10]
     price = _to_f(row.get("bud_cena_brutto")) or _to_f(row.get("tran_cena_brutto"))
     area = _to_f(row.get("bud_pow_uzyt"))
-    if not date or not price or not area:
-        return None
+    if not date or not price:
+        return None            # area may be missing — still useful by address
     if row.get("tran_rodzaj_trans") not in ("", None, "wolnyRynek"):
         return None
     msc, ul, nr = _addr(row.get("bud_adres"))
@@ -295,8 +295,13 @@ def _candidates(rec, rows_by_town):
         if town and town in rows_by_town:
             rows = rows_by_town[town]
             break
+    pinned_nr = bool(snap.get("nr"))
     out = []
     for r in rows:
+        if r.get("a") is None:
+            if pinned_nr and r.get("ul"):
+                out.append(r)      # judged by street+number in _score
+            continue
         if abs(r["a"] - area) > AREA_TOL:
             continue
         out.append(r)
@@ -332,10 +337,18 @@ def _score(rec, snap, r, is_flat, unique=False):
     known attributes always reject).
     """
     street = snap.get("street")
+    nr = _fold(str(snap.get("nr"))) if snap.get("nr") else None
     if street and r.get("ul") and street_match(street, r["ul"]):
+        if nr and r.get("nr"):
+            # street AND building number known on both sides -> decisive
+            return (2, True) if _fold(str(r["nr"])) == nr else (0, False)
+        if r.get("a") is None:
+            return 0, False    # area-less deed needs the number to be sure
         return 2, True
     if street and r.get("ul") and not street_match(street, r["ul"]):
         return 0, False        # both known and different -> different property
+    if r.get("a") is None:
+        return 0, False        # area-less deed without street match -> never
     if is_flat:
         rooms, floor = _to_i(snap.get("rooms")), _floor_int(snap.get("floor"))
         hits = 0

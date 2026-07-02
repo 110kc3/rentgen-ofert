@@ -129,6 +129,25 @@ back to ~2000 in many powiats) and marks which ones the automatic matcher
 would accept, with confidence. Needs `cache/rcn_snapshot.json.gz` (created by
 the scraper's weekly RCN pull).
 
+**Know the exact address?** Search by it directly (no area needed) — this
+shows the building's complete sale history:
+
+```bash
+python -m scraper.rcncheck Gliwice --ulica "Adama Asnyka" --nr 11
+```
+
+**Listings rarely reveal the address — pin it when you learn it.** Add
+`--pin <listing-url>` (or edit `overrides.json` by hand) and every future
+pipeline run treats the pinned street/number as ground truth for that
+listing, upgrading its RCN match to street+number certainty:
+
+```bash
+python -m scraper.rcncheck Gliwice 48.63 --ulica Asnyka --nr 11 \
+    --pin https://www.otodom.pl/pl/oferta/mieszkanie-xyz
+```
+
+Commit `overrides.json` so CI picks it up.
+
 ## Tests
 
 ```bash
