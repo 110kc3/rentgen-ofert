@@ -117,6 +117,18 @@ portal still rate-limits you (nieruchomości-online is strict, especially on rep
 runs), slow down with `RENTGEN_DELAY=2`, scrape less with `RENTGEN_TYPES=house`,
 skip the heavy photo step with `RENTGEN_PHOTOS=0`, and avoid back-to-back runs.
 
+## Check one property against RCN by hand
+
+```bash
+python -m scraper.rcncheck Gliwice 48.63 --ulica Asnyka --pokoje 2
+python -m scraper.rcncheck Pyskowice 141.5 --typ house --dzialka 800
+```
+
+Lists every notarial deed for that size in that town (the register reaches
+back to ~2000 in many powiats) and marks which ones the automatic matcher
+would accept, with confidence. Needs `cache/rcn_snapshot.json.gz` (created by
+the scraper's weekly RCN pull).
+
 ## Tests
 
 ```bash

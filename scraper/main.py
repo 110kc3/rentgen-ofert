@@ -160,6 +160,7 @@ def run() -> int:
         },
         "relisted": relisted,
         "archive": len(archive),
+        "rcn": getattr(rcn.match, "last_funnel", None),
         "sold_confirmed": sum(1 for a in archive if a.get("sold")),
         "errors": errors,
     }
