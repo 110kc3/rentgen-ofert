@@ -197,9 +197,11 @@ function wireControls() {
       apply();
     });
   });
+  let debounce;   // typing a price shouldn't re-render 20k rows per keystroke
+  const debouncedApply = () => { clearTimeout(debounce); debounce = setTimeout(apply, 200); };
   ["min-price", "max-price", "min-area", "max-area", "min-rooms", "q"].forEach((id) => {
     const el = $("#" + id);
-    if (el) el.addEventListener("input", apply);
+    if (el) el.addEventListener("input", debouncedApply);
   });
   const sort = $("#sort"); if (sort) sort.addEventListener("change", (e) => { state.sort = e.target.value; apply(); });
   const dist = $("#distance"); if (dist) dist.addEventListener("change", (e) => { state.distance = e.target.value; apply(); });
@@ -381,6 +383,34 @@ async function loadArchive() {
   return state.archive;
 }
 
+// Chunked rendering: with ~20k listings, building the whole grid at once
+// freezes the page for seconds on every filter click. Render the first CHUNK,
+// then let an IntersectionObserver append more as the user scrolls near the end.
+const CHUNK = 60;
+let view = [];          // current filtered+sorted rows
+let rendered = 0;       // how many of them are in the DOM
+let moreObserver = null;
+
+function appendChunk() {
+  const sentinel = $("#more-sentinel");
+  if (!sentinel || rendered >= view.length) return;
+  const next = view.slice(rendered, rendered + CHUNK);
+  rendered += next.length;
+  sentinel.insertAdjacentHTML("beforebegin", next.map(card).join(""));
+  sentinel.hidden = rendered >= view.length;
+}
+
+function watchSentinel() {
+  if (!moreObserver) {
+    moreObserver = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) appendChunk();
+    }, { rootMargin: "1500px" });
+  }
+  moreObserver.disconnect();
+  const sentinel = $("#more-sentinel");
+  if (sentinel) moreObserver.observe(sentinel);
+}
+
 function render() {
   if (state.history === "sold" && !state.archive) {
     $("#grid").innerHTML = `<div class="empty">Wczytywanie archiwum…</div>`;
@@ -392,11 +422,14 @@ function render() {
   const sorter = state.history === "sold" && state.sort === "newest"
     ? (a, b) => (b.delisted || "").localeCompare(a.delisted || "")
     : (sorters[state.sort] || sorters.newest);
-  const rows = pool.filter((l) => passes(l, f)).sort(sorter);
-  $("#count").textContent = rows.length ? `${PLN.format(rows.length)} wyników` : "";
-  $("#grid").innerHTML = rows.length
-    ? rows.map(card).join("")
+  view = pool.filter((l) => passes(l, f)).sort(sorter);
+  rendered = 0;
+  $("#count").textContent = view.length ? `${PLN.format(view.length)} wyników` : "";
+  $("#grid").innerHTML = view.length
+    ? `<div id="more-sentinel" class="sentinel"></div>`
     : `<div class="empty">Brak ofert dla wybranych filtrów.</div>`;
+  appendChunk();
+  watchSentinel();
   syncLocalityLabel();
   renderChips();
 }
