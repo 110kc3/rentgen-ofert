@@ -211,3 +211,5 @@ footer { text-align: center; color: var(--muted); font-size: 12px; padding: 20px
 .pin-links { margin-top: 3px; }
 .pin-links a { color: var(--accent); text-decoration: none; font-size: 12px; }
 .pin-links a:hover { text-decoration: underline; }
+.tl-src { color: var(--muted); font-size: 11px; }
+.tl-src a { color: var(--accent); text-decoration: none; }

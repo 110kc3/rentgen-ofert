@@ -16,11 +16,11 @@
  "relisted": 7806,
  "archive": 4,
  "rcn": {
-  "records": 29206,
-  "no_location_yet": 12167,
-  "no_deed_candidates": 5938,
-  "candidates_rejected": 9540,
-  "matched": 1561
+  "records": 29211,
+  "no_location_yet": 12172,
+  "no_deed_candidates": 5942,
+  "candidates_rejected": 9595,
+  "matched": 1502
  },
  "sold_confirmed": 0,
  "errors": []
