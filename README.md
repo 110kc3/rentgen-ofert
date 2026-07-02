@@ -148,6 +148,13 @@ python -m scraper.rcncheck Gliwice 48.63 --ulica Asnyka --nr 11 \
 
 Commit `overrides.json` so CI picks it up.
 
+When you give a street + building number, `rcncheck` automatically asks
+GUGiK's free services (UUG geocoder + ULDK) for the **canonical street name
+and the cadastral parcel id** (e.g. `246601_1.0041.1506`) and pins those too.
+The parcel id is the strongest anchor there is — RCN deed identifiers embed
+the same parcel, so a parcel match is decisive in both directions (`--no-uldk`
+to skip the lookup offline).
+
 ## Tests
 
 ```bash

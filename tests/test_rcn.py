@@ -164,3 +164,18 @@ def test_arealess_deed_needs_street_and_nr():
     rec2 = _rec(snapshot={"locality": "Gliwice", "street": "Asnyka"})
     assert rcn.match([rec2], {"lokale": [deed], "budynki": []},
                      log=lambda *a: None) == 0
+
+
+def test_parcel_extraction_and_decisive_scoring():
+    assert rcn._parcel("221104_4.0004.921_BUD.22_LOK") == "221104_4.0004.921"
+    assert rcn._parcel("246601_1.0041.1506") == "246601_1.0041.1506"
+    assert rcn._parcel("") is None
+    # same parcel -> wysoka even with nothing else known
+    rec = _rec(snapshot={"locality": "Gliwice", "dzialka_id": "246601_1.0041.1506"})
+    snap = {"lokale": [_tx(ul=None, nr=None, dz="246601_1.0041.1506")], "budynki": []}
+    assert rcn.match([rec], snap, log=lambda *a: None) == 1
+    assert rec["sales"][0]["confidence"] == "wysoka"
+    # different parcel -> hard reject even though town+area agree
+    rec2 = _rec(snapshot={"locality": "Gliwice", "dzialka_id": "246601_1.0041.9999",
+                          "street": "Asnyka"})
+    assert rcn.match([rec2], snap, log=lambda *a: None) == 0

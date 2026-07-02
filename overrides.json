@@ -1,7 +1,10 @@
 {
  "https://www.otodom.pl/pl/oferta/dom-204-m-gliwice-ID4BWkh": {
-  "street": "Daszyńskiego",
+  "street": "Ignacego Daszyńskiego",
   "nr": "448",
-  "locality": "Gliwice"
+  "locality": "Gliwice",
+  "dzialka_id": "246601_1.0041.1506",
+  "x": 471141.6302,
+  "y": 268339.913699999
  }
 }

@@ -26,7 +26,7 @@ import argparse
 import pathlib
 
 from . import overrides as ovmod
-from . import rcn
+from . import rcn, uldk
 
 RCN_CACHE = pathlib.Path(__file__).resolve().parents[1] / "cache" / "rcn_snapshot.json.gz"
 
@@ -74,6 +74,8 @@ def main(argv=None) -> int:
     ap.add_argument("--pin", metavar="LISTING_URL",
                     help="save these details to overrides.json for this "
                          "listing URL; the pipeline uses them on every run")
+    ap.add_argument("--no-uldk", action="store_true",
+                    help="skip the GUGiK address->parcel lookup (offline)")
     args = ap.parse_args(argv)
 
     if args.powierzchnia is None and not (args.ulica or args.nr):
@@ -84,6 +86,20 @@ def main(argv=None) -> int:
         print(f"Brak snapshotu RCN ({RCN_CACHE}). Uruchom najpierw scraper "
               f"(python -m scraper.main) lub pobierz cache z repo.")
         return 1
+
+    # exact address given -> resolve canonical street + cadastral parcel (GUGiK)
+    geo = None
+    if args.ulica and args.nr and not args.no_uldk:
+        geo = uldk.resolve(args.miejscowosc, args.ulica, args.nr)
+        if geo:
+            if geo.get("street"):
+                args.ulica = geo["street"]        # canonical name matches better
+            if geo.get("dzialka_id"):
+                print(f"Adres wg GUGiK: ul. {geo['street']} {args.nr}, "
+                      f"{args.miejscowosc} — działka {geo['dzialka_id']}"
+                      f" (obręb {geo.get('obreb')})\n")
+            elif geo.get("note"):
+                print(f"GUGiK: {geo['note']} — działka nieustalona\n")
 
     typ = args.typ or ("flat" if args.powierzchnia is not None and not args.nr else "oba")
     town = rcn._fold(args.miejscowosc)
@@ -105,7 +121,8 @@ def main(argv=None) -> int:
         rec = {"type": t, "area": args.powierzchnia,
                "snapshot": {"locality": args.miejscowosc, "street": args.ulica,
                             "nr": args.nr, "rooms": args.pokoje,
-                            "floor": args.pietro, "plot_area": args.dzialka}}
+                            "floor": args.pietro, "plot_area": args.dzialka,
+                            "dzialka_id": (geo or {}).get("dzialka_id")}}
         unique = len(cands) == 1
         for r in cands:
             conf, ok = rcn._score(rec, rec["snapshot"], r, t == "flat", unique=unique)
@@ -122,7 +139,9 @@ def main(argv=None) -> int:
     if args.pin:
         entry = ovmod.pin(args.pin, street=args.ulica, nr=args.nr,
                           locality=args.miejscowosc, rooms=args.pokoje,
-                          floor=args.pietro, plot_area=args.dzialka)
+                          floor=args.pietro, plot_area=args.dzialka,
+                          dzialka_id=(geo or {}).get("dzialka_id"),
+                          x=(geo or {}).get("x"), y=(geo or {}).get("y"))
         print(f"\nPrzypięto do {args.pin}:\n  {entry}\n"
               f"(zapisane w overrides.json — zacommituj plik; od następnego "
               f"przebiegu scraper dopasuje ten adres automatycznie)")

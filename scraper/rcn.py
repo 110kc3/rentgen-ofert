@@ -44,9 +44,11 @@ SALE_WINDOW_BEFORE = 60   # deed may precede the delisting we observed (days)
 SALE_WINDOW_AFTER = 400   # deed (+ registry lag) may trail delisting (days)
 
 LOK_PROPS = ("teryt,dok_data,tran_rodzaj_rynku,tran_rodzaj_trans,tran_cena_brutto,"
-             "lok_cena_brutto,lok_pow_uzyt,lok_liczba_izb,lok_nr_kond,lok_adres,lok_funkcja")
+             "lok_cena_brutto,lok_pow_uzyt,lok_liczba_izb,lok_nr_kond,lok_adres,"
+             "lok_funkcja,lok_id_lokalu")
 BUD_PROPS = ("teryt,dok_data,tran_rodzaj_rynku,tran_rodzaj_trans,tran_cena_brutto,"
-             "bud_cena_brutto,bud_pow_uzyt,bud_rodzaj,bud_adres,nier_pow_gruntu")
+             "bud_cena_brutto,bud_pow_uzyt,bud_rodzaj,bud_adres,nier_pow_gruntu,"
+             "bud_id_budynku")
 
 HEADERS = {"User-Agent": "rentgen-ofert (+https://github.com/) requests"}
 
@@ -117,6 +119,13 @@ def _addr(raw):
     return out["MSC"], out["UL"], out["NR_PORZ"]
 
 
+def _parcel(egib_id):
+    """'221104_4.0004.921_BUD.22_LOK' -> '221104_4.0004.921' (the parcel)."""
+    if not egib_id:
+        return None
+    return egib_id.split("_BUD")[0].strip() or None
+
+
 def _compact_lok(row):
     date = (row.get("dok_data") or "")[:10]
     price = _to_f(row.get("lok_cena_brutto")) or _to_f(row.get("tran_cena_brutto"))
@@ -128,10 +137,14 @@ def _compact_lok(row):
     if row.get("tran_rodzaj_trans") not in ("", None, "wolnyRynek"):
         return None
     msc, ul, nr = _addr(row.get("lok_adres"))
-    return {"d": date, "c": round(price), "a": area,
-            "izb": _to_i(row.get("lok_liczba_izb")), "kond": _to_i(row.get("lok_nr_kond")),
-            "rynek": (row.get("tran_rodzaj_rynku") or "")[:1] or None,  # p/w
-            "msc": msc, "ul": ul, "nr": nr}
+    out = {"d": date, "c": round(price), "a": area,
+           "izb": _to_i(row.get("lok_liczba_izb")), "kond": _to_i(row.get("lok_nr_kond")),
+           "rynek": (row.get("tran_rodzaj_rynku") or "")[:1] or None,  # p/w
+           "msc": msc, "ul": ul, "nr": nr}
+    dz = _parcel(row.get("lok_id_lokalu"))
+    if dz:
+        out["dz"] = dz
+    return out
 
 
 def _compact_bud(row):
@@ -143,10 +156,14 @@ def _compact_bud(row):
     if row.get("tran_rodzaj_trans") not in ("", None, "wolnyRynek"):
         return None
     msc, ul, nr = _addr(row.get("bud_adres"))
-    return {"d": date, "c": round(price), "a": area,
-            "grunt": _to_f(row.get("nier_pow_gruntu")),
-            "rynek": (row.get("tran_rodzaj_rynku") or "")[:1] or None,
-            "msc": msc, "ul": ul, "nr": nr}
+    out = {"d": date, "c": round(price), "a": area,
+           "grunt": _to_f(row.get("nier_pow_gruntu")),
+           "rynek": (row.get("tran_rodzaj_rynku") or "")[:1] or None,
+           "msc": msc, "ul": ul, "nr": nr}
+    dz = _parcel(row.get("bud_id_budynku"))
+    if dz:
+        out["dz"] = dz
+    return out
 
 
 def fetch(session, typename, flt, props, tag, compact, log=print):
@@ -295,7 +312,7 @@ def _candidates(rec, rows_by_town):
         if town and town in rows_by_town:
             rows = rows_by_town[town]
             break
-    pinned_nr = bool(snap.get("nr"))
+    pinned_nr = bool(snap.get("nr")) or bool(snap.get("dzialka_id"))
     out = []
     for r in rows:
         if r.get("a") is None:
@@ -336,6 +353,10 @@ def _score(rec, snap, r, is_flat, unique=False):
     lets weaker attribute evidence through (still conservative: mismatching
     known attributes always reject).
     """
+    dz = snap.get("dzialka_id")
+    if dz and r.get("dz"):
+        # same cadastral parcel -> same building; different parcel -> not it
+        return (2, True) if _fold(dz) == _fold(r["dz"]) else (0, False)
     street = snap.get("street")
     nr = _fold(str(snap.get("nr"))) if snap.get("nr") else None
     if street and r.get("ul") and street_match(street, r["ul"]):

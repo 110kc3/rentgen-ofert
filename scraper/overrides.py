@@ -25,7 +25,8 @@ import json
 import pathlib
 
 PATH = pathlib.Path(__file__).resolve().parents[1] / "overrides.json"
-FIELDS = ("street", "nr", "locality", "rooms", "floor", "plot_area", "area")
+FIELDS = ("street", "nr", "locality", "rooms", "floor", "plot_area", "area",
+          "dzialka_id", "x", "y")
 
 
 def load(path=PATH) -> dict:
