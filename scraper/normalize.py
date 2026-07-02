@@ -39,12 +39,43 @@ OLX_ROOMS = {
 SOURCE_RANK = {"otodom": 0, "nieruchomosci-online": 1, "gratka": 2, "olx": 3}
 
 DISPLAY_FIELDS = ("title", "type", "area", "rooms", "plot_area", "floor",
-                  "locality", "district", "street", "image", "is_private", "agency")
+                  "locality", "district", "street", "image", "is_private", "agency",
+                  "market")
 OFFER_FIELDS = ("source", "url", "price", "price_per_m2", "created",
                 "is_private", "agency")
 
 SPREAD_CAP = 1.15  # a merged size-group may span at most +15% in price (fallback)
 PHOTO_THRESHOLD = 40  # max dHash hamming to treat two galleries as the same property
+
+# --- developer new-builds ----------------------------------------------------
+# Developers post many units with the same marketing photos, which the
+# "same size + same gallery" rule would wrongly collapse into one property
+# (and pollute relist/sold history). Detect them and treat them separately.
+import re as _re
+
+_DEV_RE = _re.compile(
+    r"deweloper|inwestycj|rynek\s+pierwotn|nowe\s+osiedle|stan\s+deweloperski"
+    r"|etap\s+[ivx0-9]", _re.I)
+
+
+def is_development(l) -> bool:
+    """Portal says rynek pierwotny, or the title reads like a developer ad."""
+    if (l.get("market") or "").startswith(("primary", "pierwotn")):
+        return True
+    return bool(_DEV_RE.search(l.get("title") or ""))
+
+
+def _cluster_is_development(members) -> bool:
+    """A photo-cluster is a development when any ad self-identifies as one, or
+    one portal contributed >=3 distinct ads with the same gallery (an owner or
+    agency duplicates 1-2x; a developer posts a whole staircase)."""
+    if any(is_development(m) for m in members):
+        return True
+    per_source = {}
+    for m in members:
+        key = (m.get("source"), m.get("source_id"))
+        per_source.setdefault(m.get("source"), set()).add(key)
+    return any(len(ids) >= 3 for ids in per_source.values())
 
 
 def otodom_rooms(value):
@@ -203,18 +234,46 @@ def dedupe(listings):
         k = size_key(l)
         (loners if k is None else groups[k]).append(l)
 
-    properties = [_build([l]) for l in loners]
+    def _build_dev(cluster):
+        """One card per distinct asking price (~unit type) inside a development
+        cluster; identical units listed on several portals still merge."""
+        by_price = defaultdict(list)
+        for m in cluster:
+            by_price[m.get("price")].append(m)
+        out = []
+        for price_members in by_price.values():
+            prop = _build(price_members)
+            prop["development"] = True
+            out.append(prop)
+        return out
+
+    properties = []
+    for l in loners:
+        prop = _build([l])
+        if is_development(l):
+            prop["development"] = True
+        properties.append(prop)
     for members in groups.values():
         if len(members) == 1:
-            properties.append(_build(members))
+            prop = _build(members)
+            if is_development(members[0]):
+                prop["development"] = True
+            properties.append(prop)
         elif any(m.get("phashes") for m in members):
             # photos available -> merge only ads whose galleries match
             for cluster in _photo_clusters(members):
-                properties.append(_build(cluster))
+                if _cluster_is_development(cluster):
+                    properties.extend(_build_dev(cluster))
+                else:
+                    properties.append(_build(cluster))
         else:
             # no photo data -> fall back to the size + price-spread heuristic
+            dev = _cluster_is_development(members)
             for cluster in _split_by_price(members):
-                properties.append(_build(cluster))
+                if dev:
+                    properties.extend(_build_dev(cluster))
+                else:
+                    properties.append(_build(cluster))
     return properties
 
 
@@ -226,6 +285,8 @@ def link_same_size(properties):
     (developments of identical units) are skipped to avoid false positives."""
     groups = defaultdict(list)
     for p in properties:
+        if p.get("development"):
+            continue
         area = p.get("area")
         loc = (p.get("street") or p.get("locality") or "").strip().lower()
         if area is None or not loc:

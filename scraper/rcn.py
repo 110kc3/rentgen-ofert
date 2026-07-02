@@ -349,6 +349,8 @@ def match(records, snapshot, log=print):
         typ = rec.get("type")
         if typ not in by_town:
             continue
+        if rec.get("development"):
+            continue   # marketing photos != a specific flat; deeds can't be attributed
         cands, snap = _candidates(rec, by_town[typ])
         if not cands:
             continue

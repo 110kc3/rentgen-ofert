@@ -5,7 +5,9 @@ const SRC_LABEL = { otodom: "Otodom", olx: "OLX", gratka: "Gratka", morizon: "Mo
 const label = (s) => SRC_LABEL[s] || s;
 const TYPE_LABEL = { house: "Domy", flat: "Mieszkania" };
 const OWNER_LABEL = { private: "Prywatne", agency: "Biura" };
-const HIST_LABEL = { relisted: "Wystawione ponownie", dropped: "Z obniżką", sold: "Archiwum / sprzedane" };
+const HIST_LABEL = { relisted: "Wystawione ponownie", dropped: "Z obniżką", sold: "Archiwum", sold_rcn: "Sprzedane wg RCN" };
+const MARKET_LABEL = { secondary: "Rynek wtórny", primary: "Inwestycje (rynek pierwotny)" };
+const inArchive = () => state.history === "sold" || state.history === "sold_rcn";
 
 // Gliwice neighbourhoods that sometimes arrive as a "locality" -> fold into Gliwice
 const GLIWICE_DISTRICTS = new Set([
@@ -67,7 +69,7 @@ function distOf(locality) {
   return c ? haversine(GLIWICE, c) : null;
 }
 
-const state = { all: [], archive: null, type: "all", source: "all", owner: "all", history: "all", distance: "all", sort: "newest", localities: [] };
+const state = { all: [], archive: null, type: "all", source: "all", owner: "all", history: "all", market: "all", distance: "all", sort: "newest", localities: [] };
 let locOptions = [];                         // [ [name, count], ... ] sorted by count
 const FILTER_KEY = "rentgen.filters.v2";
 
@@ -212,7 +214,7 @@ function wireControls() {
 function snapshot() {
   return {
     type: state.type, source: state.source, owner: state.owner, history: state.history,
-    distance: state.distance, sort: state.sort, localities: state.localities,
+    market: state.market, distance: state.distance, sort: state.sort, localities: state.localities,
     minPrice: $("#min-price").value, maxPrice: $("#max-price").value,
     minArea: $("#min-area").value, maxArea: $("#max-area").value,
     minRooms: $("#min-rooms").value, q: $("#q").value,
@@ -221,6 +223,7 @@ function snapshot() {
 
 function isDefault(s) {
   return s.type === "all" && s.source === "all" && s.owner === "all" && s.history === "all" &&
+    (!s.market || s.market === "all") &&
     s.distance === "all" && s.sort === "newest" && (!s.localities || !s.localities.length) &&
     !s.minPrice && !s.maxPrice && !s.minArea && !s.maxArea && !s.minRooms && !s.q;
 }
@@ -255,7 +258,7 @@ function setSeg(key, val) {
 }
 
 function applySnapshot(s) {
-  ["type", "source", "owner", "history"].forEach((k) => setSeg(k, s[k]));
+  ["type", "source", "owner", "history", "market"].forEach((k) => setSeg(k, s[k]));
   if (s.distance != null) { state.distance = s.distance; const d = $("#distance"); if (d) d.value = s.distance; }
   if (s.sort != null) { state.sort = s.sort; const so = $("#sort"); if (so) so.value = s.sort; }
   state.localities = Array.isArray(s.localities) ? s.localities.slice() : [];
@@ -266,7 +269,7 @@ function applySnapshot(s) {
 }
 
 function resetAll() {
-  ["type", "source", "owner", "history"].forEach((k) => setSeg(k, "all"));
+  ["type", "source", "owner", "history", "market"].forEach((k) => setSeg(k, "all"));
   state.distance = "all"; const d = $("#distance"); if (d) d.value = "all";
   state.sort = "newest"; const so = $("#sort"); if (so) so.value = "newest";
   state.localities = [];
@@ -285,6 +288,7 @@ function activeFilters() {
   if (state.source !== "all") out.push({ k: "seg:source", label: "Źródło: " + label(state.source) });
   if (state.owner !== "all") out.push({ k: "seg:owner", label: OWNER_LABEL[state.owner] || state.owner });
   if (state.history !== "all") out.push({ k: "seg:history", label: HIST_LABEL[state.history] || state.history });
+  if (state.market !== "all") out.push({ k: "seg:market", label: MARKET_LABEL[state.market] || state.market });
   if (state.distance !== "all") out.push({ k: "distance", label: "≤ " + state.distance + " km od Gliwic" });
   state.localities.forEach((loc) => out.push({ k: "loc:" + loc, label: loc }));
   const nf = (id, lab) => { const v = ($("#" + id).value || "").trim(); if (v) out.push({ k: "num:" + id, label: lab + " " + v }); };
@@ -334,7 +338,10 @@ function currentFilters() {
 }
 
 function passes(l, f) {
-  const archiveMode = state.history === "sold";
+  const archiveMode = inArchive();
+  if (state.history === "sold_rcn" && !l.sold) return false;
+  if (state.market === "primary" && !l.development) return false;
+  if (state.market === "secondary" && l.development) return false;
   if (state.type !== "all" && l.type !== state.type) return false;
   if (state.source !== "all" && !(l.sources || [l.source]).includes(state.source)) return false;
   if (!archiveMode && state.owner === "private" && l.is_private !== true) return false;
@@ -412,14 +419,14 @@ function watchSentinel() {
 }
 
 function render() {
-  if (state.history === "sold" && !state.archive) {
+  if (inArchive() && !state.archive) {
     $("#grid").innerHTML = `<div class="empty">Wczytywanie archiwum…</div>`;
     loadArchive().then(render);
     return;
   }
   const f = currentFilters();
-  const pool = state.history === "sold" ? state.archive : state.all;
-  const sorter = state.history === "sold" && state.sort === "newest"
+  const pool = inArchive() ? state.archive : state.all;
+  const sorter = inArchive() && state.sort === "newest"
     ? (a, b) => (b.delisted || "").localeCompare(a.delisted || "")
     : (sorters[state.sort] || sorters.newest);
   view = pool.filter((l) => passes(l, f)).sort(sorter);
@@ -556,6 +563,7 @@ function card(l) {
     <div class="thumb">${img}
       <div class="badges">${badges}</div>
       ${owner ? `<span class="tag-priv">${owner}</span>` : ""}
+      ${l.development ? `<span class="tag-dev">inwestycja</span>` : ""}
       ${gone ? `<span class="tag-gone${l.sold ? " sold" : ""}">${l.sold ? "sprzedane" : "wycofane"}</span>` : ""}
     </div>
     <div class="body">

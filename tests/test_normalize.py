@@ -115,3 +115,35 @@ def test_dedupe_merges_when_rooms_missing_on_one_side():
     b = _l(source="olx", url="x", type="house", price=990000, area=150.0, rooms=None)
     out = dedupe([a, b])
     assert len(out) == 1 and len(out[0]["offers"]) == 2
+
+
+def test_developer_cluster_not_merged_into_one_flat():
+    from scraper.normalize import dedupe, is_development
+    H = 7
+    # 4 same-size, same-photo ads from one portal at two prices = a development
+    ads = [_l(source="otodom", source_id=str(i), url=f"u{i}", area=52.0, rooms=3,
+              price=420000 if i < 2 else 455000, phashes=[H],
+              title="Apartamenty Zielone Wzgórze — etap II") for i in range(4)]
+    props = dedupe(ads)
+    assert all(p.get("development") for p in props)
+    # one card per price point, not one merged "flat" and not 4 cards
+    assert sorted(p["price"] for p in props) == [420000, 455000]
+
+
+def test_secondary_flat_on_three_portals_still_merges():
+    from scraper.normalize import dedupe
+    H = 9
+    ads = [_l(source=s, source_id="1", url=f"u-{s}", area=48.5, rooms=2,
+              price=350000, phashes=[H], title="Mieszkanie 2 pokoje, Trynek")
+           for s in ("otodom", "olx", "gratka")]
+    props = dedupe(ads)
+    assert len(props) == 1
+    assert not props[0].get("development")
+    assert len(props[0]["offers"]) == 3
+
+
+def test_is_development_signals():
+    from scraper.normalize import is_development
+    assert is_development({"market": "primary", "title": "Mieszkanie"})
+    assert is_development({"title": "Nowa inwestycja — Osiedle Parkowe etap III"})
+    assert not is_development({"market": "secondary", "title": "Mieszkanie po remoncie"})

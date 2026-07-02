@@ -78,6 +78,7 @@ def parse_ads(ads, typ: str):
             "district": loc.get("districtName"),
             "street": None,
             "is_private": not is_business,
+            "market": (str(pm.get("market")).lower() if pm.get("market") else None),
             "agency": user.get("name") if is_business else None,
             "image": photos[0] if photos else None,
             "created": ad.get("lastRefreshTime") or ad.get("createdTime"),

@@ -178,3 +178,8 @@ footer { text-align: center; color: var(--muted); font-size: 12px; padding: 20px
 /* ---- chunked grid rendering ---- */
 .card { content-visibility: auto; contain-intrinsic-size: 420px; }
 .sentinel { height: 1px; grid-column: 1 / -1; }
+
+/* ---- developer new-builds ---- */
+.tag-dev { position: absolute; top: 8px; right: 8px; background: #6d28d9; color: #fff;
+  font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 6px;
+  text-transform: uppercase; letter-spacing: .03em; }
