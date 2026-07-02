@@ -187,3 +187,17 @@ footer { text-align: center; color: var(--muted); font-size: 12px; padding: 20px
 /* [hidden] must win over display rules (lost in an earlier file truncation —
    .ms-pop sets display:flex which otherwise overrides the UA hidden style) */
 [hidden] { display: none !important; }
+
+/* ---- pin-address form on cards ---- */
+.pinbox { margin-top: 6px; }
+.pinbox summary { cursor: pointer; font-size: 12px; color: var(--muted); list-style: none; }
+.pinbox summary:hover { color: var(--accent); }
+.pin-form { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.pin-form input { background: var(--chip); border: 1px solid var(--line); color: var(--text);
+  border-radius: 6px; padding: 4px 7px; font-size: 12px; }
+.pin-ul { flex: 1 1 120px; min-width: 110px; }
+.pin-nr { width: 52px; }
+.pin-x { width: 78px; }
+.pin-copy { background: var(--accent); color: #fff; border: 0; border-radius: 6px;
+  padding: 5px 9px; font-size: 12px; font-weight: 600; cursor: pointer; }
+.pin-hint { flex-basis: 100%; font-size: 11px; color: var(--muted); }
