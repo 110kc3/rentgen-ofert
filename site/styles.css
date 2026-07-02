@@ -183,3 +183,7 @@ footer { text-align: center; color: var(--muted); font-size: 12px; padding: 20px
 .tag-dev { position: absolute; top: 8px; right: 8px; background: #6d28d9; color: #fff;
   font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 6px;
   text-transform: uppercase; letter-spacing: .03em; }
+
+/* [hidden] must win over display rules (lost in an earlier file truncation —
+   .ms-pop sets display:flex which otherwise overrides the UA hidden style) */
+[hidden] { display: none !important; }
