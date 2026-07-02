@@ -480,6 +480,9 @@ def match(records, snapshot, log=print):
                     "market": {"p": "pierwotny", "w": "wtórny"}.get(r.get("rynek")),
                     "confidence": "wysoka" if best_conf == 2 else "średnia",
                     "kind": kind,
+                    # provenance: which deed this is (address + cadastral parcel)
+                    "addr": " ".join(str(x) for x in (r.get("ul"), r.get("nr")) if x) or None,
+                    "dz": r.get("dz"),
                 })
         if sales:
             seen = set()

@@ -482,27 +482,47 @@ function historyBlock(l) {
 
 // ---- property lifetime timeline ("rentgen" view) ---------------------------
 
+// every timeline row names its source; when the source is linkable, it links:
+//   portal events -> the exact ad; RCN deeds -> the parcel on geoportal
+const tlA = (url, text) =>
+  `<a href="${escapeHtml(url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${text}</a>`;
+
+function tlSrc(e) {
+  const name = e.source ? label(e.source) : "portal";
+  return e.url ? tlA(e.url, name + " ↗") : name;
+}
+
+function tlRcnSrc(e) {
+  const bits = [`źródło: RCN/GUGiK (akt notarialny)`];
+  if (e.addr) bits.push(escapeHtml(e.addr));
+  if (e.dz) bits.push(tlA(`https://mapy.geoportal.gov.pl/imap/Imgp_2.html?identifyParcel=${encodeURIComponent(e.dz)}`,
+                          `działka ${escapeHtml(e.dz)} ↗`));
+  return `<span class="tl-src">${bits.join(" · ")}</span>`;
+}
+
 function tlLabel(e) {
   const p = e.price != null ? `${PLN.format(e.price)} zł` : "";
-  const src = e.source ? label(e.source) : "";
   switch (e.kind) {
     case "sale_past":
-      return `<b class="tl-sale">🔑 sprzedane (akt notarialny)</b> ${p}` +
+      return `<b class="tl-sale">🔑 sprzedane</b> ${p}` +
              (e.market ? ` · rynek ${e.market}` : "") +
-             (e.confidence ? ` · pewność: ${e.confidence}` : "");
+             (e.confidence ? ` · pewność: ${e.confidence}` : "") +
+             `<br>${tlRcnSrc(e)}`;
     case "sale":
-      return `<b class="tl-sale">✓ sprzedane wg RCN</b> ${p}` +
-             (e.confidence ? ` · pewność: ${e.confidence}` : "");
+      return `<b class="tl-sale">✓ sprzedane</b> ${p}` +
+             (e.confidence ? ` · pewność: ${e.confidence}` : "") +
+             `<br>${tlRcnSrc(e)}`;
     case "listed":
-      return `wystawione na ${src}${p ? " — " + p : ""}`;
+      return `wystawione na ${tlSrc(e)}${p ? " — " + p : ""}`;
     case "relist":
-      return `↻ wystawione ponownie (${src})${p ? " — " + p : ""}`;
+      return `↻ wystawione ponownie na ${tlSrc(e)}${p ? " — " + p : ""}`;
     case "price":
-      return `zmiana ceny → <b>${p}</b>${src ? ` (${src})` : ""}`;
+      return `zmiana ceny → <b>${p}</b> (${tlSrc(e)})`;
     case "archived":
-      return `ogłoszenie zarchiwizowane${src ? ` (${src})` : ""}`;
+      return `ogłoszenie zarchiwizowane (${tlSrc(e)})`;
     case "delisted":
-      return `<b>zniknęło z portali</b> — wycofane lub sprzedane`;
+      return `<b>zniknęło z portali</b> — wycofane lub sprzedane ` +
+             `<span class="tl-src">źródło: rentgen (weryfikacja URL ogłoszenia)</span>`;
     default:
       return e.kind;
   }

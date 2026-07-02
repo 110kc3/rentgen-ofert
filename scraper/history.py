@@ -286,13 +286,15 @@ def timeline(rec, max_events: int = 24) -> list:
         events.append({"date": s["date"],
                        "kind": "sale_past" if s.get("kind") == "past" else "sale",
                        "price": s.get("price"), "market": s.get("market"),
-                       "confidence": s.get("confidence")})
+                       "confidence": s.get("confidence"),
+                       "addr": s.get("addr"), "dz": s.get("dz")})
     seen_urls = set()
     last_price = {}
     for o in sorted(rec.get("observations") or [], key=lambda o: o.get("date") or ""):
         url, price, date = o.get("url"), o.get("price"), o.get("date")
         if o.get("status") == "archived":
-            events.append({"date": date, "kind": "archived", "source": o.get("source")})
+            events.append({"date": date, "kind": "archived", "source": o.get("source"),
+                           "url": url})
             continue
         if url not in seen_urls:
             seen_urls.add(url)
