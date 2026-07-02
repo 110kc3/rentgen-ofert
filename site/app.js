@@ -372,8 +372,21 @@ function passes(l, f) {
   return true;
 }
 
+// discount: highest price ever recorded for this property vs today's price
+function discountOf(l) {
+  // sub-10k "prices" are seller typos/udział sales — not real discounts
+  if (l.price == null || l.price < 10000) return { pct: 0, abs: 0 };
+  const seen = (l.price_history || []).map((x) => x.price).filter((x) => x != null);
+  if (l.prev_price != null) seen.push(l.prev_price);
+  if (l.price_max != null) seen.push(l.price_max);
+  const base = Math.max(...seen, l.price);
+  if (!isFinite(base) || base <= l.price) return { pct: 0, abs: 0 };
+  return { pct: (base - l.price) / base * 100, abs: base - l.price };
+}
+
 const sorters = {
   newest: (a, b) => (b.created || "").localeCompare(a.created || ""),
+  discount: (a, b) => discountOf(b).pct - discountOf(a).pct,
   price_asc: (a, b) => (a.price ?? Infinity) - (b.price ?? Infinity),
   price_desc: (a, b) => (b.price ?? -Infinity) - (a.price ?? -Infinity),
   ppm_asc: (a, b) => (a.price_per_m2 ?? Infinity) - (b.price_per_m2 ?? Infinity),
@@ -466,6 +479,8 @@ function offersBlock(l) {
 function historyBlock(l) {
   const bits = [];
   if (l.relisted) bits.push(`<span class="relist">↻ wystawiane ponownie</span>`);
+  const d = discountOf(l);
+  if (d.pct >= 1) bits.push(`<span class="drop">▼ −${d.pct.toFixed(0)}% (−${PLN.format(d.abs)} zł)</span>`);
   const ph = (l.price_history || []).filter((x) => x.price != null);
   const also = l.also_listed || [];
   if (also.length) {
