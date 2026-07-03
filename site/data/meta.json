@@ -1,26 +1,25 @@
 {
- "updated": "2026-07-02T20:27:32+00:00",
- "count": 18002,
- "raw": 21462,
+ "updated": "2026-07-03T10:37:57+00:00",
+ "count": 17222,
+ "raw": 20326,
  "by_source": {
-  "otodom": 3341,
-  "olx": 1086,
-  "gratka": 3496,
+  "otodom": 3319,
+  "gratka": 3501,
   "morizon": 3502,
-  "nieruchomosci-online": 10037
+  "nieruchomosci-online": 10004
  },
  "by_type": {
-  "house": 6485,
-  "flat": 11517
+  "house": 6148,
+  "flat": 11074
  },
- "relisted": 7855,
+ "relisted": 7856,
  "archive": 4,
  "rcn": {
-  "records": 29358,
-  "no_location_yet": 12117,
-  "no_deed_candidates": 5992,
-  "candidates_rejected": 9663,
-  "matched": 1586
+  "records": 29552,
+  "no_location_yet": 12058,
+  "no_deed_candidates": 6054,
+  "candidates_rejected": 9831,
+  "matched": 1609
  },
  "sold_confirmed": 0,
  "errors": []
