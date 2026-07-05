@@ -30,6 +30,35 @@
  },
  {
   "type": "house",
+  "area": 86.0,
+  "title": null,
+  "image": null,
+  "locality": null,
+  "district": null,
+  "rooms": null,
+  "url": "https://gratka.pl/nieruchomosci/dom-chorzow/ob/23550727",
+  "source": "gratka",
+  "price": 380000,
+  "first_seen": "2026-06-17",
+  "delisted": "2026-06-17",
+  "sold": null,
+  "timeline": [
+   {
+    "date": "2026-06-17",
+    "kind": "listed",
+    "price": 380000,
+    "source": "gratka",
+    "url": "https://gratka.pl/nieruchomosci/dom-chorzow/ob/23550727"
+   },
+   {
+    "date": "2026-06-17",
+    "kind": "delisted"
+   }
+  ],
+  "photo_urls": []
+ },
+ {
+  "type": "house",
   "area": 300.0,
   "title": null,
   "image": null,
