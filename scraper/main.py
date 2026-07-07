@@ -14,6 +14,8 @@ Environment overrides (optional):
                         "0" disables the delist sweep)
     RENTGEN_RCN         "0" = skip RCN, "force" = re-pull now; default refreshes
                         the cached snapshot when it's older than 7 days
+    RENTGEN_GEO         "0" = skip geocoding listings for the map view
+    RENTGEN_GEO_MAX     max new UUG geocoder lookups per run (default 500)
 """
 from __future__ import annotations
 
@@ -24,13 +26,14 @@ import pathlib
 import sys
 
 from . import cache as phcache
-from . import delist, gratka, history, morizon, net, nieruchomosci_online, olx, otodom, overrides, photomatch, rcn
+from . import delist, geo, gratka, history, marketstats, morizon, net, nieruchomosci_online, olx, otodom, overrides, photomatch, rcn, rcnstats
 from .normalize import dedupe, link_same_size
 
 DATA_DIR = pathlib.Path(__file__).resolve().parents[1] / "site" / "data"
 CACHE_DIR = pathlib.Path(__file__).resolve().parents[1] / "cache"
 CACHE_PATH = CACHE_DIR / "phash_cache.json"
 RCN_CACHE = CACHE_DIR / "rcn_snapshot.json.gz"
+GEO_CACHE = CACHE_DIR / "geo_cache.json"
 
 SOURCES = (
     ("otodom", otodom),
@@ -116,6 +119,8 @@ def run() -> int:
     # Real sale prices from notarial deeds (RCN) matched onto our records.
     # Runs after update so brand-new records already carry a snapshot
     # (locality/street/rooms) to match on; the affected cards are re-enriched.
+    rcn_stats = None
+    snap = None
     if rcn_mode != "0":
         region = os.environ.get("RENTGEN_REGION", "slaskie")
         teryt = TERYT.get(region)
@@ -124,9 +129,21 @@ def run() -> int:
                                force=(rcn_mode == "force"))
             if snap:
                 rcn.match(records, snap)
+                # town/size-bucket deed benchmarks + ask-vs-sold gap for the
+                # dashboard's "cena vs transakcje RCN" comparison
+                rcn_stats = rcnstats.build(snap, records, today)
         else:
             print(f"RCN: no TERYT mapping for region '{region}', skipping")
     history.reenrich(listings)   # always: also drops the transient _rec links
+
+    # Coordinates for the map view (UUG geocoder, cached; towns first).
+    geocoded = 0
+    if os.environ.get("RENTGEN_GEO", "1") != "0":
+        gc = geo.load(GEO_CACHE)
+        _, geocoded = geo.attach(
+            listings, gc, session=http, today=today,
+            max_new=int(os.environ.get("RENTGEN_GEO_MAX", "500")))
+        geo.save(GEO_CACHE, gc)
 
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     history.save(hist_path, records)
@@ -140,6 +157,16 @@ def run() -> int:
 
     (DATA_DIR / "listings.json").write_text(
         json.dumps(listings, ensure_ascii=False, indent=1), encoding="utf-8")
+
+    if rcn_stats:
+        (DATA_DIR / "rcnstats.json").write_text(
+            json.dumps(rcn_stats, ensure_ascii=False, indent=0), encoding="utf-8")
+
+    # Market time series for the "Statystyki" page (works without RCN too —
+    # the deed lines just stay empty then).
+    mstats = marketstats.build(records, snap, today)
+    (DATA_DIR / "stats.json").write_text(
+        json.dumps(mstats, ensure_ascii=False, indent=0), encoding="utf-8")
 
     # Delisted/sold properties -> their own feed for the "Archiwum" view.
     archive = history.build_archive(records)
@@ -160,8 +187,12 @@ def run() -> int:
             "flat": sum(1 for x in listings if x["type"] == "flat"),
         },
         "relisted": relisted,
+        "geocoded": geocoded,
         "archive": len(archive),
         "rcn": getattr(rcn.match, "last_funnel", None),
+        "rcn_stats": {"towns": len(rcn_stats["towns"]),
+                      "gap_pairs": (rcn_stats["gap"].get("all") or {}).get("n", 0)}
+                     if rcn_stats else None,
         "sold_confirmed": sum(1 for a in archive if a.get("sold")),
         "errors": errors,
     }

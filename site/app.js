@@ -81,11 +81,19 @@ const apply = () => { persist(); render(); };
 
 async function boot() {
   try {
-    const [listings, meta] = await Promise.all([
+    const [listings, meta, rcnstats] = await Promise.all([
       fetch("data/listings.json", { cache: "no-store" }).then((r) => r.json()),
       fetch("data/meta.json", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
+      fetch("data/rcnstats.json", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
     ]);
     state.all = Array.isArray(listings) ? listings : [];
+    state.rcnstats = rcnstats && rcnstats.towns ? rcnstats : null;
+    if (state.rcnstats) {
+      for (const l of state.all) {
+        const b = benchOf(l);
+        if (b) { l._bench = b; l._gap = b.gapPct; }
+      }
+    }
     renderStats(meta);
   } catch (e) {
     $("#grid").innerHTML =
@@ -100,6 +108,7 @@ async function boot() {
   wirePinButtons();
   restoreFilters();
   render();
+  wireMap();   // after render so the first marker pass sees the filtered view
 }
 
 function renderStats(meta) {
@@ -112,8 +121,12 @@ function renderStats(meta) {
   const arch = meta.archive
     ? ` · <b>${PLN.format(meta.archive)}</b> w archiwum${meta.sold_confirmed ? ` (<b>${PLN.format(meta.sold_confirmed)}</b> sprzedane wg RCN)` : ""}`
     : "";
+  const g = state.rcnstats && state.rcnstats.gap && state.rcnstats.gap.all;
+  const gap = g
+    ? ` · wg RCN sprzedaż kończy się typowo <b>${Math.abs(g.med_pct).toFixed(0)}%</b> ${g.med_pct <= 0 ? "poniżej" : "powyżej"} ceny ofertowej${g.med_days ? ` po ~<b>${g.med_days}</b> dniach` : ""} (${PLN.format(g.n)} sprzedaży)`
+    : "";
   $("#stats").innerHTML =
-    `<b>${PLN.format(meta.count || 0)}</b> ofert · ${bySrc}${rel}${arch} · zaktualizowano ${when}`;
+    `<b>${PLN.format(meta.count || 0)}</b> ofert · ${bySrc}${rel}${arch}${gap} · zaktualizowano ${when}`;
 }
 
 function buildSourceFilter() {
@@ -373,6 +386,55 @@ function passes(l, f) {
   return true;
 }
 
+// ---- "cena vs transakcje RCN" (benchmarks from data/rcnstats.json) ----------
+
+// must fold town names exactly like scraper/rcn.py _fold()
+const foldTown = (s) => !s ? "" :
+  s.replace(/ł/g, "l").replace(/Ł/g, "L").normalize("NFKD")
+   .replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9 ]/g, " ").trim();
+
+// must mirror scraper/rcnstats.py bucket_of()
+function bucketOf(type, area) {
+  if (area == null) return null;
+  if (type === "flat") return area < 40 ? "<40" : area < 60 ? "40-59" : area < 80 ? "60-79" : area < 120 ? "80-119" : "120+";
+  if (type === "house") return area < 100 ? "<100" : area < 150 ? "100-149" : area < 220 ? "150-219" : "220+";
+  return null;
+}
+const BUCKET_LABEL = {
+  "<40": "do 40 m²", "40-59": "40–59 m²", "60-79": "60–79 m²", "80-119": "80–119 m²", "120+": "od 120 m²",
+  "<100": "do 100 m²", "100-149": "100–149 m²", "150-219": "150–219 m²", "220+": "od 220 m²",
+};
+
+function ppmOf(l) {
+  if (l.price_per_m2 != null) return l.price_per_m2;
+  return l.price != null && l.area ? l.price / l.area : null;
+}
+
+// deed zł/m² benchmark for this listing's town + size bucket (+ market);
+// ppm bounds mirror scraper/rcnstats.py PPM_MIN/MAX — a listing outside them
+// is a typo/udział price and a "gap vs market" would be nonsense
+function benchOf(l) {
+  const stats = state.rcnstats;
+  const ppm = ppmOf(l);
+  if (!stats || ppm == null || ppm < 500 || ppm > 40000) return null;
+  const town = stats.towns[foldTown(normLoc(l.locality))];
+  const bucket = bucketOf(l.type, l.area);
+  if (!town || !bucket) return null;
+  const b = town[l.type] && town[l.type][bucket] && town[l.type][bucket][l.development ? "p" : "w"];
+  if (!b) return null;
+  return { ...b, bucket, townName: town.name, gapPct: (ppm - b.med) / b.med * 100 };
+}
+
+// how sales end around here: town gap stat, else voivodeship-wide per type
+function gapStatOf(l) {
+  const stats = state.rcnstats;
+  if (!stats) return null;
+  const town = stats.towns[foldTown(normLoc(l.locality))];
+  if (town && town.gap) return { ...town.gap, where: town.name };
+  const g = stats.gap && (stats.gap[l.type] || stats.gap.all);
+  return g ? { ...g, where: null } : null;
+}
+
 // discount: highest price ever recorded for this property vs today's price
 function discountOf(l) {
   // sub-10k "prices" are seller typos/udział sales — not real discounts
@@ -388,6 +450,7 @@ function discountOf(l) {
 const sorters = {
   newest: (a, b) => (b.created || "").localeCompare(a.created || ""),
   discount: (a, b) => discountOf(b).pct - discountOf(a).pct,
+  vsrcn: (a, b) => (a._gap ?? Infinity) - (b._gap ?? Infinity),
   price_asc: (a, b) => (a.price ?? Infinity) - (b.price ?? Infinity),
   price_desc: (a, b) => (b.price ?? -Infinity) - (a.price ?? -Infinity),
   ppm_asc: (a, b) => (a.price_per_m2 ?? Infinity) - (b.price_per_m2 ?? Infinity),
@@ -454,6 +517,7 @@ function render() {
   watchSentinel();
   syncLocalityLabel();
   renderChips();
+  if (state.mapOn) updateMapMarkers();
 }
 
 function priceLabel(l) {
@@ -558,6 +622,49 @@ function timelineBlock(l) {
   return `<details class="tl" onclick="event.stopPropagation()">
     <summary>Historia nieruchomości (${tl.length})</summary>
     <div class="tl-body">${rows}${ph}</div>
+  </details>`;
+}
+
+// "cena vs transakcje RCN" line under zł/m² + expandable negotiation arguments
+
+function vsRcnLine(l) {
+  const b = l._bench;
+  if (!b) return "";
+  const cls = b.gapPct > 5 ? "over" : b.gapPct < -5 ? "under" : "par";
+  const sign = b.gapPct > 0 ? "+" : "";
+  const tip = `mediana z ${b.n} aktów notarialnych (${b.townName}, ${BUCKET_LABEL[b.bucket] || b.bucket}, ost. ${(state.rcnstats || {}).window_months || 24} mies.): ${PLN.format(b.med)} zł/m²`;
+  return `<div class="vsrcn ${cls}" title="${escapeHtml(tip)}">vs transakcje RCN: <b>${sign}${b.gapPct.toFixed(0)}%</b> <span class="vsrcn-med">(mediana ${PLN.format(b.med)} zł/m²)</span></div>`;
+}
+
+function negoBlock(l) {
+  const b = l._bench;
+  const g = gapStatOf(l);
+  if (!b && !g) return "";
+  const rows = [];
+  if (b) {
+    const ppm = ppmOf(l);
+    const sign = b.gapPct > 0 ? "+" : "";
+    rows.push(`podobne (${BUCKET_LABEL[b.bucket] || b.bucket}) w: ${escapeHtml(b.townName)} sprzedawały się wg aktów notarialnych za ` +
+      `<b>${PLN.format(b.med)} zł/m²</b> (typowo ${PLN.format(b.p25)}–${PLN.format(b.p75)} zł/m², ${b.n} transakcji, ost. ${(state.rcnstats || {}).window_months || 24} mies.)` +
+      (ppm != null ? ` — ta oferta: <b>${PLN.format(Math.round(ppm))} zł/m²</b> (${sign}${b.gapPct.toFixed(0)}%)` : ""));
+  }
+  if (g && !l.development) {
+    rows.push(`${g.where ? "w: " + escapeHtml(g.where) : "w województwie"} sprzedaż kończy się typowo ` +
+      `<b>${Math.abs(g.med_pct).toFixed(0)}% ${g.med_pct <= 0 ? "poniżej" : "powyżej"}</b> ostatniej ceny ofertowej` +
+      (g.med_days ? `, po ~${g.med_days} dniach od wystawienia` : "") +
+      ` (${g.n} obserwowanych sprzedaży wg RCN)`);
+  }
+  const days = l.first_seen ? Math.round((Date.now() - new Date(l.first_seen)) / 864e5) : null;
+  if (days != null && days >= 0) {
+    const bits = [`oferta na rynku od <b>${days} dni</b>`];
+    if (l.relisted) bits.push("wystawiana ponownie");
+    const d = discountOf(l);
+    if (d.pct >= 1) bits.push(`cena już obniżona o ${d.pct.toFixed(0)}% (−${PLN.format(d.abs)} zł)`);
+    rows.push(bits.join(" · "));
+  }
+  return `<details class="nego" onclick="event.stopPropagation()">
+    <summary>💬 Argumenty do negocjacji</summary>
+    <div class="nego-body">${rows.map((r) => `<div class="nego-row">${r}</div>`).join("")}</div>
   </details>`;
 }
 
@@ -756,6 +863,136 @@ function wirePinButtons() {
   });
 }
 
+// ---- map view (Leaflet + markercluster, lazy-loaded from CDN) ---------------
+
+const MAP_KEY = "rentgen.map.v1";
+let lmap = null, lcluster = null, legendCtl = null, leafletLoading = null, mapFitted = false;
+
+// marker color = the card's "vs transakcje RCN" verdict
+function gapColor(l) {
+  const g = l._gap;
+  if (g == null) return "#1f6feb";
+  return g > 5 ? "#b91c1c" : g < -5 ? "#1a7f37" : "#6b7280";
+}
+
+// town-precision points all sit on the UUG centroid — scatter them
+// deterministically (~≤400 m, seeded by URL) so clusters expand sanely
+function jitterLL(l) {
+  if (l.llp === "s") return l.ll;
+  let h = 2166136261;
+  const s = l.url || l.title || "";
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  const ang = ((h >>> 8) % 360) * Math.PI / 180;
+  const r = ((h >>> 16) % 1000) / 1000 * 0.004;
+  return [l.ll[0] + Math.sin(ang) * r,
+          l.ll[1] + Math.cos(ang) * r / Math.cos(l.ll[0] * Math.PI / 180)];
+}
+
+function loadCss(href) {
+  const el = document.createElement("link");
+  el.rel = "stylesheet"; el.href = href;
+  document.head.appendChild(el);
+}
+
+function loadJs(src) {
+  return new Promise((ok, err) => {
+    const el = document.createElement("script");
+    el.src = src; el.onload = ok; el.onerror = err;
+    document.head.appendChild(el);
+  });
+}
+
+function ensureLeaflet() {
+  if (window.L && window.L.markerClusterGroup) return Promise.resolve();
+  if (!leafletLoading) {
+    loadCss("https://unpkg.com/leaflet@1.9.4/dist/leaflet.css");
+    loadCss("https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css");
+    loadCss("https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css");
+    leafletLoading = loadJs("https://unpkg.com/leaflet@1.9.4/dist/leaflet.js")
+      .then(() => loadJs("https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"));
+  }
+  return leafletLoading;
+}
+
+function initMap() {
+  if (lmap) return;
+  lmap = L.map("map").setView([50.3, 19.0], 9);
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+  }).addTo(lmap);
+  lcluster = L.markerClusterGroup({ chunkedLoading: true, maxClusterRadius: 46, disableClusteringAtZoom: 16 });
+  lmap.addLayer(lcluster);
+  legendCtl = L.control({ position: "bottomleft" });
+  legendCtl.onAdd = () => { const d = document.createElement("div"); d.className = "map-legend"; return d; };
+  legendCtl.addTo(lmap);
+}
+
+function mapPopup(l) {
+  const ppm = l.price_per_m2 != null ? ` · ${PLN.format(l.price_per_m2)} zł/m²` : "";
+  const b = l._bench;
+  const gap = b ? `<div class="vsrcn ${b.gapPct > 5 ? "over" : b.gapPct < -5 ? "under" : "par"}">vs transakcje RCN: <b>${b.gapPct > 0 ? "+" : ""}${b.gapPct.toFixed(0)}%</b></div>` : "";
+  const facts = [l.area != null ? `${PLN.format(l.area)} m²` : null,
+                 l.rooms != null ? `${l.rooms} pok.` : null].filter(Boolean).join(" · ");
+  return `<div class="map-pop">
+    ${l.image ? `<img loading="lazy" src="${l.image}" onerror="this.style.display='none'">` : ""}
+    <div class="price">${l.price != null ? PLN.format(l.price) + " zł" : "Cena: zapytaj"}${ppm}</div>
+    ${gap}
+    <div class="facts">${facts}${facts && l.locality ? " · " : ""}${escapeHtml(l.locality || "")}</div>
+    <div class="t">${escapeHtml(l.title || "")}</div>
+    ${l.llp === "t" ? `<div class="approx">≈ położenie przybliżone (środek miejscowości)</div>` : ""}
+    ${l.url ? `<a href="${escapeHtml(l.url)}" target="_blank" rel="noopener">otwórz ogłoszenie ↗</a>` : ""}
+  </div>`;
+}
+
+function updateMapMarkers() {
+  if (!lmap || !state.mapOn) return;
+  lcluster.clearLayers();
+  const ms = [];
+  let approx = 0;
+  for (const l of view) {
+    if (!l.ll) continue;
+    if (l.llp !== "s") approx++;
+    const m = L.circleMarker(jitterLL(l), {
+      radius: 6, weight: 1, color: "#ffffff", fillColor: gapColor(l), fillOpacity: 0.85,
+    });
+    m.bindPopup(() => mapPopup(l), { maxWidth: 280 });
+    ms.push(m);
+  }
+  lcluster.addLayers(ms);
+  const dot = (c) => `<span class="dot" style="background:${c}"></span>`;
+  legendCtl.getContainer().innerHTML =
+    `<b>${PLN.format(ms.length)}</b> ofert na mapie (${PLN.format(approx)} ≈ środek miejscowości)<br>` +
+    `cena vs transakcje RCN:<br>` +
+    `${dot("#1a7f37")}poniżej (−5%+) ${dot("#6b7280")}rynkowo ${dot("#b91c1c")}powyżej (+5%+) ${dot("#1f6feb")}brak danych`;
+  if (!mapFitted && ms.length) {
+    lmap.fitBounds(lcluster.getBounds().pad(0.05));
+    mapFitted = true;
+  }
+}
+
+function setMap(on) {
+  state.mapOn = on;
+  try { localStorage.setItem(MAP_KEY, on ? "1" : "0"); } catch (e) {}
+  $("#map").hidden = !on;
+  const btn = $("#map-btn");
+  if (btn) btn.classList.toggle("active", on);
+  if (on) ensureLeaflet().then(() => {
+    initMap();
+    lmap.invalidateSize();
+    updateMapMarkers();
+  }).catch(() => { $("#map").innerHTML = `<div class="empty">Nie udało się wczytać mapy (CDN).</div>`; });
+}
+
+function wireMap() {
+  const btn = $("#map-btn");
+  if (!btn) return;
+  btn.addEventListener("click", () => setMap(!state.mapOn));
+  let saved = null;
+  try { saved = localStorage.getItem(MAP_KEY); } catch (e) {}
+  if (saved === "1") setMap(true);
+}
+
 function card(l) {
   const ppm = l.price_per_m2 != null ? `${PLN.format(l.price_per_m2)} zł/m²` : "";
   const facts = [
@@ -783,6 +1020,7 @@ function card(l) {
     <div class="body">
       <div class="price">${priceLabel(l)}</div>
       ${ppm ? `<div class="ppm">${ppm}</div>` : ""}
+      ${vsRcnLine(l)}
       ${facts ? `<div class="facts">${facts}</div>` : ""}
       ${loc ? `<div class="loc">${loc}</div>` : ""}
       <div class="title">${l.title || ""}</div>
@@ -790,6 +1028,7 @@ function card(l) {
       ${pastSaleLine(l)}
       ${historyBlock(l)}
       ${offersBlock(l)}
+      ${negoBlock(l)}
       ${timelineBlock(l)}
       ${pinBlock(l)}
     </div>

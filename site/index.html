@@ -5,12 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Rentgen ofert — woj. śląskie</title>
   <meta name="description" content="Wszystkie oferty sprzedaży domów i mieszkań w województwie śląskim (Otodom, OLX, Gratka, Morizon, n-online) w jednym miejscu.">
-  <link rel="stylesheet" href="styles.css?v=7">
+  <link rel="stylesheet" href="styles.css?v=8">
 </head>
 <body>
   <header>
     <h1>Rentgen ofert — woj. śląskie</h1>
-    <div class="sub">Domy i mieszkania na sprzedaż z pięciu portali — całe województwo śląskie w jednym miejscu, bez duplikatów.</div>
+    <div class="sub">Domy i mieszkania na sprzedaż z pięciu portali — całe województwo śląskie w jednym miejscu, bez duplikatów.
+    <a class="backlink" href="stats.html">📊 Statystyki rynku</a></div>
     <div class="stats" id="stats"></div>
   </header>
 
@@ -85,10 +86,14 @@
       <input class="txt" id="q" type="search" placeholder="szukaj: dzielnica, tytuł…">
     </div>
     <div class="spacer"></div>
+    <div class="group">
+      <button type="button" id="map-btn" class="mapbtn" title="pokaż oferty na mapie">🗺 Mapa</button>
+    </div>
     <div class="group"><label>Sortuj</label>
       <select id="sort">
         <option value="newest">Najnowsze</option>
         <option value="discount">Największa obniżka</option>
+        <option value="vsrcn">Cena vs transakcje RCN ↑</option>
         <option value="price_asc">Cena ↑</option>
         <option value="price_desc">Cena ↓</option>
         <option value="ppm_asc">zł/m² ↑</option>
@@ -100,6 +105,7 @@
 
   <main>
     <div class="chips" id="chips" hidden></div>
+    <div id="map" hidden></div>
     <div class="grid" id="grid"></div>
   </main>
 
@@ -107,6 +113,6 @@
     rentgen-ofert · dane z publicznych ogłoszeń Otodom, OLX, Gratka, Morizon i n-online · całe woj. śląskie · odświeżane automatycznie przez GitHub Actions
   </footer>
 
-  <script src="app.js?v=18"></script>
+  <script src="app.js?v=20"></script>
 </body>
 </html>
