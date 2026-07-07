@@ -1,6 +1,35 @@
 [
  {
   "type": "house",
+  "area": 220.0,
+  "title": null,
+  "image": null,
+  "locality": null,
+  "district": null,
+  "rooms": null,
+  "url": "https://gratka.pl/nieruchomosci/dom-cieszynski-istebna/ob/37410125",
+  "source": "gratka",
+  "price": 750000,
+  "first_seen": "2026-06-17",
+  "delisted": "2026-06-17",
+  "sold": null,
+  "timeline": [
+   {
+    "date": "2026-06-17",
+    "kind": "listed",
+    "price": 750000,
+    "source": "gratka",
+    "url": "https://gratka.pl/nieruchomosci/dom-cieszynski-istebna/ob/37410125"
+   },
+   {
+    "date": "2026-06-17",
+    "kind": "delisted"
+   }
+  ],
+  "photo_urls": []
+ },
+ {
+  "type": "house",
   "area": 118.0,
   "title": null,
   "image": null,
