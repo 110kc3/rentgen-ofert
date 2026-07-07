@@ -27,6 +27,8 @@ header {
 }
 h1 { margin: 0; font-size: 22px; letter-spacing: -.02em; }
 .sub { color: var(--muted); font-size: 13px; margin-top: 3px; }
+.backlink { color: var(--accent); text-decoration: none; margin-left: 10px; }
+.backlink:hover { text-decoration: underline; }
 .stats { margin-top: 6px; font-size: 13px; color: var(--muted); }
 .stats b { color: var(--text); }
 
@@ -215,3 +217,51 @@ footer { text-align: center; color: var(--muted); font-size: 12px; padding: 20px
 .tl-src a { color: var(--accent); text-decoration: none; }
 .hist .drop { background: #166534; color: #fff; font-weight: 700; font-size: 11px;
   padding: 1px 6px; border-radius: 6px; }
+
+/* ---- cena vs transakcje RCN + negotiation arguments ---- */
+.vsrcn { font-size: 12px; color: var(--muted); }
+.vsrcn b { font-weight: 700; }
+.vsrcn.over b { color: #b91c1c; }
+.vsrcn.under b { color: #1a7f37; }
+@media (prefers-color-scheme: dark) {
+  .vsrcn.over b { color: #f87171; }
+  .vsrcn.under b { color: #4ade80; }
+}
+.vsrcn-med { font-size: 11px; opacity: .8; }
+.nego { margin-top: 7px; border-top: 1px dashed var(--line); padding-top: 6px; }
+.nego summary { cursor: pointer; font-size: 12px; color: var(--accent); font-weight: 600;
+  list-style: none; }
+.nego summary::before { content: "▸ "; }
+.nego[open] summary::before { content: "▾ "; }
+.nego-body { margin-top: 5px; display: flex; flex-direction: column; gap: 4px; }
+.nego-row { font-size: 12px; color: var(--text); }
+
+/* ---- map view ---- */
+.mapbtn { background: var(--card); color: var(--text); border: 1px solid var(--line);
+  border-radius: 8px; padding: 6px 12px; font-size: 13px; cursor: pointer; }
+.mapbtn.active { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+#map { height: 68vh; border: 1px solid var(--line); border-radius: 12px;
+  margin: 0 0 14px; z-index: 1; background: var(--chip); }
+.map-legend { background: var(--card); color: var(--text); border: 1px solid var(--line);
+  border-radius: 8px; box-shadow: var(--shadow); padding: 7px 10px;
+  font-size: 12px; line-height: 1.7; }
+.map-legend .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%;
+  margin: 0 4px 0 6px; vertical-align: -1px; }
+.map-legend .dot:first-of-type { margin-left: 0; }
+.map-pop { font: 13px/1.4 inherit; max-width: 260px; }
+.map-pop img { width: 100%; max-height: 140px; object-fit: cover; border-radius: 8px;
+  margin-bottom: 5px; }
+.map-pop .price { font-weight: 700; font-size: 15px; }
+.map-pop .facts { color: var(--muted); font-size: 12px; margin-top: 2px; }
+.map-pop .t { font-size: 12px; margin-top: 3px; display: -webkit-box;
+  -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.map-pop .approx { color: var(--muted); font-size: 11px; margin-top: 3px; }
+.map-pop a { color: var(--accent); text-decoration: none; font-size: 12px;
+  display: inline-block; margin-top: 4px; }
+.leaflet-popup-content-wrapper, .leaflet-popup-tip {
+  background: var(--card); color: var(--text); }
+.leaflet-container { font: inherit; }
+@media (prefers-color-scheme: dark) {
+  .leaflet-tile { filter: invert(1) hue-rotate(180deg) brightness(.92) contrast(.9) saturate(.65); }
+  .leaflet-control-attribution { background: rgba(24,28,34,.8); color: var(--muted); }
+}

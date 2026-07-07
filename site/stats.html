@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Statystyki rynku — Rentgen ofert, woj. śląskie</title>
+  <meta name="description" content="Ceny ofertowe vs realne ceny transakcyjne (RCN), podaż, obniżki i czas sprzedaży — domy i mieszkania w woj. śląskim.">
+  <link rel="stylesheet" href="styles.css?v=8">
+  <link rel="stylesheet" href="stats.css?v=1">
+</head>
+<body>
+  <header>
+    <h1>Statystyki rynku — woj. śląskie</h1>
+    <div class="sub">Ceny ofertowe z portali vs realne ceny z aktów notarialnych (RCN), podaż i ruch tygodniowy.
+      <a class="backlink" href="index.html">← wróć do ofert</a></div>
+    <div class="stats" id="stats"></div>
+  </header>
+
+  <div class="controls">
+    <div class="group"><label>Miejscowość</label>
+      <select id="town"><option value="">Całe województwo</option></select>
+    </div>
+    <div class="group">
+      <div class="seg" data-key="type">
+        <button data-val="flat" class="active">Mieszkania</button>
+        <button data-val="house">Domy</button>
+      </div>
+    </div>
+    <div class="group"><label>Zakres</label>
+      <div class="seg" data-key="range">
+        <button data-val="24">2 lata</button>
+        <button data-val="60" class="active">5 lat</button>
+        <button data-val="all">max</button>
+      </div>
+    </div>
+  </div>
+
+  <main>
+    <div class="tiles" id="tiles"></div>
+    <div class="charts">
+      <section class="chartcard" id="c-prices"></section>
+      <section class="chartcard" id="c-supply"></section>
+      <section class="chartcard" id="c-flow"></section>
+      <section class="chartcard" id="c-dom"></section>
+    </div>
+  </main>
+
+  <footer>
+    rentgen-ofert · oferty: Otodom, OLX, Gratka, Morizon, n-online · transakcje: RCN/GUGiK (akty notarialne) ·
+    serie ofertowe budują się od pierwszego uruchomienia narzędzia
+  </footer>
+
+  <script src="stats.js?v=1"></script>
+</body>
+</html>

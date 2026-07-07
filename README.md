@@ -6,7 +6,7 @@ searchable page. No server: a GitHub Actions cron job scrapes the portals,
 writes a JSON file, and a static dashboard on GitHub Pages displays it.
 
 ```
-GitHub Actions (cron) → python -m scraper.main → site/data/listings.json → GitHub Pages (site/)
+GitHub Actions (cron) → python -m scraper.main → site/data/*.json → GitHub Pages (site/)
 ```
 
 ## What it does
@@ -37,6 +37,35 @@ GitHub Actions (cron) → python -m scraper.main → site/data/listings.json →
   shows as "🔑 poprzednio sprzedane … za …"; a deed *after* a listing vanished
   confirms "✓ sprzedane wg RCN". Matches are conservative and carry a
   confidence label (wysoka = street-anchored, średnia = attribute-anchored).
+- **Cena vs transakcje RCN (negotiation leverage).** `scraper/rcnstats.py`
+  aggregates the RCN snapshot into `site/data/rcnstats.json` (~21 KB): median /
+  p25 / p75 deed zł/m² per town + flat-size bucket + market (last 24 months,
+  ≥ 5 deeds). Every flat card with a benchmark shows **"vs transakcje RCN:
+  +18 %"** and an expandable **"💬 Argumenty do negocjacji"** block — what
+  similar flats actually sold for, how sales end locally (median % below the
+  last asking price and days on market, from properties we watched vanish and
+  matched to deeds; accumulates as the tool runs), plus this listing's time on
+  market / relists / price cuts. New sort: *Cena vs transakcje RCN ↑*. House
+  zł/m² benchmarks are deliberately not published (the RCN budynki layer
+  usually carries building-value fragments, not house sale prices).
+- **Map view.** The dashboard's **🗺 Mapa** toggle plots the currently
+  filtered listings on an OpenStreetMap map (Leaflet + clustering, loaded
+  on demand), with markers colored by the listing's price vs local RCN
+  transactions (green = below, red = above). Coordinates come from GUGiK's
+  free UUG geocoder via `scraper/geo.py` — unique town/street names are
+  resolved once into a committed cache (`cache/geo_cache.json`), towns first,
+  streets improving over runs (`RENTGEN_GEO_MAX` lookups per run,
+  `RENTGEN_GEO=0` to skip). Street-precise pins are exact; town-precise ones
+  are scattered ≤400 m around the centroid and marked "≈" in the popup.
+- **Statystyki page (`stats.html`).** A separate market dashboard fed by
+  `scraper/marketstats.py` -> `site/data/stats.json` (~32 KB): median asking
+  zł/m² (weekly, from the tool's own observations) charted against **median
+  transacted zł/m² from notarial deeds** (monthly since 2018, wtórny +
+  pierwotny) — per town or voivodeship-wide; active supply per week; new /
+  withdrawn / price-cut counts; days-on-market histogram; stat tiles. Charts
+  are dependency-free responsive SVG with tooltips, a data table under each
+  chart, and a validated color palette (light + dark). Deed series lag a few
+  months (registry delay); ask series build forward from the first run.
 - **Delisting detection.** Listings that stop appearing are not assumed dead
   (region searches are pagination-capped) — up to `RENTGEN_VERIFY_MAX` stale
   URLs per run are fetched and only 404s / "ogłoszenie nieaktualne" pages /
@@ -60,7 +89,8 @@ GitHub Actions (cron) → python -m scraper.main → site/data/listings.json →
   skip them and fall back to a size+price heuristic.)
 - Dashboard: filter by **town** (searchable multi-select), type / source / private
   vs agency / price / area / rooms, optional distance-from-Gliwice, full-text search,
-  and sort by newest, price, zł/m² or area. Active filters show as removable chips
+  and sort by newest, biggest discount, **price vs RCN transactions**, price, zł/m²
+  or area — as a card grid or on the **map**. Active filters show as removable chips
   with one-click reset, and your selection is remembered (saved locally and encoded
   in the URL, so a filtered view is shareable). Every link opens the original ad. No
   seller contact data is stored.
@@ -126,6 +156,8 @@ RENTGEN_MAX_PAGES=3 RENTGEN_DELAY=0.3 python -m scraper.main
 | `RENTGEN_TYPES` | house,flat | which to scrape; e.g. `house` for houses only |
 | `RENTGEN_VERIFY_MAX` | 300 | stale listings URL-verified per run (`0` disables) |
 | `RENTGEN_RCN` | 1 | `0` skips RCN; `force` re-pulls the transaction snapshot now |
+| `RENTGEN_GEO` | 1 | `0` skips geocoding listings for the map view |
+| `RENTGEN_GEO_MAX` | 500 | max new UUG geocoder lookups per run (cache does the rest) |
 
 **Rate limiting (HTTP 429):** the scraper backs off and retries automatically. If a
 portal still rate-limits you (nieruchomości-online is strict, especially on repeat
@@ -178,8 +210,9 @@ python -m pytest -q          # parser + dedupe unit tests (offline, use fixtures
 
 ## Customise
 
-- **City / scope** — edit the `SEARCH` URLs in each `scraper/<portal>.py`
-  (swap `gliwice`, or add rentals).
+- **Region** — set `RENTGEN_REGION` (a voivodeship slug); see the
+  whole-Poland plan in `TODO.md` before going multi-region. For rentals or
+  other scopes, edit the `SEARCH` URLs in each `scraper/<portal>.py`.
 - **Add a portal** — write a module exposing `scrape(max_pages, delay, ...)`
   that returns the shared listing dict (see the docstring in
   `scraper/normalize.py`) and add it to `SOURCES` in `scraper/main.py`.
@@ -196,15 +229,23 @@ scraper/
   cache.py       photo-hash cache (URL -> hashes + gallery URLs), reused run-to-run
   delist.py      URL-verifies vanished listings before marking them "wycofane"
   rcn.py         RCN (notarial-deed prices) WFS pull + probabilistic sale matching
+  rcnstats.py    deed zł/m² benchmarks + ask-vs-sold gap -> rcnstats.json
+  marketstats.py weekly/monthly market time series -> stats.json (Statystyki page)
+  geo.py         UUG geocoding of towns/streets + EPSG:2180 -> WGS84 (map view)
+  uldk.py        address -> canonical street + cadastral parcel (UUG + ULDK)
+  rcncheck.py    manual RCN lookup / --pin; overrides.py  hand-pinned addresses
   main.py        runs every source, photo-checks look-alikes, writes site/data/*.json
 cache/
   phash_cache.json      committed gallery-hash cache, reused run-to-run (auto-pruned)
   rcn_snapshot.json.gz  committed RCN transaction snapshot (refreshed weekly)
+  geo_cache.json        committed geocode cache (town/street -> lat,lon)
 site/
-  index.html  app.js  styles.css      static dashboard (GitHub Pages)
-  data/        listings.json, archive.json, meta.json  (generated)
-tests/         parser + dedupe + history + RCN tests with offline fixtures
-.github/workflows/update.yml           cron + Pages deploy
+  index.html  app.js  styles.css        listings dashboard + map view (GitHub Pages)
+  stats.html  stats.js  stats.css       Statystyki market dashboard (SVG charts)
+  data/        listings.json, history.json, archive.json, meta.json,
+               rcnstats.json, stats.json          (generated each run)
+tests/         parser + dedupe + history + RCN + stats + geo tests, offline fixtures
+.github/workflows/   update.yml (cron scrape) + deploy.yml (Pages publish)
 TODO.md        roadmap / pending work (kept in sync with this README)
 ```
 

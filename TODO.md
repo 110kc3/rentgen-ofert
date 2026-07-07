@@ -1,9 +1,158 @@
 # TODO — rentgen-ofert
 
 > Keep this file and `README.md` updated after each change.
-> Last updated: 2026-07-02
+> Last updated: 2026-07-07
 
-## Done (property lifetime timeline + RCN — this round)
+## Done (cena vs transakcje RCN — 2026-07-07)
+- [x] **`scraper/rcnstats.py` -> `site/data/rcnstats.json`** (~21 KB): per-town
+      / size-bucket / market (p|w) deed zł/m² benchmarks (n, med, p25, p75)
+      from the RCN snapshot, last 24 months, min 5 deeds per bucket. Flats
+      only — the budynki layer's price is usually a building-value fragment
+      (voivodeship median ~200 zł/m²), so house benchmarks would mislead.
+- [x] **Ask-vs-sold gap stats** (same file): properties we watched vanish AND
+      matched to a deed give median (deed − last ask)/ask % and median days on
+      market, per town + voivodeship-wide. |gap| > 40 % pairs dropped as
+      mismatches. Currently 0 pairs — history has `kind:"past"` sales but only
+      5 delisted records so far; fills in as the delist sweep + RCN matching
+      run forward. The dashboard hides the stat until data exists.
+- [x] **Dashboard**: "vs transakcje RCN: +18 %" line on every card with a
+      benchmark (63 % of listings today; tooltip = median, n, bucket, window;
+      ppm outside 500–40 000 zł/m² excluded as typos/udział), expandable
+      **"💬 Argumenty do negocjacji"** block (deed benchmark + p25–p75 range,
+      how sales end locally, days on market / relist / cuts), new sort
+      **"Cena vs transakcje RCN ↑"**, header line with the global gap stat.
+- [x] `meta.json` gets `rcn_stats: {towns, gap_pairs}`; tests in
+      `tests/test_rcnstats.py` (61 total, offline).
+
+## Done (Statystyki page — 2026-07-07)
+- [x] **`scraper/marketstats.py` -> `site/data/stats.json`** (~32 KB, builds in
+      ~2 s): weekly series from history observations (active supply, median
+      asking zł/m², new / confirmed-withdrawn / price cuts — global per type +
+      active/median for the 40 busiest towns) and monthly RCN deed series
+      since 2018 (median transacted zł/m² + n for flats, wtórny/pierwotny
+      globally, wtórny per town; months with < 5 deeds -> null). Plus
+      days-on-market histogram and % of listings that ever cut price.
+      Developer records excluded from history-derived series.
+- [x] **`site/stats.html` + `stats.js` + `stats.css`** — separate dashboard,
+      linked from the main header. Hand-rolled responsive SVG (no libs):
+      ceny ofertowe vs transakcje RCN line chart (the two-line chart nobody
+      else has), weekly supply, small-multiple bars for nowe/wycofane/obniżki,
+      DOM histogram, stat tiles (incl. the rcnstats gap stat when it exists).
+      Town select + Mieszkania/Domy + 2 lata/5 lat/max range. Charts follow
+      the dataviz method: validated 3-slot palette (light+dark), legend +
+      end-of-line direct labels, crosshair/per-bar tooltips, "tabela danych"
+      under every chart, nulls break lines (deed registry lags months —
+      e.g. Gliwice powiat stops at 2026-02 in the current snapshot).
+- [x] Tests `tests/test_marketstats.py` (67 total, offline). Note: weekly ask
+      medians for the first 1–2 weeks are coverage-ramp artifacts (portals
+      were added over days), not market moves.
+
+## Done (map view — 2026-07-07)
+- [x] **`scraper/geo.py`.** Listings carry no coordinates, so unique
+      locality / locality+street strings are geocoded through GUGiK's free
+      UUG service into a committed cache (`cache/geo_cache.json`; misses
+      cached too, retried after 60 days). EPSG:2180 -> WGS84 in pure Python
+      (inverse transverse Mercator, no pyproj). Budgeted: towns first (one
+      lookup covers hundreds of listings), then streets by demand,
+      `RENTGEN_GEO_MAX` (500) new lookups per run — street precision keeps
+      improving run over run. Listings gain `ll: [lat, lon]` +
+      `llp: "s"|"t"` (street/town); `meta.json` gains `geocoded`.
+- [x] **Dashboard map (🗺 Mapa toggle).** Leaflet + markercluster, lazy-loaded
+      from unpkg only when first opened (main page load unchanged). Shows the
+      *current filtered view*; markers colored by the "vs transakcje RCN" gap
+      (green below / gray par / red above / blue no data), legend with counts,
+      popup = mini card with photo, price, gap and link. Town-precision pins
+      get a deterministic ≤400 m scatter (seeded by URL) so they cluster
+      instead of stacking on the centroid. Dark-mode tile filter. Map state
+      remembered in localStorage. Archive entries have no `ll` yet — map in
+      Archiwum mode shows nothing (known gap).
+
+## Backlog (product: "deweloperuch dla wszystkich ogłoszeń")
+- [ ] **Obniżki view + alerts.** "Price cut in the last 7 days" view sorted by
+      % cut; CI-generated RSS/Atom feeds (global + per-town) so alerts need no
+      server; localStorage watchlist + "changes since your last visit" diff.
+- [ ] **Sort: longest on market** (motivated sellers; data already on cards).
+- [ ] **Payload split (before scaling).** `listings.json` is 42 MB fetched with
+      `cache: no-store` on every visit: slim grid index + lazy per-listing
+      detail shards, content-hash filenames instead of no-store, precompressed
+      `.json.gz`. Prerequisite for multi-region.
+- [ ] **Multi-voivodeship / whole Poland.** Detailed plan below ↓.
+
+## Plan: scraping whole Poland (notes, 2026-07-07)
+
+Region (voivodeship) stays the unit of everything: one scrape job, one data
+dir, one dashboard, one RCN snapshot per region. "Poland" = 16 regions, not
+one giant run. Rough scale: Śląskie is ~18k unique / ~29k raw listings, Poland
+is ~8–12× that (Otodom alone lists ~250k sales nationwide).
+
+### Krok 0 — de-Gliwice the code (prereq, cheap)
+- 4/5 scrapers already take `RENTGEN_REGION` as a URL slug (otodom, olx,
+  gratka, morizon — verify each portal uses the same 16 slugs; otodom/olx do).
+- **n-online is the exception**: hardcoded `SLASKIE_TOWNS` list (per-city
+  subdomains), other regions degrade to a single-town search. Either build a
+  town list per region (their sitemap / city index) or accept n-online as
+  śląskie-only at first.
+- Hardcoded bits to regionalize: `normalize.py CITY = "Gliwice"`,
+  gratka/morizon strip the literal string `"śląskie"` from locations,
+  `app.js` `GLIWICE_DISTRICTS` + `TOWN_COORDS` + the distance-from-Gliwice
+  filter (make the anchor city a per-region config, or drop the distance
+  filter outside śląskie), page titles.
+- **Pagination-cap audit per portal.** `RENTGEN_MAX_PAGES=50` truncates big
+  regions (OLX caps searches at ~25 pages ≈ 1000 ads regardless!). Detect
+  overflow (last page == cap) and subdivide the search: per-city/per-powiat
+  URLs, or price-band slices. Mazowieckie region-wide is definitely over
+  every portal's cap — without this, coverage silently drops and the delist
+  sweep starts URL-checking thousands of "missing" listings.
+
+### Krok 1 — layout: region = build unit
+- `site/data/<region>/{listings,history,archive,meta,rcnstats,stats}.json`;
+  per-region caches (`cache/phash_<region>.json`, `cache/rcn_<region>.json.gz`).
+- Dashboard + stats page load from the region's data dir (path or `?region=`);
+  root `index.html` becomes a region picker with per-region counts.
+- TERYT map for RCN already covers all 16 regions — nothing to do there.
+
+### Krok 2 — CI
+- Matrix over regions with `max-parallel: 1–2` and staggered crons (each
+  region 1×/day spread over 24 h, instead of 2×/day everywhere) — the portals
+  see the same runner IPs regardless of region, so parallel regions multiply
+  ban risk, not throughput.
+- Onboard ONE region at a time: the first run per region is heavy (photo
+  hashing fetches galleries for every ambiguous listing).
+- Per-region `RENTGEN_VERIFY_MAX` budget; per-region concurrency group so a
+  slow region can't wedge the others.
+- Realistic failure mode is portal 403s on GH runner IPs. Fallbacks, in
+  order: lower frequency, local scrape + push (already supported — output
+  files ARE the cache), self-hosted runner.
+
+### Krok 3 — storage (the actual blocker)
+- **GitHub hard limits bite before anything else**: 100 MB/file (śląskie
+  history.json is already 63 MB — Mazowieckie will cross 100 MB), repo grows
+  by ~40 MB of JSON diffs per commit × 16 regions × daily, Pages caps at
+  1 GB site / 100 GB-mo bandwidth.
+- Stop committing data into main's history before it balloons. Options:
+  (a) orphan `data` branch, force-pushed each run (keeps "local scrape IS
+  the cache" workflow, history stays 1 commit deep);
+  (b) no commit at all — carry history.json between runs as an Actions
+  artifact/cache and deploy Pages straight from the artifact;
+  (c) external storage (Cloudflare R2 / S3) once even that outgrows.
+- Shard or gzip history.json per region either way; the browser never loads
+  it, only the pipeline does.
+- The **"Payload split"** backlog item above stops being optional at this
+  scale: per-region slim index + lazy detail shards, hashed filenames.
+
+### Rollout order
+1. Krok 0 audit + fixes, still śląskie-only (no behavior change).
+2. Pilot ONE extra region end-to-end (małopolskie or dolnośląskie — mid-size,
+   tests the n-online gap and the overflow subdivision).
+3. Krok 3 storage switch while the repo is still small.
+4. Add regions in batches of 3–4, watching portal error rates in meta.json.
+- [ ] **Sparkline price chart** on cards instead of the text price trail.
+- [ ] **Rental listings dataset** -> estimated gross yield per sale listing
+      from rental comps (town + size bucket); attracts the investor crowd.
+- [ ] **Agency behaviour stats** (relist frequency per agency) — tread
+      carefully, naming-and-shaming risk.
+
+## Done (property lifetime timeline + RCN — earlier round)
 - [x] **RCN integration (`scraper/rcn.py`).** Pulls all Śląskie flat +
       residential-building transactions from GUGiK's free WFS
       (`mapy.geoportal.gov.pl/wss/service/rcn`, public since Feb 2026) into
@@ -33,7 +182,7 @@
       RCN sale banners, meta counts.
 - [x] Tests: `tests/test_history.py`, `tests/test_rcn.py` (39 total, offline).
 
-## Done (developer new-builds + UI perf — this round)
+## Done (developer new-builds + UI perf — earlier round)
 - [x] **Developer new-builds detected and un-merged.** Detection: portal's
       `market: primary` (Otodom/OLX, now captured), title keywords
       (deweloper/inwestycja/etap/…), or >=3 same-gallery ads on one portal.
@@ -47,7 +196,7 @@
       inputs, `content-visibility`; filter clicks went from ~seconds of
       freeze at ~19k cards to ~200 ms.
 
-## Done (RCN matching v2 + validator — this round)
+## Done (RCN matching v2 + validator — earlier round)
 - [x] **Match-rate overhaul** (measured on real data: 29k records):
       declension-tolerant street matching (Gdańskiej == Gdańska — was the
       single biggest false-reject), district↔locality fallback, decimal-area
@@ -63,7 +212,7 @@
 - [x] Fixed the always-open miejscowość picker (a lost `[hidden]` CSS rule,
       not a JS bug).
 
-## Done (address lookup + manual pinning — this round)
+## Done (address lookup + manual pinning — earlier round)
 - [x] `rcncheck` searches by exact address (`--ulica`, `--nr`, area optional,
       flats+houses) — shows a building's full sale history back to ~2000.
 - [x] **overrides.json + `--pin`**: hand-learned addresses attach to listing
@@ -71,7 +220,7 @@
       and the matcher treats street+number as decisive (wysoka), including
       against deeds that lack a usable-area field (kept in the snapshot now).
 
-## Done (address -> parcel resolution — this round)
+## Done (address -> parcel resolution — earlier round)
 - [x] **`scraper/uldk.py`**: address -> canonical street + EPSG:2180 point
       (UUG geocoder) -> cadastral parcel id (ULDK GetParcelByXY). Free GUGiK
       services, no keys. Guarded: if the geocoder can't confirm the exact
@@ -91,6 +240,8 @@
       delisted > 60 days with no deed yet.
 - [ ] Otodom/OLX ship exact lat/lon — capturing them would make RCN matching
       near-certain (geometry is in the WFS response, currently discarded).
+      Would also upgrade the map view: `geo.py` town/street geocoding is
+      approximate, portal coordinates are the real thing.
 
 ## Done
 - [x] Otodom scraper (houses + flats) — parses `__NEXT_DATA__` JSON
@@ -109,7 +260,7 @@
 - [x] Skip archived nieruchomości-online listings (`availability: OutOfStock`)
 - [x] Relist + price history via photo fingerprint — persistent `history.json`
 
-## Done (Śląskie-wide + caching + filtering — this round)
+## Done (Śląskie-wide + caching + filtering — earlier round)
 - [x] **Whole-voivodeship scope.** All five scrapers now search the entire Śląskie
       voivodeship: a region-level URL on Otodom/OLX/gratka/Morizon (no more Gliwice
       radius), and a generous per-city sub-domain list on nieruchomości-online.
@@ -144,16 +295,16 @@
       pagination (~`RENTGEN_MAX_PAGES` × ~36/page), so a single region query returns
       the newest N, not all. For exhaustive coverage, iterate per **powiat** (or raise
       `RENTGEN_MAX_PAGES`) on Otodom/OLX/gratka/Morizon — bigger + slower, but complete.
-- [ ] **Precise distances.** Capture each listing's lat/lon from Otodom/OLX (they
-      ship coordinates) so the distance filter works for *every* town, not just the
-      ~90 in the hard-coded `TOWN_COORDS` map in `app.js`.
+- [ ] **Precise distances.** Listings now carry `ll` (UUG-geocoded, town/street
+      precision) — the distance filter could compute from it for *every* town
+      instead of the ~90 hard-coded `TOWN_COORDS` in `app.js`. Portal-shipped
+      lat/lon (Otodom/OLX) would be better still.
 
 ## Pending — features / ideas
 - [ ] **adresowo.pl** — client-side rendered; needs a headless browser (Playwright)
       or its JSON API. Deferred to keep the no-browser model.
 - [ ] More portals: domiporta.pl, sprzedajemy.pl, Facebook Marketplace
 - [ ] Daily email digest of new / price-changed listings
-- [ ] Map view of listings
 - [ ] Optional rentals (wynajem) toggle
 
 ## Known issues / notes
