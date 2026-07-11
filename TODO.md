@@ -50,6 +50,44 @@ every fix below is covered by `tests/test_bugfixes.py` (90 tests total).
       market/owner filters are ignored in Archiwum (fields don't exist
       there); DOM-histogram tooltip no longer shows "undefined".
 
+## NEXT — priority 1: stop committing data into main's history (do FIRST)
+
+**Why now, not "before scaling":** `history.json` is 83 MB and GitHub hard-
+rejects files at **100 MB** — a few more weeks of Śląskie growth and the twice-
+daily data commit starts FAILING on main. The 2026-07-11 push already produced
+14 "file larger than 50 MB" warnings (old history.json versions), the pack is
+95 MB after ~50 commits, and every refresh adds ~40 MB of JSON diff to history
+forever. This bites before any multi-region work.
+
+**What to do (option (a) from Krok 3 — keeps the "local scrape IS the cache"
+workflow, ~an afternoon of work):**
+1. **Create an orphan `data` branch** holding only `site/data/**` + `cache/**`:
+   `git checkout --orphan data && git rm -r --cached . && git add site/data cache
+   && git commit -m "data snapshot" && git push -u origin data`.
+2. **update.yml**: before scraping, fetch the `data` branch and copy its
+   `site/data` + `cache` into the working tree (they're no longer in main);
+   after scraping, commit the refreshed files to the `data` branch and
+   **`push --force`** it (single-commit-deep branch — history lives in the
+   files themselves, not in git history). Stop committing them to main.
+3. **deploy.yml**: build the Pages artifact by overlaying main's `site/` with
+   the `data` branch's `site/data/` (two checkouts into one upload dir).
+   Trigger it from successful update runs + pushes touching `site/**` on main.
+4. **Gzip `history.json`** on the data branch (`history.json.gz`, ~8-10x
+   smaller — only the pipeline reads it, the browser never does). Buys years
+   of headroom under the 100 MB limit; shard per-region later when going
+   multi-voivodeship.
+5. **Shrink main once**: after data stops being committed, rewrite main's
+   history to drop the old data blobs (`git filter-repo --path site/data
+   --path cache --invert-paths` + force-push, or start a fresh clone) so the
+   repo drops from ~95 MB to a few MB. Local checkouts must re-clone after.
+6. `.gitignore` `site/data/` + `cache/` on main so a local scrape can't
+   accidentally re-commit them there; README: document that local scrapes
+   push to the `data` branch instead.
+
+Follow-up (separate, still important): the **Payload split** backlog item —
+`listings.json` (44 MB, `cache: no-store`) → slim grid index + lazy detail
+shards + hashed filenames. Do it before adding a second region.
+
 ## Done (cena vs transakcje RCN — 2026-07-07)
 - [x] **`scraper/rcnstats.py` -> `site/data/rcnstats.json`** (~21 KB): per-town
       / size-bucket / market (p|w) deed zł/m² benchmarks (n, med, p25, p75)
@@ -119,7 +157,10 @@ every fix below is covered by `tests/test_bugfixes.py` (90 tests total).
       % cut; CI-generated RSS/Atom feeds (global + per-town) so alerts need no
       server; localStorage watchlist + "changes since your last visit" diff.
 - [ ] **Sort: longest on market** (motivated sellers; data already on cards).
-- [ ] **Payload split (before scaling).** `listings.json` is 42 MB fetched with
+- [ ] **Storage switch — see "NEXT — priority 1" at the top of this file.**
+      Data commits to main hit GitHub's 100 MB file limit soon; move data to
+      an orphan `data` branch first.
+- [ ] **Payload split (before scaling).** `listings.json` is 44 MB fetched with
       `cache: no-store` on every visit: slim grid index + lazy per-listing
       detail shards, content-hash filenames instead of no-store, precompressed
       `.json.gz`. Prerequisite for multi-region.
