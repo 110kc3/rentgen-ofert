@@ -73,6 +73,12 @@ const state = { all: [], archive: null, type: "all", source: "all", owner: "all"
 let locOptions = [];                         // [ [name, count], ... ] sorted by count
 const FILTER_KEY = "rentgen.filters.v2";
 
+// data lives per voivodeship in data/<region>/ (see TODO.md "storage switch");
+// ?region=malopolskie switches once more regions are scraped
+const REGION = ((new URLSearchParams(location.search).get("region") || "slaskie")
+  .replace(/[^a-z-]/g, "")) || "slaskie";
+const DATA = `data/${REGION}`;
+
 const $ = (sel) => document.querySelector(sel);
 const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -82,9 +88,9 @@ const apply = () => { persist(); render(); };
 async function boot() {
   try {
     const [listings, meta, rcnstats] = await Promise.all([
-      fetch("data/listings.json", { cache: "no-store" }).then((r) => r.json()),
-      fetch("data/meta.json", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
-      fetch("data/rcnstats.json", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
+      fetch(`${DATA}/listings.json`, { cache: "no-store" }).then((r) => r.json()),
+      fetch(`${DATA}/meta.json`, { cache: "no-store" }).then((r) => r.json()).catch(() => null),
+      fetch(`${DATA}/rcnstats.json`, { cache: "no-store" }).then((r) => r.json()).catch(() => null),
     ]);
     state.all = Array.isArray(listings) ? listings : [];
     state.rcnstats = rcnstats && rcnstats.towns ? rcnstats : null;
@@ -99,6 +105,10 @@ async function boot() {
     $("#grid").innerHTML =
       `<div class="empty">Nie udało się wczytać danych (data/listings.json).</div>`;
     return;
+  }
+  if (REGION !== "slaskie") {              // keep the region across page links
+    const a = document.querySelector('a[href="stats.html"]');
+    if (a) a.href = `stats.html?region=${REGION}`;
   }
   buildSourceFilter();
   buildLocalityOptions();
@@ -475,7 +485,7 @@ const sorters = {
 async function loadArchive() {
   if (state.archive) return state.archive;
   try {
-    const a = await fetch("data/archive.json", { cache: "no-store" }).then((r) => r.json());
+    const a = await fetch(`${DATA}/archive.json`, { cache: "no-store" }).then((r) => r.json());
     state.archive = Array.isArray(a) ? a : [];
   } catch (e) {
     state.archive = [];

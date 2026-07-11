@@ -4,6 +4,10 @@
    RCN deed series) as hand-rolled responsive SVG charts. No libraries. */
 
 const PLN = new Intl.NumberFormat("pl-PL");
+// data lives per voivodeship in data/<region>/ — same convention as app.js
+const REGION = ((new URLSearchParams(location.search).get("region") || "slaskie")
+  .replace(/[^a-z-]/g, "")) || "slaskie";
+const DATA = `data/${REGION}`;
 const $ = (sel) => document.querySelector(sel);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -17,14 +21,18 @@ const state = { data: null, gap: null, town: "", type: "flat", range: "60" };
 async function boot() {
   try {
     const [data, rcnstats] = await Promise.all([
-      fetch("data/stats.json", { cache: "no-store" }).then((r) => r.json()),
-      fetch("data/rcnstats.json", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
+      fetch(`${DATA}/stats.json`, { cache: "no-store" }).then((r) => r.json()),
+      fetch(`${DATA}/rcnstats.json`, { cache: "no-store" }).then((r) => r.json()).catch(() => null),
     ]);
     state.data = data;
     state.gap = rcnstats && rcnstats.gap ? rcnstats.gap : null;
   } catch (e) {
     $("main").innerHTML = `<div class="empty">Nie udało się wczytać danych (data/stats.json).</div>`;
     return;
+  }
+  if (REGION !== "slaskie") {              // keep the region across page links
+    const a = document.querySelector('a[href="index.html"]');
+    if (a) a.href = `index.html?region=${REGION}`;
   }
   $("#stats").innerHTML = `dane z ${esc(state.data.built || "—")} · oferty tygodniowo (od startu narzędzia) · akty notarialne miesięcznie (RCN/GUGiK)`;
   const towns = Object.keys(state.data.weekly.towns || {});

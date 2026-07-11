@@ -6,8 +6,14 @@ searchable page. No server: a GitHub Actions cron job scrapes the portals,
 writes a JSON file, and a static dashboard on GitHub Pages displays it.
 
 ```
-GitHub Actions (cron) → python -m scraper.main → site/data/*.json → GitHub Pages (site/)
+GitHub Actions (cron) → python -m scraper.main → site/data/<region>/*.json
+        → force-pushed to the orphan `data` branch → GitHub Pages (main site/ + data overlay)
 ```
+
+Scraped data and caches live on a single-commit **`data` branch**, never in
+main's git history — main stays a few MB of code while the data branch is
+force-pushed fresh each run (the price history lives *inside*
+`history.json.gz`, so old git versions of it carry no information).
 
 ## What it does
 
@@ -117,24 +123,29 @@ Dashboard URL: `https://<your-username>.github.io/rentgen-ofert/`.
 
 ### B) Scrape locally, let CI only publish (fastest loop)
 
-All scraper output is committed files, so a local scrape IS the cache — CI
-never needs to repeat it:
+All scraper output is committed files (on the `data` branch), so a local
+scrape IS the cache — CI never needs to repeat it. Pull the current data,
+scrape, push it back as a fresh single commit:
 
 ```bash
+git fetch origin data && git checkout origin/data -- site/data cache && git reset -q
 python -m scraper.main                                   # ~minutes with warm caches
-git add -A site cache && git commit -m "data: local scrape" && git push
+git checkout --orphan data-local && git rm -r --cached -q . \
+  && git add -f site/data cache && git commit -m "data: local scrape" \
+  && git push --force origin HEAD:data && git checkout -
 ```
 
-Any push touching `site/**` triggers the lightweight **Deploy site** workflow
-(publishes in ~1 min, no scraping). The heavy **Update listings** workflow now
-runs only on its cron, on `scraper/**` changes, or manually (with an `rcn`
-input — set it to `force` to re-pull the RCN transaction snapshot).
+Then publish via **Actions tab → "Deploy site" → Run workflow** (pushes to the
+`data` branch can't trigger workflows themselves). The heavy **Update
+listings** workflow runs on its cron, on `scraper/**` changes, or manually
+(inputs: `rcn` — set `force` to re-pull the RCN transaction snapshot;
+`region` — voivodeship slug, default `slaskie`).
 
 ### C) Run locally (dashboard preview)
 
 ```bash
 pip install -r scraper/requirements.txt   # requests + beautifulsoup4 + Pillow
-python -m scraper.main                     # scrape -> site/data/listings.json
+python -m scraper.main                     # scrape -> site/data/slaskie/listings.json
 python -m http.server 8000 -d site         # then open http://localhost:8000
 ```
 
@@ -173,8 +184,9 @@ python -m scraper.rcncheck Pyskowice 141.5 --typ house --dzialka 800
 
 Lists every notarial deed for that size in that town (the register reaches
 back to ~2000 in many powiats) and marks which ones the automatic matcher
-would accept, with confidence. Needs `cache/rcn_snapshot.json.gz` (created by
-the scraper's weekly RCN pull).
+would accept, with confidence. Needs `cache/rcn_<region>.json.gz` (created by
+the scraper's weekly RCN pull; fetch it with the data-branch checkout from
+section B if you scraped in CI only).
 
 **Know the exact address?** Search by it directly (no area needed) — this
 shows the building's complete sale history:
@@ -235,15 +247,16 @@ scraper/
   uldk.py        address -> canonical street + cadastral parcel (UUG + ULDK)
   rcncheck.py    manual RCN lookup / --pin; overrides.py  hand-pinned addresses
   main.py        runs every source, photo-checks look-alikes, writes site/data/*.json
-cache/
-  phash_cache.json      committed gallery-hash cache, reused run-to-run (auto-pruned)
-  rcn_snapshot.json.gz  committed RCN transaction snapshot (refreshed weekly)
-  geo_cache.json        committed geocode cache (town/street -> lat,lon)
+cache/                 (on the `data` branch, gitignored on main)
+  phash_<region>.json   gallery-hash cache, reused run-to-run (auto-pruned)
+  rcn_<region>.json.gz  RCN transaction snapshot (refreshed weekly)
+  geo_cache.json        geocode cache, shared across regions (town/street -> lat,lon)
 site/
   index.html  app.js  styles.css        listings dashboard + map view (GitHub Pages)
   stats.html  stats.js  stats.css       Statystyki market dashboard (SVG charts)
-  data/        listings.json, history.json, archive.json, meta.json,
-               rcnstats.json, stats.json          (generated each run)
+  data/<region>/  listings.json, history.json.gz, archive.json, meta.json,
+                  rcnstats.json, stats.json   (generated each run; on the `data`
+                  branch — one directory per voivodeship, ?region= to view)
 tests/         parser + dedupe + history + RCN + stats + geo tests, offline fixtures
 .github/workflows/   update.yml (cron scrape) + deploy.yml (Pages publish)
 TODO.md        roadmap / pending work (kept in sync with this README)

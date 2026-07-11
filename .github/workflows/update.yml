@@ -1,6 +1,12 @@
-# Scrape + commit data. Does NOT deploy — deploy.yml picks up every completed
+# Scrape + push data. Does NOT deploy — deploy.yml picks up every completed
 # run (workflow_run trigger) and publishes, with retries. This keeps exactly
 # one deployment path, so two workflows never race for the Pages queue.
+#
+# STORAGE: scraped data + caches live on the orphan `data` branch, force-pushed
+# as a SINGLE commit each run — never in main's git history (history.json alone
+# is tens of MB; committing it to main twice a day was marching the repo into
+# GitHub's 100 MB file / repo-size limits). The price history lives inside
+# history.json.gz itself, so discarding old git versions loses nothing.
 name: Update listings
 
 on:
@@ -12,6 +18,10 @@ on:
         description: "RCN snapshot: 1 = cache (weekly refresh), force = re-pull now"
         required: false
         default: "1"
+      region:
+        description: "voivodeship slug to scrape (data goes to site/data/<region>/)"
+        required: false
+        default: "slaskie"
   push:
     branches: [main]
     # only scraper-affecting changes trigger the heavy scrape; pure site/
@@ -22,17 +32,28 @@ on:
       - ".github/workflows/update.yml"
 
 permissions:
-  contents: write             # commit refreshed data (price history in git)
+  contents: write             # force-push the refreshed `data` branch
 
 concurrency:
-  group: rentgen-scrape
+  group: rentgen-scrape       # one scrape at a time (portals see the same IPs)
   cancel-in-progress: false
 
 jobs:
   update:
     runs-on: ubuntu-latest
+    env:
+      REGION: ${{ github.event.inputs.region || 'slaskie' }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Pull current data + caches from the data branch
+        run: |
+          if git fetch origin data; then
+            git checkout origin/data -- site/data cache || echo "data branch has no data yet"
+            git reset -q      # keep the files, but untracked on main's checkout
+          else
+            echo "no data branch yet — starting fresh"
+          fi
 
       - uses: actions/setup-python@v5
         with:
@@ -43,18 +64,20 @@ jobs:
       - name: Install dependencies
         run: pip install -r scraper/requirements.txt
 
-      - name: Scrape Śląskie listings
+      - name: Scrape listings
         env:
+          RENTGEN_REGION: ${{ env.REGION }}
           RENTGEN_MAX_PAGES: "50"
           RENTGEN_DELAY: "0.7"
           RENTGEN_RCN: ${{ github.event.inputs.rcn || '1' }}
         run: python -m scraper.main
 
-      - name: Commit refreshed data + caches
+      - name: Push refreshed data (single-commit data branch)
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git pull --rebase origin main || true
-          git add -A site/data cache
-          git commit -m "data: refresh Śląskie listings [skip ci]" || echo "no changes to commit"
-          git push || echo "nothing to push"
+          git checkout --orphan refreshed-data
+          git rm -r --cached -q .
+          git add -f site/data cache
+          git commit -m "data: ${REGION} refresh $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push --force origin HEAD:data

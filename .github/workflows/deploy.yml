@@ -33,7 +33,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: main            # workflow_run checks out the triggering sha; we want fresh main (incl. the data commit)
+          ref: main            # workflow_run checks out the triggering sha; we want fresh main
+      - name: Overlay data from the data branch
+        # site/data/ lives on the orphan `data` branch, not on main — a deploy
+        # is main's site/ + the data branch's site/data/. A hard failure here
+        # (no data branch) keeps the previous Pages deployment live.
+        run: |
+          git fetch origin data
+          git checkout origin/data -- site/data
+          rm -f site/data/*/history.json.gz   # pipeline-only store, not served
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

@@ -29,10 +29,17 @@ from . import cache as phcache
 from . import delist, geo, gratka, history, marketstats, morizon, net, nieruchomosci_online, olx, otodom, overrides, photomatch, rcn, rcnstats
 from .normalize import dedupe, link_same_size
 
-DATA_DIR = pathlib.Path(__file__).resolve().parents[1] / "site" / "data"
-CACHE_DIR = pathlib.Path(__file__).resolve().parents[1] / "cache"
-CACHE_PATH = CACHE_DIR / "phash_cache.json"
-RCN_CACHE = CACHE_DIR / "rcn_snapshot.json.gz"
+# Region = the unit of everything (data dir, caches, RCN snapshot). Output goes
+# to site/data/<region>/ and per-region cache files so more voivodeships can be
+# added side by side; the geocode cache is shared (a town looked up once serves
+# every region). All of it lives on the orphan `data` branch, NOT in main's
+# history (see TODO.md "storage switch").
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+REGION = os.environ.get("RENTGEN_REGION", "slaskie")
+DATA_DIR = ROOT / "site" / "data" / REGION
+CACHE_DIR = ROOT / "cache"
+CACHE_PATH = CACHE_DIR / f"phash_{REGION}.json"
+RCN_CACHE = CACHE_DIR / f"rcn_{REGION}.json.gz"
 GEO_CACHE = CACHE_DIR / "geo_cache.json"
 
 SOURCES = (
@@ -102,7 +109,7 @@ def run() -> int:
     #   2. delist sweep — URL-verify records that vanished from scrapes
     #   3. history.update — matches today's listings, builds snapshots
     #   4. RCN match — needs snapshots + `delisted` dates; cards re-enriched after
-    hist_path = DATA_DIR / "history.json"
+    hist_path = DATA_DIR / "history.json.gz"
     records = history.compact(history.load(hist_path))
     active_urls = {o.get("url") for l in listings for o in l.get("offers", [])}
     active_urls |= {l.get("url") for l in listings}
@@ -124,8 +131,7 @@ def run() -> int:
     rcn_stats = None
     snap = None
     if rcn_mode != "0":
-        region = os.environ.get("RENTGEN_REGION", "slaskie")
-        teryt = TERYT.get(region)
+        teryt = TERYT.get(REGION)
         if teryt:
             snap = rcn.refresh(RCN_CACHE, http, teryt_prefix=teryt, today=today,
                                force=(rcn_mode == "force"))
@@ -135,7 +141,7 @@ def run() -> int:
                 # dashboard's "cena vs transakcje RCN" comparison
                 rcn_stats = rcnstats.build(snap, records, today)
         else:
-            print(f"RCN: no TERYT mapping for region '{region}', skipping")
+            print(f"RCN: no TERYT mapping for region '{REGION}', skipping")
     history.reenrich(listings)   # always: also drops the transient _rec links
 
     # Coordinates for the map view (UUG geocoder, cached; towns first).

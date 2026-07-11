@@ -1,7 +1,7 @@
 """Check one specific property against the RCN transaction register.
 
-Looks up notarial deeds in the cached snapshot (cache/rcn_snapshot.json.gz,
-pulled by the main scraper). Search by size, by exact address, or both — and
+Looks up notarial deeds in the cached snapshot (cache/rcn_<region>.json.gz,
+pulled by the main scraper; region from RENTGEN_REGION, default slaskie). Search by size, by exact address, or both — and
 optionally *pin* the address to a listing URL so the automatic matcher uses
 it on every future run (see scraper/overrides.py).
 
@@ -23,12 +23,15 @@ Examples (run from the repo root):
 from __future__ import annotations
 
 import argparse
+import os
 import pathlib
 
 from . import overrides as ovmod
 from . import rcn, uldk
 
-RCN_CACHE = pathlib.Path(__file__).resolve().parents[1] / "cache" / "rcn_snapshot.json.gz"
+_REGION = os.environ.get("RENTGEN_REGION", "slaskie")
+RCN_CACHE = (pathlib.Path(__file__).resolve().parents[1] / "cache"
+             / f"rcn_{_REGION}.json.gz")
 
 
 def _row_line(r, typ):
