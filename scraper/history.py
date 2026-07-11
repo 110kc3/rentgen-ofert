@@ -22,6 +22,7 @@ tool first ran) — the RCN sale matcher fills in the deeper past.
 from __future__ import annotations
 
 import json
+import os
 import pathlib
 from collections import defaultdict
 
@@ -38,15 +39,26 @@ def _bucket(typ, area):
 
 
 def load(path) -> list:
+    """Missing store = fresh start; a CORRUPT store must fail loudly.
+
+    Swallowing a decode error here would silently restart history from zero and
+    then save() would overwrite months of accumulated lifecycle data — recover
+    the committed file (it lives in git) instead."""
     try:
-        return json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
-    except Exception:
+        text = pathlib.Path(path).read_text(encoding="utf-8")
+    except FileNotFoundError:
         return []
+    return json.loads(text)
 
 
 def save(path, records):
-    pathlib.Path(path).write_text(
-        json.dumps(records, ensure_ascii=False, indent=0), encoding="utf-8")
+    """Atomic write (temp file + rename): the store is tens of MB and a run
+    killed mid-write must not leave a truncated file behind."""
+    p = pathlib.Path(path)
+    tmp = p.with_name(p.name + ".tmp")
+    tmp.write_text(json.dumps(records, ensure_ascii=False, indent=0),
+                   encoding="utf-8")
+    os.replace(tmp, p)
 
 
 def _find(rec_index, typ, area, hashes):
@@ -197,7 +209,16 @@ def update(properties, records, today: str):
         if rec.get("delisted"):
             del rec["delisted"]
 
-        _observe(rec, p, today)
+        # observe EVERY portal offer of the merged card, not just the primary
+        # one — observing only (primary url, min price) made the primary
+        # flipping portals look like a relist and the cheapest offer vanishing
+        # look like a price change on an ad whose price never moved
+        offer_obs = [o for o in (p.get("offers") or []) if o.get("url")]
+        if not offer_obs:
+            offer_obs = [{"url": url, "price": p.get("price"), "source": p.get("source")}]
+        for o in offer_obs:
+            _observe(rec, o, today)
+            url_idx[o["url"]] = rec
         _update_snapshot(rec, p)
         _merge_photo_urls(rec, p.get("photo_urls"))
 
@@ -205,21 +226,45 @@ def update(properties, records, today: str):
         # "na rynku od" = earliest portal publish date we've seen (else first record day)
         pub = sorted((o.get("created") or "")[:10] for o in p.get("offers", []) if o.get("created"))
         p["first_seen"] = min([rec["first_seen"], *pub]) if pub else rec["first_seen"]
-        # genuine relist: same property under a DIFFERENT url on an EARLIER day
+        # genuine relist: an old URL went quiet BEFORE a currently-live URL first
+        # appeared (agent killed the ad and re-posted). An ad merely expiring on
+        # one portal while the flat stays live on another is NOT a relist.
         # (developments excluded — "the same ad again" is just the developer's
         # rolling marketing, not a flat coming back to the market)
-        if rec.get("development"):
-            earlier = []
-        else:
-            earlier = [o for o in obs if o.get("url") != url and (o.get("date") or "") < today]
-        p["relisted"] = bool(earlier)
+        current_urls = {o["url"] for o in offer_obs}
+        relisted, earlier = False, []
+        if not rec.get("development"):
+            cur_first, gone_last = {}, {}
+            for o in obs:
+                u, d = o.get("url"), o.get("date") or ""
+                if not u or o.get("status"):
+                    continue
+                if u in current_urls:
+                    if d < cur_first.get(u, "9999"):
+                        cur_first[u] = d
+                elif d > gone_last.get(u, ""):
+                    gone_last[u] = d
+            newest_cur = max(cur_first.values(), default=today)
+            relisted = any(d < newest_cur for d in gone_last.values())
+            if relisted:
+                earlier = [o for o in obs
+                           if o.get("url") not in current_urls and not o.get("status")
+                           and (o.get("date") or "") < newest_cur]
+        p["relisted"] = relisted
         p["prev_price"] = next((o["price"] for o in reversed(earlier) if o.get("price")), None)
-        # price trail: points where the price changed over time
-        trail, last = [], object()
+        # price trail: points where the card price (min across live offers) changed
+        by_date = {}
         for o in obs:
-            if o.get("price") != last:
-                trail.append({"date": o["date"], "price": o.get("price")})
-                last = o.get("price")
+            d, pr = o.get("date"), o.get("price")
+            if o.get("status") or not d or pr is None:
+                continue
+            if d not in by_date or pr < by_date[d]:
+                by_date[d] = pr
+        trail, last = [], object()
+        for d in sorted(by_date):
+            if by_date[d] != last:
+                trail.append({"date": d, "price": by_date[d]})
+                last = by_date[d]
         p["price_history"] = trail
         p["timeline"] = timeline(rec)
         p["photo_urls"] = (rec.get("photo_urls") or [])[:MAX_PHOTO_URLS]
@@ -288,6 +333,12 @@ def timeline(rec, max_events: int = 24) -> list:
                        "price": s.get("price"), "market": s.get("market"),
                        "confidence": s.get("confidence"),
                        "addr": s.get("addr"), "dz": s.get("dz")})
+    live_obs = sorted((o for o in rec.get("observations") or []
+                       if o.get("status") != "archived"),
+                      key=lambda o: o.get("date") or "")
+    live_dates = {}                      # url -> set of dates seen live
+    for o in live_obs:
+        live_dates.setdefault(o.get("url"), set()).add(o.get("date"))
     seen_urls = set()
     last_price = {}
     for o in sorted(rec.get("observations") or [], key=lambda o: o.get("date") or ""):
@@ -298,7 +349,13 @@ def timeline(rec, max_events: int = 24) -> list:
             continue
         if url not in seen_urls:
             seen_urls.add(url)
-            kind = "listed" if len(seen_urls) == 1 else "relist"
+            if len(seen_urls) == 1:
+                kind = "listed"
+            else:
+                # another ad of the same property live the same day -> a
+                # cross-portal posting, not the flat coming back to the market
+                cross = any(date in live_dates.get(u, ()) for u in seen_urls if u != url)
+                kind = "listed" if cross else "relist"
             events.append({"date": date, "kind": kind, "price": price,
                            "source": o.get("source"), "url": url})
         elif price is not None and last_price.get(url) is not None \

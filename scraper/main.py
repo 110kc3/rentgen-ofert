@@ -76,14 +76,12 @@ def run() -> int:
         print("No listings collected - aborting (keeping previous data).", file=sys.stderr)
         return 1
 
-    # Portal-archived ads (n-online flags them) are history evidence, not offers.
-    archived_raw = [x for x in raw if x.get("archived")]
-    raw = [x for x in raw if not x.get("archived")]
-
     # Fingerprint every listing by its gallery photos. Powers photo-based
     # de-duplication, the relist/price history and the photo archive. A
     # committed cache (cache/phash_cache.json) lets repeat runs reuse hashes
     # (and gallery URLs) by listing URL and skip the slow detail fetches.
+    # Archived ads are hashed too (BEFORE the split below) so observe_archived
+    # can still photo-match them when their URL was never seen live.
     if os.environ.get("RENTGEN_PHOTOS", "1") != "0":
         print(f"Photo-hashing {len(raw)} listings (dedupe + history) ...")
         pc = phcache.load(CACHE_PATH)
@@ -92,6 +90,10 @@ def run() -> int:
         phcache.save(CACHE_PATH, pc)
         print(f"  phash cache: {len(pc.get('entries', {}))} urls "
               f"({pruned} pruned as stale)")
+
+    # Portal-archived ads (n-online flags them) are history evidence, not offers.
+    archived_raw = [x for x in raw if x.get("archived")]
+    raw = [x for x in raw if not x.get("archived")]
 
     listings = dedupe(raw)
 

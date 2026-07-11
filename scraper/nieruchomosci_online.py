@@ -22,19 +22,36 @@ from .normalize import to_float, to_int
 # Śląskie: the cities with powiat rights plus major towns. The long tail of
 # villages is still covered by the other portals' region-wide searches.
 REGION = os.environ.get("RENTGEN_REGION", "slaskie")
-SLASKIE_TOWNS = [
-    "katowice", "gliwice", "zabrze", "bytom", "sosnowiec", "czestochowa",
-    "tychy", "rybnik", "dabrowa-gornicza", "bielsko-biala", "ruda-slaska",
-    "jastrzebie-zdroj", "jaworzno", "chorzow", "myslowice",
-    "siemianowice-slaskie", "tarnowskie-gory", "bedzin", "piekary-slaskie",
-    "raciborz", "swietochlowice", "zory", "wodzislaw-slaski", "mikolow",
-    "knurow", "czeladz", "lubliniec", "pszczyna", "czechowice-dziedzice",
-    "zawiercie", "cieszyn", "myszkow", "klobuck", "bierun", "laziska-gorne",
-    "rydultowy", "orzesze", "pyskowice", "ornontowice", "zbroslawice",
-    "pilchowice", "gieraltowice", "sosnicowice", "toszek", "rudziniec",
-    "wielowies", "rzeczyce",
-]
-TOWNS = SLASKIE_TOWNS if REGION == "slaskie" else [REGION]
+# sub-domain slug -> proper display name (the slug loses Polish diacritics, so
+# `slug.title()` would leak fake localities like "Dabrowa-Gornicza" into the
+# data and break locality-keyed dedupe/geocoding for offers without an address)
+SLASKIE_TOWNS = {
+    "katowice": "Katowice", "gliwice": "Gliwice", "zabrze": "Zabrze",
+    "bytom": "Bytom", "sosnowiec": "Sosnowiec", "czestochowa": "Częstochowa",
+    "tychy": "Tychy", "rybnik": "Rybnik", "dabrowa-gornicza": "Dąbrowa Górnicza",
+    "bielsko-biala": "Bielsko-Biała", "ruda-slaska": "Ruda Śląska",
+    "jastrzebie-zdroj": "Jastrzębie-Zdrój", "jaworzno": "Jaworzno",
+    "chorzow": "Chorzów", "myslowice": "Mysłowice",
+    "siemianowice-slaskie": "Siemianowice Śląskie",
+    "tarnowskie-gory": "Tarnowskie Góry", "bedzin": "Będzin",
+    "piekary-slaskie": "Piekary Śląskie", "raciborz": "Racibórz",
+    "swietochlowice": "Świętochłowice", "zory": "Żory",
+    "wodzislaw-slaski": "Wodzisław Śląski", "mikolow": "Mikołów",
+    "knurow": "Knurów", "czeladz": "Czeladź", "lubliniec": "Lubliniec",
+    "pszczyna": "Pszczyna", "czechowice-dziedzice": "Czechowice-Dziedzice",
+    "zawiercie": "Zawiercie", "cieszyn": "Cieszyn", "myszkow": "Myszków",
+    "klobuck": "Kłobuck", "bierun": "Bieruń", "laziska-gorne": "Łaziska Górne",
+    "rydultowy": "Rydułtowy", "orzesze": "Orzesze", "pyskowice": "Pyskowice",
+    "ornontowice": "Ornontowice", "zbroslawice": "Zbrosławice",
+    "pilchowice": "Pilchowice", "gieraltowice": "Gierałtowice",
+    "sosnicowice": "Sośnicowice", "toszek": "Toszek", "rudziniec": "Rudziniec",
+    "wielowies": "Wielowieś", "rzeczyce": "Rzeczyce",
+}
+TOWNS = list(SLASKIE_TOWNS) if REGION == "slaskie" else [REGION]
+
+
+def town_name(slug):
+    return SLASKIE_TOWNS.get(slug) or (slug.replace("-", " ").title() if slug else None)
 PATHS = {"house": "domy", "flat": "mieszkania"}
 HEADERS = {
     "User-Agent": (
@@ -83,7 +100,7 @@ def parse_offers(offers, typ: str, town: str = ""):
             "rooms": to_int(item.get("numberOfRooms")),
             "plot_area": None,
             "floor": None,
-            "locality": addr.get("addressLocality") or (town.title() if town else None),
+            "locality": addr.get("addressLocality") or town_name(town),
             "district": None,
             "street": addr.get("streetAddress") or None,
             "is_private": None,
@@ -109,6 +126,7 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
         for town in TOWNS:
             base = f"https://{town}.nieruchomosci-online.pl/{path}/"
             page = 1
+            dup_pages = 0
             while page <= max_pages:
                 url = base if page == 1 else f"{base}?p={page}"
                 try:
@@ -124,8 +142,18 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
                 out.extend(fresh)
                 if fresh:
                     log(f"  nieruchomosci-online {typ}/{town} page {page}: +{len(fresh)}")
+                if not batch:
+                    break              # empty result page = past the end
                 if not fresh:
-                    break
+                    # towns cross-list each other's offers, so a page can be all
+                    # already-seen URLs while later pages still hold new ones —
+                    # only stop after two such pages in a row (also bounds the
+                    # portals that echo the last page forever when paged past it)
+                    dup_pages += 1
+                    if dup_pages >= 2:
+                        break
+                else:
+                    dup_pages = 0
                 page += 1
                 time.sleep(delay)
     return out

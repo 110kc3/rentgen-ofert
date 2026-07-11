@@ -16,6 +16,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import math
+import os
 import pathlib
 from collections import Counter
 
@@ -76,8 +77,10 @@ def load(path):
 def save(path, cache):
     p = pathlib.Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(cache, ensure_ascii=False, separators=(",", ":")),
-                 encoding="utf-8")
+    tmp = p.with_name(p.name + ".tmp")   # atomic: never leave a truncated cache
+    tmp.write_text(json.dumps(cache, ensure_ascii=False, separators=(",", ":")),
+                   encoding="utf-8")
+    os.replace(tmp, p)
 
 
 def _key(locality, street=None):

@@ -97,12 +97,16 @@ def _weekly(records, towns_top):
             continue
         town, _ = _town_of(rec)
         in_top = town in towns_top
+        # count these weeks into the axis too — a withdrawal whose week has no
+        # live observation anywhere (e.g. archived-ad evidence) must still show
         w_first = _week_of(rec.get("first_seen") or "")
         if w_first:
             new[(w_first, typ)] += 1
+            weeks_seen.add(w_first)
         w_gone = _week_of(rec.get("delisted") or "")
         if w_gone:
             gone[(w_gone, typ)] += 1
+            weeks_seen.add(w_gone)
 
         # one snapshot per week the property was live: last price of the week
         by_week = {}

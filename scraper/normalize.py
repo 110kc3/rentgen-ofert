@@ -36,7 +36,24 @@ OLX_ROOMS = {
     "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
     "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
 }
-SOURCE_RANK = {"otodom": 0, "nieruchomosci-online": 1, "gratka": 2, "olx": 3}
+SOURCE_RANK = {"otodom": 0, "nieruchomosci-online": 1, "gratka": 2, "olx": 3,
+               "morizon": 4}
+
+# gratka/morizon breadcrumbs end with the voivodeship — strip it whatever the
+# scraped region is (was a hardcoded `.replace("śląskie", "")`)
+VOIVODESHIPS = frozenset({
+    "dolnośląskie", "kujawsko-pomorskie", "lubelskie", "lubuskie", "łódzkie",
+    "małopolskie", "mazowieckie", "opolskie", "podkarpackie", "podlaskie",
+    "pomorskie", "śląskie", "świętokrzyskie", "warmińsko-mazurskie",
+    "wielkopolskie", "zachodniopomorskie"})
+
+
+def location_parts(location):
+    """'Żerniki, Gliwice, śląskie' -> ['Żerniki', 'Gliwice'] (voivodeship dropped)."""
+    parts = [p.strip() for p in (location or "").split(",") if p.strip()]
+    if parts and parts[-1].lower() in VOIVODESHIPS:
+        parts = parts[:-1]
+    return parts
 
 DISPLAY_FIELDS = ("title", "type", "area", "rooms", "plot_area", "floor",
                   "locality", "district", "street", "image", "is_private", "agency",
@@ -178,13 +195,24 @@ def _build(members):
                 photo_urls.append(u)
     prop["phashes"] = phashes
     prop["photo_urls"] = photo_urls
+    # keep price and zł/m² consistent: both from the CHEAPEST offer's listing
+    # (card price is the min across portals; primary's ppm may belong to a
+    # pricier offer of the same flat)
+    cheapest = offers[0] if offers and offers[0]["price"] is not None else None
+    ppm = primary.get("price_per_m2")
+    if cheapest:
+        cheap_member = next((m for m in members if m.get("url") == cheapest["url"]), None)
+        if cheap_member and cheap_member.get("price_per_m2") is not None:
+            ppm = cheap_member["price_per_m2"]
+        elif prop.get("area"):
+            ppm = round(cheapest["price"] / prop["area"])
     prop.update({
         "source": primary.get("source"),
         "url": primary.get("url"),
         "price": min(prices) if prices else None,
         "price_max": max(prices) if prices else None,
-        "price_per_m2": primary.get("price_per_m2"),
-        "cheapest": offers[0] if offers and offers[0]["price"] is not None else None,
+        "price_per_m2": ppm,
+        "cheapest": cheapest,
         "created": max(dates) if dates else None,
         "sources": sorted({o["source"] for o in offers}, key=lambda s: SOURCE_RANK.get(s, 9)),
         "offers": offers,
@@ -197,10 +225,13 @@ def _hamming(a, b):
 
 
 def same_photos(a_hashes, b_hashes):
-    """True if the closest pair of gallery hashes is within PHOTO_THRESHOLD."""
+    """True if any pair of gallery hashes is within PHOTO_THRESHOLD.
+
+    any() short-circuits on the first hit — this runs O(properties x bucket)
+    times in history matching, so not evaluating the full cross product matters."""
     if not a_hashes or not b_hashes:
         return False
-    return min(_hamming(a, b) for a in a_hashes for b in b_hashes) <= PHOTO_THRESHOLD
+    return any(_hamming(a, b) <= PHOTO_THRESHOLD for a in a_hashes for b in b_hashes)
 
 
 def _photo_clusters(members):
@@ -247,7 +278,9 @@ def _cross_size_unify(listings):
             sizes = {round(m["area"], 2) for m in cluster if m.get("area") is not None}
             if len(cluster) < 2 or len(sizes) <= 1:
                 continue
-            best = sorted(cluster, key=_rank)[0]
+            # pick the size donor among members that HAVE an area — otherwise an
+            # area-less best-ranked ad would wipe every member's area
+            best = sorted((m for m in cluster if m.get("area") is not None), key=_rank)[0]
             for m in cluster:
                 m["area"] = best.get("area")
                 if m.get("type") == "flat":
@@ -335,6 +368,8 @@ def link_same_size(properties):
                                  "source": o.get("source"), "first_seen": o.get("first_seen")}
                                 for o in others]
             cheaper = [o.get("price") for o in others if o.get("price") is not None]
-            if cheaper:
+            # a genuine earlier price from history beats "what the concurrent
+            # duplicate asks right now" — don't clobber it
+            if cheaper and p.get("prev_price") is None:
                 p["prev_price"] = min(cheaper)
     return properties

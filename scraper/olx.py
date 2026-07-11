@@ -33,7 +33,9 @@ HEADERS = {
     "Accept-Language": "pl-PL,pl;q=0.9,en;q=0.8",
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
 }
-_STATE = re.compile(r'__PRERENDERED_STATE__\s*=\s*"(.*?)";', re.S)
+# escape-aware: the state is a JSON-encoded string, so a `\";` sequence inside it
+# (an escaped quote followed by a semicolon in some ad text) must not end the match
+_STATE = re.compile(r'__PRERENDERED_STATE__\s*=\s*"((?:[^"\\]|\\.)*)";', re.S)
 
 
 def extract_state(html: str) -> dict:

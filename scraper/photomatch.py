@@ -74,6 +74,12 @@ def _gratka(html):
     return list(dict.fromkeys(re.findall(r'https://thumbs\.cdngr\.pl/thumb/[^"\s]+?\.jpg', html)))
 
 
+def _morizon(html):
+    # morizon shares gratka's frontend/CDN but has served img*.morizon.pl too
+    return list(dict.fromkeys(re.findall(
+        r'https://(?:thumbs\.cdngr\.pl|img\d*\.morizon\.pl)/[^"\s]+?\.(?:jpg|jpeg|webp)', html)))
+
+
 _NOL_SKIP = re.compile(r'contact|logo|avatar|agent|baner|stopka|ikona|placeholder', re.I)
 
 
@@ -83,7 +89,7 @@ def _nol(html):
 
 
 _EXTRACTORS = {"otodom": _otodom, "olx": _olx, "gratka": _gratka,
-               "nieruchomosci-online": _nol}
+               "morizon": _morizon, "nieruchomosci-online": _nol}
 
 
 def gallery_urls(listing, session) -> list:

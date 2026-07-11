@@ -12,7 +12,7 @@ import time
 import requests
 from bs4 import BeautifulSoup
 
-from .normalize import to_float, to_int
+from .normalize import location_parts, to_float, to_int
 
 BASE = "https://www.morizon.pl"
 # Whole-voivodeship search by default; override with RENTGEN_REGION.
@@ -42,12 +42,10 @@ def _first_price(text):
 
 
 def _locality(location):
-    """City = the broadest (last) breadcrumb part of 'street, district, city',
-    e.g. 'Tarnogórska, Szobiszowice, Gliwice' -> 'Gliwice' (taking the first
-    segment stored street names like 'Tarnogórska' as fake towns)."""
-    if not location:
-        return None
-    parts = [p.strip() for p in location.replace("śląskie", "").split(",") if p.strip()]
+    """City = the broadest (last) breadcrumb part of 'street, district, city,
+    voivodeship', e.g. 'Tarnogórska, Szobiszowice, Gliwice, śląskie' -> 'Gliwice'
+    (taking the first segment stored street names like 'Tarnogórska' as fake towns)."""
+    parts = location_parts(location)
     if not parts:
         return None
     city = parts[-1]
@@ -56,10 +54,7 @@ def _locality(location):
 
 def _district(location):
     """The narrower part(s) before the city, e.g. 'Tarnogórska, Szobiszowice'."""
-    if not location:
-        return None
-    parts = [p.strip() for p in location.replace("śląskie", "").split(",") if p.strip()]
-    inner = parts[:-1]
+    inner = location_parts(location)[:-1]
     return ", ".join(inner) if inner else None
 
 

@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import os
 import pathlib
 
 VERSION = 1
@@ -39,7 +40,9 @@ def load(path) -> dict:
 def save(path, cache) -> None:
     p = pathlib.Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(cache, ensure_ascii=False, indent=0), encoding="utf-8")
+    tmp = p.with_name(p.name + ".tmp")   # atomic: never leave a truncated cache
+    tmp.write_text(json.dumps(cache, ensure_ascii=False, indent=0), encoding="utf-8")
+    os.replace(tmp, p)
 
 
 def get(cache, url):
