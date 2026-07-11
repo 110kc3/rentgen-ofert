@@ -41,6 +41,10 @@ concurrency:
 jobs:
   update:
     runs-on: ubuntu-latest
+    # a wedged portal must not hold the runner for GitHub's full 6 h default —
+    # per-request retry waits are capped in scraper/net.py and the photo phase
+    # has its own budget, this is the last-resort backstop
+    timeout-minutes: 300
     env:
       REGION: ${{ github.event.inputs.region || 'slaskie' }}
     steps:
@@ -70,7 +74,7 @@ jobs:
           RENTGEN_MAX_PAGES: "50"
           RENTGEN_DELAY: "0.7"
           RENTGEN_RCN: ${{ github.event.inputs.rcn || '1' }}
-        run: python -m scraper.main
+        run: python -u -m scraper.main   # -u: unbuffered logs, visible while running
 
       - name: Push refreshed data (single-commit data branch)
         run: |

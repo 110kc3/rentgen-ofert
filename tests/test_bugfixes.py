@@ -212,6 +212,33 @@ def test_snapshot_roundtrip_atomic(tmp_path):
     assert not path.with_name(path.name + ".tmp").exists()
 
 
+# ---- net: bounded retry sleeps ---------------------------------------------------
+
+def test_retry_after_is_capped():
+    from types import SimpleNamespace
+    from scraper import net
+    r = net.CappedRetry(total=5, respect_retry_after_header=True)
+    resp = SimpleNamespace(headers={"Retry-After": "86400"})   # portal says: a day
+    assert r.get_retry_after(resp) == net.RETRY_AFTER_CAP
+    resp_small = SimpleNamespace(headers={"Retry-After": "3"})
+    assert r.get_retry_after(resp_small) == 3.0
+    assert r.get_retry_after(SimpleNamespace(headers={})) is None
+
+
+def test_photo_budget_skips_uncached(monkeypatch):
+    from scraper import photomatch
+    fetched = []
+    monkeypatch.setattr(photomatch, "listing_hashes",
+                        lambda l, s: (fetched.append(l["url"]) or ([1], ["u"])))
+    listings = [{"source": "olx", "url": f"u{i}"} for i in range(4)]
+    photomatch.attach_hashes(listings, session=object(), log=lambda *a: None,
+                             budget_s=-1)          # budget already exhausted
+    assert fetched == []                            # nothing fetched...
+    assert all(l["phashes"] == [] for l in listings)
+    photomatch.attach_hashes(listings, session=object(), log=lambda *a: None)
+    assert len(fetched) == 4                        # ...but unlimited still works
+
+
 # ---- marketstats ---------------------------------------------------------------
 
 def test_withdrawal_week_is_on_axis_without_live_obs():

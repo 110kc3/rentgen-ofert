@@ -92,7 +92,9 @@ def run() -> int:
     if os.environ.get("RENTGEN_PHOTOS", "1") != "0":
         print(f"Photo-hashing {len(raw)} listings (dedupe + history) ...")
         pc = phcache.load(CACHE_PATH)
-        photomatch.attach_hashes(raw, session=http, cache=pc, today=today)
+        budget_min = float(os.environ.get("RENTGEN_PHOTO_BUDGET_MIN", "90"))
+        photomatch.attach_hashes(raw, session=http, cache=pc, today=today,
+                                 budget_s=budget_min * 60 if budget_min > 0 else None)
         pruned = phcache.prune(pc, today)
         phcache.save(CACHE_PATH, pc)
         print(f"  phash cache: {len(pc.get('entries', {}))} urls "

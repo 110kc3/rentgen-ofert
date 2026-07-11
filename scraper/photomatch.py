@@ -15,6 +15,7 @@ from __future__ import annotations
 import io
 import json
 import re
+import time
 from concurrent.futures import ThreadPoolExecutor
 
 import requests
@@ -119,7 +120,7 @@ def listing_hashes(listing, session) -> tuple:
 
 
 def attach_hashes(listings, max_workers: int = 8, session=None, log=print,
-                  cache=None, today=None):
+                  cache=None, today=None, budget_s=None):
     """Fetch galleries and set listing['phashes'] for each given listing.
 
     If a ``cache`` dict (see ``scraper.cache``) is given, listings whose URL is
@@ -127,17 +128,28 @@ def attach_hashes(listings, max_workers: int = 8, session=None, log=print,
     fetches - the slowest, most rate-limited part of a run. Only successful,
     non-empty results are written back, so a transient fetch failure is retried
     next run instead of being cached as "no photos".
+
+    ``budget_s`` bounds the wall clock of the FETCHING part: once exceeded,
+    remaining un-cached listings are skipped this run (no hashes, not cached —
+    picked up again next run). Cache hits are always served. This keeps a
+    rate-limited portal from stretching the run past the CI job timeout.
     """
     from . import net
     from . import cache as cachemod
     session = session or net.session()
+    deadline = time.monotonic() + budget_s if budget_s else None
+    skipped = 0
 
     def work(l):
+        nonlocal skipped
         url = l.get("url")
         if cache is not None and url:
             cached = cachemod.get(cache, url)
             if cached:
                 return (l, cached, cachemod.get_urls(cache, url), True)
+        if deadline is not None and time.monotonic() > deadline:
+            skipped += 1
+            return (l, [], [], False)
         hashes, img_urls = listing_hashes(l, session)
         return (l, hashes, img_urls, False)
 
@@ -160,4 +172,6 @@ def attach_hashes(listings, max_workers: int = 8, session=None, log=print,
                 cachemod.put(cache, url, hashes, today, image_urls=img_urls)  # no-ops on empty
     log(f"  photo-hashed {len(results)} ambiguous listings "
         f"({sum(1 for l in listings if l.get('phashes'))} with photos; "
-        f"{hits} reused from cache)")
+        f"{hits} reused from cache"
+        + (f"; {skipped} skipped, photo budget exhausted" if skipped else "")
+        + ")")
