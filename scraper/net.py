@@ -2,8 +2,11 @@
 
 Portals (especially nieruchomosci-online's many sub-domains) return HTTP 429
 "Too Many Requests" when hit too fast. This session auto-retries 429/503/5xx
-with exponential back-off and honours any ``Retry-After`` header, so a transient
-rate-limit pauses-and-retries instead of dropping the whole portal.
+with exponential back-off and honours any ``Retry-After`` header — but CAPPED:
+a portal once answered with a Retry-After so large that urllib3 slept for
+hours inside one request and the CI job hit its 6-hour kill switch. A capped
+wait keeps every request's worst case bounded; if the portal is still angry
+after the retries, the caller's error handling drops that page and moves on.
 """
 from __future__ import annotations
 
@@ -15,10 +18,18 @@ try:
 except Exception:  # pragma: no cover - very old urllib3
     from requests.packages.urllib3.util.retry import Retry
 
+RETRY_AFTER_CAP = 90.0   # seconds; longest single Retry-After sleep we honour
+
+
+class CappedRetry(Retry):
+    def get_retry_after(self, response):
+        ra = super().get_retry_after(response)
+        return min(ra, RETRY_AFTER_CAP) if ra is not None else ra
+
 
 def session() -> requests.Session:
     s = requests.Session()
-    retry = Retry(
+    retry = CappedRetry(
         total=5,
         status_forcelist=(429, 500, 502, 503, 504),
         backoff_factor=2,          # sleeps ~0, 2, 4, 8, 16 s between tries

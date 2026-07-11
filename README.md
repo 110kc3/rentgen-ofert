@@ -164,6 +164,7 @@ RENTGEN_MAX_PAGES=3 RENTGEN_DELAY=0.3 python -m scraper.main
 | `RENTGEN_MAX_PAGES` | 50 | max result pages per portal per type |
 | `RENTGEN_DELAY` | 0.7 | seconds between requests (be polite) |
 | `RENTGEN_PHOTOS` | 1 | photo-match ambiguous listings; `0` skips the detail fetches |
+| `RENTGEN_PHOTO_BUDGET_MIN` | 90 | max minutes of photo fetching per run (`0` = unlimited); skipped listings retry next run |
 | `RENTGEN_TYPES` | house,flat | which to scrape; e.g. `house` for houses only |
 | `RENTGEN_VERIFY_MAX` | 300 | stale listings URL-verified per run (`0` disables) |
 | `RENTGEN_RCN` | 1 | `0` skips RCN; `force` re-pulls the transaction snapshot now |
