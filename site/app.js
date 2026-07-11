@@ -87,12 +87,22 @@ const apply = () => { persist(); render(); };
 
 async function boot() {
   try {
+    // manifest (tiny, always fresh) carries the content version; the slim
+    // index + detail shards are then fetched cacheably under ?v=<hash>.
+    // Heavy fields (offers/timeline/photos) live in shards loaded on demand.
+    const mf = await fetch(`${DATA}/manifest.json`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    state.v = mf && mf.v ? `?v=${mf.v}` : "";
+    state.shards = (mf && mf.shards) || 64;
     const [listings, meta, rcnstats] = await Promise.all([
-      fetch(`${DATA}/listings.json`, { cache: "no-store" }).then((r) => r.json()),
+      mf ? fetch(`${DATA}/index.json${state.v}`).then((r) => r.json())
+         : fetch(`${DATA}/listings.json`, { cache: "no-store" }).then((r) => r.json()),
       fetch(`${DATA}/meta.json`, { cache: "no-store" }).then((r) => r.json()).catch(() => null),
       fetch(`${DATA}/rcnstats.json`, { cache: "no-store" }).then((r) => r.json()).catch(() => null),
     ]);
     state.all = Array.isArray(listings) ? listings : [];
+    if (!mf) for (const l of state.all) l._full = true;   // pre-split monolith
+    state.byUrl = new Map(state.all.filter((l) => l.url).map((l) => [l.url, l]));
     state.rcnstats = rcnstats && rcnstats.towns ? rcnstats : null;
     if (state.rcnstats) {
       for (const l of state.all) {
@@ -117,6 +127,7 @@ async function boot() {
   wireChips();
   wirePinButtons();
   wireCardOpen();
+  wireLazyDetails();
   restoreFilters();
   render();
   wireMap();   // after render so the first marker pass sees the filtered view
@@ -487,10 +498,55 @@ async function loadArchive() {
   try {
     const a = await fetch(`${DATA}/archive.json`, { cache: "no-store" }).then((r) => r.json());
     state.archive = Array.isArray(a) ? a : [];
+    for (const l of state.archive) l._full = true;   // archive ships complete records
   } catch (e) {
     state.archive = [];
   }
   return state.archive;
+}
+
+// ---- lazy detail shards ------------------------------------------------------
+// heavy fields (offers, timeline, photo_urls, street…) live in d/NN.json,
+// where NN = FNV-1a(url) % shards — the SAME hash as scraper/payload.py
+
+function shardOf(url, n) {
+  let h = 0x811c9dc5 | 0;
+  for (let i = 0; i < url.length; i++) h = Math.imul(h ^ url.charCodeAt(i), 0x01000193);
+  return (h >>> 0) % n;
+}
+
+const shardCache = new Map();
+async function loadDetails(l) {
+  if (l._full || !l.url) return l;
+  const s = shardOf(l.url, state.shards || 64);
+  if (!shardCache.has(s)) {
+    shardCache.set(s, fetch(`${DATA}/d/${String(s).padStart(2, "0")}.json${state.v || ""}`)
+      .then((r) => (r.ok ? r.json() : {})).catch(() => ({})));
+  }
+  const shard = await shardCache.get(s);
+  Object.assign(l, shard[l.url] || {});
+  l._full = true;
+  return l;
+}
+
+// one capturing listener fills a card's expandable sections on first open
+// (`toggle` doesn't bubble, hence capture: true)
+function wireLazyDetails() {
+  $("#grid").addEventListener("toggle", async (e) => {
+    const det = e.target;
+    if (!det.open) return;
+    const cardEl = det.closest(".card[data-href]");
+    if (!cardEl) return;
+    const l = state.byUrl && state.byUrl.get(cardEl.dataset.href);
+    if (!l || l._full) return;
+    await loadDetails(l);
+    cardEl.querySelectorAll("details.offers .offers-body")
+      .forEach((el) => { el.innerHTML = offersRows(l); });
+    cardEl.querySelectorAll("details.tl .tl-body")
+      .forEach((el) => { el.innerHTML = tlBody(l); });
+    const ul = cardEl.querySelector(".pin-ul");   // street arrives with the shard
+    if (ul && !ul.value && l.street) ul.value = l.street;
+  }, true);
 }
 
 // Chunked rendering: with ~20k listings, building the whole grid at once
@@ -552,18 +608,24 @@ function priceLabel(l) {
   return `${PLN.format(l.price)} zł`;
 }
 
-function offersBlock(l) {
-  const offers = l.offers || [];
-  if (offers.length < 2) return "";
+function offersRows(l) {
   const cheapUrl = l.cheapest && l.cheapest.url;
   const multiPrice = l.price_max != null && l.price_max !== l.price;
-  const rows = offers.map((o) => {
+  return (l.offers || []).map((o) => {
     const p = o.price != null ? `${PLN.format(o.price)} zł` : "zapytaj";
     const dd = o.created ? ` · ${o.created.slice(0, 10)}` : "";
     const best = multiPrice && o.url === cheapUrl ? `<span class="best">najtaniej</span>` : "";
     return `<a href="${escapeHtml(o.url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${label(o.source)} — ${p}${best}${dd}</a>`;
   }).join("");
-  return `<div class="offers"><div class="offers-h">Ta sama nieruchomość na ${offers.length} ofertach:</div>${rows}</div>`;
+}
+
+function offersBlock(l) {
+  const n = l._full ? (l.offers || []).length : (l.offers_n || 0);
+  if (n < 2) return "";
+  return `<details class="offers" onclick="event.stopPropagation()">
+    <summary class="offers-h">Ta sama nieruchomość na ${n} ofertach</summary>
+    <div class="offers-body">${l._full ? offersRows(l) : `<span class="lz">wczytywanie…</span>`}</div>
+  </details>`;
 }
 
 function historyBlock(l) {
@@ -633,20 +695,25 @@ function tlLabel(e) {
   }
 }
 
-function timelineBlock(l) {
-  const tl = l.timeline || [];
-  const photos = l.photo_urls || [];
-  if (tl.length < 2 && !photos.length && !(l.sales || []).length) return "";
-  const rows = tl.map((e) =>
+function tlBody(l) {
+  const rows = (l.timeline || []).map((e) =>
     `<div class="tl-row"><span class="tl-date">${e.date || ""}</span><span class="tl-what">${tlLabel(e)}</span></div>`
   ).join("");
+  const photos = l.photo_urls || [];
   const ph = photos.length
     ? `<div class="tl-photos">zdjęcia z ogłoszeń: ${photos.map((u, i) =>
         `<a href="${escapeHtml(u)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${i + 1}</a>`).join(" ")}</div>`
     : "";
+  return `${rows}${ph}`;
+}
+
+function timelineBlock(l) {
+  const n = l._full ? (l.timeline || []).length : (l.tl_n || 0);
+  const phN = l._full ? (l.photo_urls || []).length : (l.ph_n || 0);
+  if (n < 2 && !phN && !(l.sales || []).length) return "";
   return `<details class="tl" onclick="event.stopPropagation()">
-    <summary>Historia nieruchomości (${tl.length})</summary>
-    <div class="tl-body">${rows}${ph}</div>
+    <summary>Historia nieruchomości (${n})</summary>
+    <div class="tl-body">${l._full ? tlBody(l) : `<span class="lz">wczytywanie…</span>`}</div>
   </details>`;
 }
 

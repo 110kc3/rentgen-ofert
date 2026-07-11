@@ -99,11 +99,15 @@ main { max-width: 1280px; margin: 14px auto 60px; padding: 0 18px; }
 .loc { font-size: 12.5px; color: var(--muted); }
 .also { margin-top: 4px; font-size: 12px; }
 .also a { color: var(--accent); text-decoration: none; }
-.offers { margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--line);
-  display: flex; flex-direction: column; gap: 2px; }
-.offers-h { font-size: 11px; color: var(--muted); font-weight: 600; margin-bottom: 1px; }
+.offers { margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--line); }
+.offers-h { font-size: 11px; color: var(--muted); font-weight: 600; margin-bottom: 1px;
+  cursor: pointer; list-style: none; }
+.offers-h::before { content: "▸ "; }
+.offers[open] .offers-h::before { content: "▾ "; }
+.offers-body { display: flex; flex-direction: column; gap: 2px; margin-top: 2px; }
 .offers a { color: var(--accent); text-decoration: none; font-size: 12px; }
 .offers a:hover { text-decoration: underline; }
+.lz { color: var(--muted); font-size: 12px; }
 .hist { margin-top: 5px; font-size: 12px; color: var(--muted);
   display: flex; flex-wrap: wrap; gap: 3px 8px; align-items: center; }
 .hist .relist { background: #b45309; color: #fff; font-weight: 700;

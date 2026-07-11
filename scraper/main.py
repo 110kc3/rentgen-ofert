@@ -26,7 +26,7 @@ import pathlib
 import sys
 
 from . import cache as phcache
-from . import delist, geo, gratka, history, marketstats, morizon, net, nieruchomosci_online, olx, otodom, overrides, photomatch, rcn, rcnstats
+from . import delist, geo, gratka, history, marketstats, morizon, net, nieruchomosci_online, olx, otodom, overrides, payload, photomatch, rcn, rcnstats
 from .normalize import dedupe, link_same_size
 
 # Region = the unit of everything (data dir, caches, RCN snapshot). Output goes
@@ -165,8 +165,10 @@ def run() -> int:
     for p in listings:                 # drop bulky hashes before publishing
         p.pop("phashes", None)
 
-    (DATA_DIR / "listings.json").write_text(
-        json.dumps(listings, ensure_ascii=False, indent=1), encoding="utf-8")
+    # dashboard payload: slim index + lazy detail shards (replaces the old
+    # monolithic listings.json — see scraper/payload.py)
+    payload.build(listings, DATA_DIR)
+    (DATA_DIR / "listings.json").unlink(missing_ok=True)   # pre-split leftover
 
     if rcn_stats:
         (DATA_DIR / "rcnstats.json").write_text(

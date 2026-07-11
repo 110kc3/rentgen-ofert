@@ -255,9 +255,11 @@ cache/                 (on the `data` branch, gitignored on main)
 site/
   index.html  app.js  styles.css        listings dashboard + map view (GitHub Pages)
   stats.html  stats.js  stats.css       Statystyki market dashboard (SVG charts)
-  data/<region>/  listings.json, history.json.gz, archive.json, meta.json,
-                  rcnstats.json, stats.json   (generated each run; on the `data`
-                  branch — one directory per voivodeship, ?region= to view)
+  data/<region>/  manifest.json (content version) + index.json (slim grid) +
+                  d/NN.json (lazy detail shards, see scraper/payload.py),
+                  history.json.gz, archive.json, meta.json, rcnstats.json,
+                  stats.json   (generated each run; on the `data` branch —
+                  one directory per voivodeship, ?region= to view)
 tests/         parser + dedupe + history + RCN + stats + geo tests, offline fixtures
 .github/workflows/   update.yml (cron scrape) + deploy.yml (Pages publish)
 TODO.md        roadmap / pending work (kept in sync with this README)

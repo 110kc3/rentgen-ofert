@@ -151,11 +151,17 @@ shards + hashed filenames. Do it before adding a second region.
 - [ ] **Sort: longest on market** (motivated sellers; data already on cards).
 - [x] **Storage switch — done 2026-07-11** (see the Done section at the top):
       data lives on the force-pushed orphan `data` branch, region = directory.
-- [ ] **Payload split (before scaling).** `listings.json` is 44 MB fetched with
-      `cache: no-store` on every visit: slim grid index + lazy per-listing
-      detail shards, content-hash filenames instead of no-store, precompressed
-      `.json.gz`. Prerequisite for multi-region.
-- [ ] **Multi-voivodeship / whole Poland.** Detailed plan below ↓.
+- [x] **Payload split — done 2026-07-11.** `scraper/payload.py` replaces the
+      44 MB no-store `listings.json` with: `manifest.json` (tiny, no-store,
+      carries a content hash) + `index.json` (12.5 MB slim grid fields, fetched
+      cacheably as `?v=<hash>`) + `d/NN.json` (64 detail shards keyed by
+      FNV-1a(url)%64 — offers/timeline/photos, fetched only when a card is
+      expanded; same hash implemented in app.js, parity-tested). Offers list
+      became a collapsible section. Verified in a real browser: first paint
+      from the index alone, 1 shard fetch on first expand, 0 before.
+- [ ] **Multi-voivodeship / whole Poland — NEXT.** Prerequisites all done;
+      start with the pilot region (małopolskie or dolnośląskie) per the
+      rollout order below ↓.
 
 ## Plan: scraping whole Poland (notes, 2026-07-07)
 
