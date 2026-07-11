@@ -21,6 +21,7 @@ tool first ran) — the RCN sale matcher fills in the deeper past.
 """
 from __future__ import annotations
 
+import gzip
 import json
 import os
 import pathlib
@@ -43,21 +44,37 @@ def load(path) -> list:
 
     Swallowing a decode error here would silently restart history from zero and
     then save() would overwrite months of accumulated lifecycle data — recover
-    the committed file (it lives in git) instead."""
+    the committed file (it lives on the `data` branch) instead.
+
+    A ``.gz`` path is read gzipped (the store is ~10x smaller that way and only
+    the pipeline ever reads it). A plain-JSON sibling left over from before the
+    gzip switch is picked up once as a fallback."""
+    p = pathlib.Path(path)
     try:
-        text = pathlib.Path(path).read_text(encoding="utf-8")
+        if p.suffix == ".gz":
+            try:
+                with gzip.open(p, "rt", encoding="utf-8") as f:
+                    return json.load(f)
+            except FileNotFoundError:
+                legacy = p.with_name(p.name[:-3])       # history.json.gz -> history.json
+                return json.loads(legacy.read_text(encoding="utf-8"))
+        return json.loads(p.read_text(encoding="utf-8"))
     except FileNotFoundError:
         return []
-    return json.loads(text)
 
 
 def save(path, records):
     """Atomic write (temp file + rename): the store is tens of MB and a run
-    killed mid-write must not leave a truncated file behind."""
+    killed mid-write must not leave a truncated file behind. `.gz` paths are
+    written gzipped."""
     p = pathlib.Path(path)
     tmp = p.with_name(p.name + ".tmp")
-    tmp.write_text(json.dumps(records, ensure_ascii=False, indent=0),
-                   encoding="utf-8")
+    payload = json.dumps(records, ensure_ascii=False, indent=0)
+    if p.suffix == ".gz":
+        with gzip.open(tmp, "wt", encoding="utf-8") as f:
+            f.write(payload)
+    else:
+        tmp.write_text(payload, encoding="utf-8")
     os.replace(tmp, p)
 
 

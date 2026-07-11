@@ -131,6 +131,19 @@ def test_history_save_is_atomic(tmp_path):
     assert not path.with_name(path.name + ".tmp").exists()
 
 
+def test_history_gzip_roundtrip_and_legacy_fallback(tmp_path):
+    gz = tmp_path / "history.json.gz"
+    history.save(gz, [{"a": "ł"}])
+    with gzip.open(gz, "rt", encoding="utf-8") as f:
+        assert json.load(f) == [{"a": "ł"}]
+    assert history.load(gz) == [{"a": "ł"}]
+    # a pre-gzip plain history.json is picked up when the .gz doesn't exist yet
+    legacy_dir = tmp_path / "legacy"
+    legacy_dir.mkdir()
+    (legacy_dir / "history.json").write_text('[{"b": 2}]', encoding="utf-8")
+    assert history.load(legacy_dir / "history.json.gz") == [{"b": 2}]
+
+
 # ---- scrapers ------------------------------------------------------------------
 
 def test_olx_state_regex_survives_escaped_quotes():
