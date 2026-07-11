@@ -77,7 +77,7 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git checkout --orphan refreshed-data
-          git rm -r --cached -q .
+          git rm -r --cached -q . || true   # empty index (nothing tracked) is fine
           git add -f site/data cache
           git commit -m "data: ${REGION} refresh $(date -u +%Y-%m-%dT%H:%MZ)"
           git push --force origin HEAD:data
