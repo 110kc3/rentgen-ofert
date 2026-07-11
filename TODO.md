@@ -1,7 +1,54 @@
 # TODO — rentgen-ofert
 
 > Keep this file and `README.md` updated after each change.
-> Last updated: 2026-07-07
+> Last updated: 2026-07-11
+
+## Done (bug sweep — 2026-07-11)
+Full-codebase review (4 areas: scrapers, pipeline, RCN/stats, dashboard);
+every fix below is covered by `tests/test_bugfixes.py` (90 tests total).
+- [x] **delist**: bare `zakończone` marker falsely delisted live ads whose
+      description contains the word (now anchored to ogłoszenie/oferta);
+      the sweep ran right after `observe_archived` and un-set the `delisted`
+      flag the archive evidence had just set (`last_seen` now counts only live
+      observations; "resurfaced" clear only when live *today*); sorting sweep
+      candidates could crash on `(seen, url)` ties (dict comparison).
+- [x] **morizon had no photo extractor** — an entire portal (~3.5k raw ads)
+      never got gallery hashes, so cross-portal dedupe/relist detection was
+      dead for it; also added to `SOURCE_RANK`.
+- [x] **history**: observations now record EVERY portal offer of a merged
+      card, not just (primary url, min price) — the old scheme made a primary
+      flipping portals look like a relist and the cheapest offer vanishing look
+      like a price change (relisted on real data: 7 952 → ~1 450, the rest were
+      artifacts). Relist now = an old URL went quiet BEFORE a live URL first
+      appeared. Timeline labels cross-portal postings "listed", not "relist".
+- [x] **storage safety**: `history.json` (83 MB) written atomically
+      (tmp+rename) and a CORRUPT store now fails the run loudly instead of
+      silently restarting history from zero and overwriting months of data;
+      phash/geo/RCN caches also write atomically.
+- [x] **scrapers**: OLX state regex ended at the first `";` even inside an
+      escaped string (dropped the rest of the category); Otodom stopped
+      paging on a page of INVESTMENT-only results; n-online stopped a town's
+      pagination on the first all-duplicate page (towns cross-list each other)
+      and `slug.title()` leaked diacritic-less fake localities ("Dabrowa-
+      Gornicza"); gratka/morizon stripped the literal string "śląskie" from
+      breadcrumbs — any other `RENTGEN_REGION` made the voivodeship the city.
+- [x] **RCN**: `_fold` didn't collapse whitespace ('Bielsko - Biała' town key
+      got 0 deed candidates); building numbers compare space-free ('13 A' ==
+      '13A'); declension tolerance no longer equates distinct streets
+      (Górna != Górnika); snapshot dedup is per WFS page so field-identical
+      mirrored deeds aren't collapsed; rcnstats window is real calendar
+      months (was 720 days); marketstats counts withdrawals whose week has no
+      live observation; dedupe area-unify can no longer wipe areas to null;
+      card zł/m² now belongs to the cheapest offer shown as the price.
+- [x] **dashboard**: XSS — scraped title/district/image/urls reached
+      `innerHTML` unescaped in cards (portals are attacker-controlled input);
+      inline `onclick="window.open('${url}')"` was JS-injectable → delegated
+      `data-href` handler; the 📌 pin command is now single-quoted for the
+      shell (street names with `$(...)` could execute in the user's
+      terminal); "Najnowsze" sort parses the three portal date formats
+      (string-compare mis-sorted within a day and sank 48% of listings);
+      market/owner filters are ignored in Archiwum (fields don't exist
+      there); DOM-histogram tooltip no longer shows "undefined".
 
 ## Done (cena vs transakcje RCN — 2026-07-07)
 - [x] **`scraper/rcnstats.py` -> `site/data/rcnstats.json`** (~21 KB): per-town

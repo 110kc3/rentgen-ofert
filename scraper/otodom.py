@@ -98,11 +98,14 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
             except Exception as exc:  # keep what we have, stop this category
                 log(f"  otodom {typ} page {page} error: {exc}")
                 break
-            batch = parse_items(sa.get("items", []), typ)
+            items = sa.get("items") or []
+            batch = parse_items(items, typ)
             out.extend(batch)
             total_pages = (sa.get("pagination") or {}).get("totalPages", 1) or 1
             log(f"  otodom {typ} page {page}/{min(total_pages, max_pages)}: +{len(batch)}")
-            if page >= min(total_pages, max_pages) or not batch:
+            # stop on an empty RESULT page, not an empty parsed batch — a page of
+            # nothing but INVESTMENT bundles filters to [] while more pages exist
+            if page >= min(total_pages, max_pages) or not items:
                 break
             page += 1
             time.sleep(delay)

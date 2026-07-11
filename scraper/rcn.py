@@ -29,6 +29,7 @@ from __future__ import annotations
 import datetime as dt
 import gzip
 import json
+import os
 import pathlib
 import re
 import unicodedata
@@ -168,17 +169,21 @@ def _compact_bud(row):
 
 def fetch(session, typename, flt, props, tag, compact, log=print):
     out, start = [], 0
-    seen = set()
     while True:
         page = _get_page(session, typename, flt, props, start)
         n = 0
+        # dedupe per page only: the WFS emits duplicate rows per linked object
+        # within one response, but two genuinely distinct deeds CAN be
+        # field-identical (mirrored new-build units sold the same day) — a
+        # pull-wide key would collapse those and undercount the benchmarks
+        seen = set()
         for row in _parse_members(page, tag):
             n += 1
             c = compact(row)
             if c:
                 key = json.dumps(c, sort_keys=True, ensure_ascii=False)
                 if key in seen:
-                    continue       # WFS emits duplicate rows per linked object
+                    continue
                 seen.add(key)
                 out.append(c)
         if n:
@@ -212,8 +217,10 @@ def load_snapshot(path):
 def save_snapshot(path, data):
     p = pathlib.Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
-    with gzip.open(p, "wt", encoding="utf-8") as f:
+    tmp = p.with_name(p.name + ".tmp")   # atomic: never leave a truncated snapshot
+    with gzip.open(tmp, "wt", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
+    os.replace(tmp, p)
 
 
 def refresh(cache_path, session, teryt_prefix="24", today=None, force=False, log=print):
@@ -248,13 +255,14 @@ def refresh(cache_path, session, teryt_prefix="24", today=None, force=False, log
 # ---- matching ---------------------------------------------------------------
 
 def _fold(s):
-    """lowercase, strip diacritics (incl. ł) and punctuation."""
+    """lowercase, strip diacritics (incl. ł) and punctuation, collapse spaces —
+    'Bielsko - Biała' and 'Bielsko-Biała' must fold to the same key."""
     if not s:
         return ""
     s = s.replace("ł", "l").replace("Ł", "L")
     s = unicodedata.normalize("NFKD", s)
     s = "".join(c for c in s if not unicodedata.combining(c))
-    return re.sub(r"[^a-z0-9 ]", " ", s.lower()).strip()
+    return " ".join(re.sub(r"[^a-z0-9 ]", " ", s.lower()).split())
 
 
 _STREET_NOISE = {"ul", "ulica", "al", "aleja", "pl", "plac", "os", "osiedle", "gen",
@@ -265,9 +273,16 @@ def _street_tokens(s):
     return [t for t in _fold(s).split() if t not in _STREET_NOISE and not t.isdigit()]
 
 
+# folded (ASCII) declension endings a street-name token may gain/swap; a suffix
+# outside this set means a DIFFERENT word ('gorna' vs 'gornika'), not a case form
+_DECL_SUFFIX = {"", "a", "e", "i", "y", "ej", "iej", "ego", "iego",
+                "emu", "iemu", "ym", "im", "ymi", "imi", "ach", "iach"}
+
+
 def _tok_eq(a, b):
     """Token equality tolerant of Polish declension: 'gdanska' == 'gdanskiej',
-    'polna' == 'polnej', but 'kwiatowa' != 'kwiatkowskiego'."""
+    'polna' == 'polnej', but 'kwiatowa' != 'kwiatkowskiego' and
+    'gorna' != 'gornika' (an agent noun, not a case of 'gorna')."""
     if a == b:
         return True
     short, long_ = (a, b) if len(a) <= len(b) else (b, a)
@@ -277,7 +292,7 @@ def _tok_eq(a, b):
             break
         common += 1
     return (common >= 4 and common >= len(short) - 1
-            and len(long_) - common <= 3)
+            and long_[common:] in _DECL_SUFFIX)
 
 
 def street_match(a, b):
@@ -365,11 +380,12 @@ def _score(rec, snap, r, is_flat, unique=False):
     # renumbered over the years (real case: a 2008 deed on działka 974 whose
     # address sits on today's działka 1506). Street+number agreement wins.
     street = snap.get("street")
-    nr = _fold(str(snap.get("nr"))) if snap.get("nr") else None
+    # building numbers compare space-free: '13 A' and '13A' are the same door
+    nr = _fold(str(snap.get("nr"))).replace(" ", "") if snap.get("nr") else None
     if street and r.get("ul") and street_match(street, r["ul"]):
         if nr and r.get("nr"):
             # street AND building number known on both sides -> decisive
-            return (2, True) if _fold(str(r["nr"])) == nr else (0, False)
+            return (2, True) if _fold(str(r["nr"])).replace(" ", "") == nr else (0, False)
         if r.get("a") is None:
             return 0, False    # area-less deed needs the number to be sure
         return 2, True
@@ -394,8 +410,8 @@ def _score(rec, snap, r, is_flat, unique=False):
         if hits >= 2:
             return 1, True
         # a to-the-decimal area that exists exactly once in the town is itself
-        # strong evidence — accept with rooms agreeing (or unknown)
-        if unique and _decimal_area(rec.get("area")) and hits >= 0:
+        # strong evidence — accept (mismatching known attributes already rejected)
+        if unique and _decimal_area(rec.get("area")):
             return 1, True
         return 0, False
     # houses: no street -> corroborate with the plot area (deed carries it)
@@ -497,7 +513,6 @@ def match(records, snapshot, log=print):
             funnel["matched"] += 1
         else:
             funnel["candidates_rejected"] += 1
-    funnel["candidates_rejected"] -= funnel["matched"] if False else 0
     match.last_funnel = funnel
     log(f"RCN: matched sale events onto {attached} properties "
         f"(funnel: {funnel})")

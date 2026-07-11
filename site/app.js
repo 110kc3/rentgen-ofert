@@ -106,6 +106,7 @@ async function boot() {
   wireLocality();
   wireChips();
   wirePinButtons();
+  wireCardOpen();
   restoreFilters();
   render();
   wireMap();   // after render so the first marker pass sees the filtered view
@@ -354,8 +355,10 @@ function currentFilters() {
 function passes(l, f) {
   const archiveMode = inArchive();
   if (state.history === "sold_rcn" && !l.sold) return false;
-  if (state.market === "primary" && !l.development) return false;
-  if (state.market === "secondary" && l.development) return false;
+  // archive entries carry no development/is_private fields — the market and
+  // owner filters would silently pass/blank everything there, so skip them
+  if (!archiveMode && state.market === "primary" && !l.development) return false;
+  if (!archiveMode && state.market === "secondary" && l.development) return false;
   if (state.type !== "all" && l.type !== state.type) return false;
   if (state.source !== "all" && !(l.sources || [l.source]).includes(state.source)) return false;
   if (!archiveMode && state.owner === "private" && l.is_private !== true) return false;
@@ -447,8 +450,20 @@ function discountOf(l) {
   return { pct: (base - l.price) / base * 100, abs: base - l.price };
 }
 
+// `created` arrives in three formats (OLX ISO+offset, Otodom "YYYY-MM-DD HH:MM:SS",
+// gratka/morizon date-only) and is null for ~half the listings — comparing raw
+// strings mis-sorts within a day and sinks null-created listings; parse once.
+function createdTs(l) {
+  if (l._ts === undefined) {
+    const c = l.created || l.first_seen || l.delisted || "";
+    const t = Date.parse(c.includes(" ") ? c.replace(" ", "T") : c);
+    l._ts = Number.isFinite(t) ? t : 0;
+  }
+  return l._ts;
+}
+
 const sorters = {
-  newest: (a, b) => (b.created || "").localeCompare(a.created || ""),
+  newest: (a, b) => createdTs(b) - createdTs(a),
   discount: (a, b) => discountOf(b).pct - discountOf(a).pct,
   vsrcn: (a, b) => (a._gap ?? Infinity) - (b._gap ?? Infinity),
   price_asc: (a, b) => (a.price ?? Infinity) - (b.price ?? Infinity),
@@ -536,7 +551,7 @@ function offersBlock(l) {
     const p = o.price != null ? `${PLN.format(o.price)} zł` : "zapytaj";
     const dd = o.created ? ` · ${o.created.slice(0, 10)}` : "";
     const best = multiPrice && o.url === cheapUrl ? `<span class="best">najtaniej</span>` : "";
-    return `<a href="${o.url}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${label(o.source)} — ${p}${best}${dd}</a>`;
+    return `<a href="${escapeHtml(o.url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${label(o.source)} — ${p}${best}${dd}</a>`;
   }).join("");
   return `<div class="offers"><div class="offers-h">Ta sama nieruchomość na ${offers.length} ofertach:</div>${rows}</div>`;
 }
@@ -617,7 +632,7 @@ function timelineBlock(l) {
   ).join("");
   const ph = photos.length
     ? `<div class="tl-photos">zdjęcia z ogłoszeń: ${photos.map((u, i) =>
-        `<a href="${u}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${i + 1}</a>`).join(" ")}</div>`
+        `<a href="${escapeHtml(u)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${i + 1}</a>`).join(" ")}</div>`
     : "";
   return `<details class="tl" onclick="event.stopPropagation()">
     <summary>Historia nieruchomości (${tl.length})</summary>
@@ -806,12 +821,13 @@ async function runRcnCheck(box, btn) {
     if (nrOk) deeds = deeds.filter((d) => addrNr(d.addr) === wantNr);
     deeds.sort((a, b) => (a.date || "").localeCompare(b.date || ""));
     const rows = deeds.map((d) => {
-      const bits = [d.date,
+      // d.* is raw text from the external WFS response — escape like the head
+      const bits = [escapeHtml(d.date || ""),
         d.price != null ? `<b>${PLN.format(d.price)} zł</b>` : "cena ?",
-        d.area != null ? `${d.area} m²` : null,
-        d.market ? `rynek ${d.market.startsWith("p") ? "pierwotny" : "wtórny"}` : null,
-        d.layer === "lokale" ? (d.rooms ? `${d.rooms} izb` : null)
-                             : (d.grunt ? `działka ${d.grunt} m²` : null),
+        d.area != null ? `${escapeHtml(d.area)} m²` : null,
+        d.market ? `rynek ${String(d.market).startsWith("p") ? "pierwotny" : "wtórny"}` : null,
+        d.layer === "lokale" ? (d.rooms ? `${escapeHtml(d.rooms)} izb` : null)
+                             : (d.grunt ? `działka ${escapeHtml(d.grunt)} m²` : null),
       ].filter(Boolean).join(" · ");
       return `<div class="tl-row"><span class="tl-what">${d.layer === "lokale" ? "🏠" : "🏡"} ${bits}</span></div>`;
     }).join("");
@@ -826,19 +842,31 @@ async function runRcnCheck(box, btn) {
 }
 
 function buildPinCommand(box) {
-  const q = (v) => `"${String(v).replace(/"/g, "")}"`;
+  // single-quote for the shell: scraped street names / URLs may carry `$`,
+  // backticks or quotes, and the user pastes this into their terminal
+  const q = (v) => `'${String(v).replace(/'/g, "'\\''")}'`;
   const val = (sel) => { const el = box.querySelector(sel); return el ? el.value.trim() : ""; };
   const parts = ["python -m scraper.rcncheck", q(box.dataset.loc || "?")];
-  if (box.dataset.area) parts.push(box.dataset.area);
+  if (box.dataset.area) parts.push(q(box.dataset.area));
   const ul = val(".pin-ul"), nr = val(".pin-nr");
   if (ul) parts.push("--ulica", q(ul));
-  if (nr) parts.push("--nr", nr);
+  if (nr) parts.push("--nr", q(nr));
   const x = box.querySelector(".pin-x");
-  if (x && x.value.trim()) parts.push(x.dataset.flag, x.value.trim());
+  if (x && x.value.trim()) parts.push(x.dataset.flag, q(x.value.trim()));
   if (box.dataset.type === "house") parts.push("--typ", "house");
-  else if (box.dataset.rooms) parts.push("--pokoje", box.dataset.rooms);
+  else if (box.dataset.rooms) parts.push("--pokoje", q(box.dataset.rooms));
   parts.push("--pin", q(box.dataset.url));
   return parts.join(" ");
+}
+
+// one delegated listener instead of a per-card inline onclick — scraped URLs
+// must never be interpolated into JS code (a quote in a URL = script injection)
+function wireCardOpen() {
+  $("#grid").addEventListener("click", (e) => {
+    if (e.target.closest("a, button, input, select, textarea, label, details, summary")) return;
+    const card = e.target.closest(".card[data-href]");
+    if (card) window.open(card.dataset.href, "_blank", "noopener");
+  });
 }
 
 function wirePinButtons() {
@@ -935,7 +963,7 @@ function mapPopup(l) {
   const facts = [l.area != null ? `${PLN.format(l.area)} m²` : null,
                  l.rooms != null ? `${l.rooms} pok.` : null].filter(Boolean).join(" · ");
   return `<div class="map-pop">
-    ${l.image ? `<img loading="lazy" src="${l.image}" onerror="this.style.display='none'">` : ""}
+    ${l.image ? `<img loading="lazy" src="${escapeHtml(l.image)}" onerror="this.style.display='none'">` : ""}
     <div class="price">${l.price != null ? PLN.format(l.price) + " zł" : "Cena: zapytaj"}${ppm}</div>
     ${gap}
     <div class="facts">${facts}${facts && l.locality ? " · " : ""}${escapeHtml(l.locality || "")}</div>
@@ -1005,12 +1033,12 @@ function card(l) {
   const townLabel = town ? (td ? `${town} • ${td} km` : town) : null;
   const loc = [townLabel, l.district].filter(Boolean).join(", ");
   const img = l.image
-    ? `<img loading="lazy" src="${l.image}" onerror="this.style.display='none'">`
+    ? `<img loading="lazy" src="${escapeHtml(l.image)}" onerror="this.style.display='none'">`
     : `<div class="noimg">bez zdjęcia</div>`;
   const owner = l.is_private === true ? "prywatne" : l.is_private === false ? "biuro" : "";
   const badges = (l.sources || [l.source]).map((s) => `<span class="badge ${s}">${label(s)}</span>`).join("");
   const gone = !!l.delisted;
-  return `<div class="card${gone ? " gone" : ""}" ${l.url ? `onclick="window.open('${l.url}','_blank','noopener')"` : ""}>
+  return `<div class="card${gone ? " gone" : ""}" ${l.url ? `data-href="${escapeHtml(l.url)}"` : ""}>
     <div class="thumb">${img}
       <div class="badges">${badges}</div>
       ${owner ? `<span class="tag-priv">${owner}</span>` : ""}
@@ -1022,8 +1050,8 @@ function card(l) {
       ${ppm ? `<div class="ppm">${ppm}</div>` : ""}
       ${vsRcnLine(l)}
       ${facts ? `<div class="facts">${facts}</div>` : ""}
-      ${loc ? `<div class="loc">${loc}</div>` : ""}
-      <div class="title">${l.title || ""}</div>
+      ${loc ? `<div class="loc">${escapeHtml(loc)}</div>` : ""}
+      <div class="title">${escapeHtml(l.title || "")}</div>
       ${soldBanner(l)}
       ${pastSaleLine(l)}
       ${historyBlock(l)}

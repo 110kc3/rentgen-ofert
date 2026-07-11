@@ -30,10 +30,10 @@ DEFAULT_MAX_CHECKS = 300
 
 # Portal-specific "this ad is dead" markers on pages that still return 200.
 _GONE_MARKERS = re.compile(
-    r"og[łl]oszenie\s+(?:jest\s+)?(?:nieaktualne|niedost[ęe]pne|archiwalne|wygas[łl]o)"
-    r"|oferta\s+(?:jest\s+)?(?:nieaktualna|archiwalna|niedost[ęe]pna)"
+    r"og[łl]oszenie\s+(?:jest\s+)?(?:nieaktualne|niedost[ęe]pne|archiwalne|wygas[łl]o|zako[ńn]czone)"
+    r"|oferta\s+(?:jest\s+)?(?:nieaktualna|archiwalna|niedost[ęe]pna|zako[ńn]czona)"
     r"|to\s+og[łl]oszenie\s+zosta[łl]o\s+usuni[ęe]te"
-    r"|zako[ńn]czone|\"availability\"\s*:\s*\"[^\"]*(?:OutOfStock|SoldOut|Discontinued)",
+    r"|\"availability\"\s*:\s*\"[^\"]*(?:OutOfStock|SoldOut|Discontinued)",
     re.I)
 
 # Redirect landing on a search/index page (portal dumped us off the dead ad).
@@ -43,8 +43,13 @@ _INDEX_URL = re.compile(
 
 
 def last_seen(rec) -> str:
+    """Last day the property was seen LIVE. Status-carrying observations (e.g.
+    the 'archived' evidence rows observe_archived adds) don't count — otherwise
+    an ad archived today would look 'seen today' and the sweep would clear the
+    delisted flag that the archive evidence just set."""
     obs = rec.get("observations") or []
-    return max((o.get("date") or "" for o in obs), default=rec.get("first_seen") or "")
+    return max((o.get("date") or "" for o in obs if not o.get("status")),
+               default=rec.get("first_seen") or "")
 
 
 def is_gone(url: str, session) -> bool | None:
@@ -83,10 +88,12 @@ def sweep(records, today: str, session, active_urls=None,
     for rec in records:
         seen = last_seen(rec)
         urls = {o.get("url") for o in rec.get("observations") or []}
-        if urls & active_urls or seen >= cutoff:
+        if urls & active_urls or seen == today:
             if rec.get("delisted"):
-                del rec["delisted"]          # resurfaced
+                del rec["delisted"]          # resurfaced (visibly live right now)
             continue
+        if seen >= cutoff:
+            continue                          # too recent to conclude anything
         if rec.get("delisted"):
             continue                          # already concluded
         if rec.get("development"):
@@ -96,7 +103,7 @@ def sweep(records, today: str, session, active_urls=None,
         if url:
             candidates.append((seen, url, rec))
 
-    candidates.sort()                         # oldest unseen first
+    candidates.sort(key=lambda c: (c[0], c[1]))   # oldest unseen first (never compare the rec dicts)
     checked = confirmed = 0
     for seen, url, rec in candidates:
         if checked >= max_checks:

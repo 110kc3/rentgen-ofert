@@ -233,7 +233,7 @@ function barChart(el, { title, labels, values, color, unit, xEvery, heading }) {
     if (!p) { tt.hidden = true; return; }
     const i = +p.dataset.i;
     const box = svg.getBoundingClientRect();
-    tt.innerHTML = `<div class="tt-t">${esc(labels[i])}</div><div class="tt-r"><span>${esc(heading || title)}</span><span>${PLN.format(values[i])}${unit ? " " + unit : ""}</span></div>`;
+    tt.innerHTML = `<div class="tt-t">${esc(labels[i])}</div><div class="tt-r"><span>${esc(heading || title || "")}</span><span>${PLN.format(values[i])}${unit ? " " + unit : ""}</span></div>`;
     tt.hidden = false;
     tt.style.left = Math.min((x(i) / W) * box.width + 8, box.width - tt.offsetWidth - 4) + "px";
     tt.style.top = "10px";

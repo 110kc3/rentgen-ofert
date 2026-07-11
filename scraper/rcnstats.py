@@ -148,8 +148,12 @@ def build(snapshot, records, today=None,
           window_months=WINDOW_MONTHS, min_n=MIN_N):
     """Assemble the rcnstats.json payload. Small: towns x buckets x 2 markets."""
     today = today or dt.date.today().isoformat()
-    cutoff = (dt.date.fromisoformat(today)
-              - dt.timedelta(days=window_months * 30)).isoformat()
+    # real calendar months back, not months*30 days (720 days ≠ the advertised
+    # 24 months — deeds near the edge were silently dropped)
+    d = dt.date.fromisoformat(today)
+    m = d.year * 12 + (d.month - 1) - window_months
+    cutoff = dt.date(m // 12, m % 12 + 1,
+                     min(d.day, 28)).isoformat()
     towns = _bucket_stats(snapshot or {}, cutoff, min_n)
 
     pairs = list(gap_pairs(records or []))
