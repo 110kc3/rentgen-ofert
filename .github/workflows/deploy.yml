@@ -42,6 +42,10 @@ jobs:
           git fetch origin data
           git checkout origin/data -- site/data
           rm -f site/data/*/history.json.gz   # pipeline-only store, not served
+      # Bakes fresh counts into the artifact's no-JS summary, Dataset JSON-LD,
+      # sitemap lastmod and llms.txt — no commit to main (ubuntu runners ship Node).
+      - name: Render no-JS summary + agent-discovery files
+        run: node scripts/update-summary.mjs
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

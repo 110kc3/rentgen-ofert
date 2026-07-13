@@ -1,7 +1,6 @@
-# Shell scripts must stay LF — the CI runners are Linux, and a Windows checkout
-# that flips build-site.sh to CRLF breaks `bash build-site.sh` ("set: pipefail:
-# invalid option name") and therefore the OVH deploy. eol=lf forces LF on checkout
-# regardless of the local git autocrlf setting.
+# Shell scripts must stay LF — the CI runners are Linux, and a CRLF checkout
+# breaks bash ("set: pipefail: invalid option name"). eol=lf forces LF on
+# checkout regardless of the local git autocrlf setting.
 *.sh text eol=lf
 
 # Normalise line endings repo-wide: store LF and check out LF everywhere, so a

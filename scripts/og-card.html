@@ -1,0 +1,36 @@
+<!doctype html>
+<!-- Source of site/og.png (1200x630 social/share card). Regenerate after edits:
+     npx playwright screenshot --viewport-size=1200,630 scripts/og-card.html site/og.png -->
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  width:1200px;height:630px;
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  background:#f4f5f7;color:#1b1f24;
+  display:flex;flex-direction:column;justify-content:center;padding:0 84px;
+}
+.brand{font-size:40px;font-weight:800;letter-spacing:-.5px;margin-bottom:20px}
+.brand .accent{color:#1f6feb}
+h1{font-size:60px;line-height:1.12;font-weight:800;letter-spacing:-1.5px;max-width:18ch;margin-bottom:20px}
+.lead{font-size:27px;color:#6b7280;max-width:42ch;line-height:1.45;margin-bottom:40px}
+.chips{display:flex;gap:14px}
+.chip{background:#fff;border:1px solid #e5e7eb;border-radius:999px;padding:13px 24px;font-size:22px;font-weight:600;
+box-shadow:0 1px 2px rgba(0,0,0,.06),0 4px 12px rgba(0,0,0,.05)}
+.chip b{color:#1f6feb}
+</style>
+</head>
+<body>
+  <div class="brand">🏠 Rentgen ofert <span class="accent">· woj. śląskie</span></div>
+  <h1>Wszystkie domy i mieszkania na sprzedaż w jednym miejscu</h1>
+  <p class="lead">Pięć portali, zero duplikatów, historia cen i realne ceny transakcyjne z aktów notarialnych (RCN).</p>
+  <div class="chips">
+    <span class="chip"><b>18&nbsp;000+</b> ofert</span>
+    <span class="chip"><b>5</b> portali</span>
+    <span class="chip"><b>RCN</b> ceny transakcyjne</span>
+    <span class="chip">aktualizacja <b>2×&nbsp;dziennie</b></span>
+  </div>
+</body>
+</html>
