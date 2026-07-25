@@ -1,7 +1,7 @@
 # TODO — rentgen-ofert
 
 > Keep this file and `README.md` updated after each change.
-> Last updated: 2026-07-11
+> Last updated: 2026-07-14
 
 ## Done (bug sweep — 2026-07-11)
 Full-codebase review (4 areas: scrapers, pipeline, RCN/stats, dashboard);
@@ -162,6 +162,9 @@ shards + hashed filenames. Do it before adding a second region.
 - [ ] **Multi-voivodeship / whole Poland — NEXT.** Prerequisites all done;
       start with the pilot region (małopolskie or dolnośląskie) per the
       rollout order below ↓.
+- [ ] **Licytacje komornicze — "deweloperuch dla licytacji"** (nationwide
+      bailiff auctions + RCN gap per auction). Feasibility verified
+      2026-07-14; full plan in its own section below ↓.
 
 ## Plan: scraping whole Poland (notes, 2026-07-07)
 
@@ -236,6 +239,90 @@ is ~8–12× that (Otodom alone lists ~250k sales nationwide).
       from rental comps (town + size bucket); attracts the investor crowd.
 - [ ] **Agency behaviour stats** (relist frequency per agency) — tread
       carefully, naming-and-shaming risk.
+
+## Plan: licytacje komornicze — "deweloperuch dla licytacji" (notes, 2026-07-14)
+
+All Polish bailiff real-estate auctions in one dashboard, each with a
+**"cena wywołania vs transakcje RCN"** gap — the analytics layer no existing
+aggregator has (licytor.pl / podkluczyk.pl / adradar.pl are paid alert
+services without deed benchmarks). Nationwide from day one: only **~3.2k live
+real-estate auctions** across Poland (vs ~18k listings in śląskie alone), so
+one polite cron covers the country. Feasibility probed live from the Pi
+(Polish residential IP) on 2026-07-14; probe details also in project memory
+(`licytacje-komornik-scrapeability`).
+
+### Source facts (verified 2026-07-14)
+- **licytacje.komornik.pl** is the single central source (KRK portal;
+  elicytacje.komornik.pl redirects there). Publication is mandated by
+  art. 953/955 KPC; **robots.txt is `Allow: /`** (only user panels blocked).
+- **Search page SSR** (`/wyszukiwarka-licytacji`): `__NUXT_DATA__`
+  (devalue-encoded) carries `search-items` = the 20 newest items + total
+  `count` (3,167 on 2026-07-14). **URL query params are ignored server-side**
+  — no SSR pagination/filters, so poll it (~hourly) to catch new items
+  (~100–250 new notices/day nationwide).
+- **Item record fields** (from that payload): id, title, openingValue,
+  **estimate** (suma oszacowania), startAuctionAt/endAuctionAt, marginDueDate,
+  dateCreated, status, mainCategory, subCategory (APARTMENTS/HOUSES/LAND/
+  GARAGES/COMMERCIAL_PREMISES/OTHER), address (city/street/buildingNo/
+  **flatNo**/zipCode/province), eauction flag, noticeId, location{lat,lon}
+  (schema present, always 0,0 — geocode via geo.py), base64 thumbnail.
+- **Notice pages** (`/wyszukiwarka/obwieszczenia-o-licytacji/<id>/<any-slug>`)
+  are **fully SSR'd and ID-enumerable**: missing ids genuinely 404; ids are
+  dense from ≤30000 to ~44400 (July 2026) → full historical backfill is one
+  weekend of polite crawling. Each page: complete obwieszczenie text +
+  structured rows (Cena wywołania, Suma oszacowania, Najniższe postąpienie,
+  rękojmia, sygnatura Km, **KW number**, działka numbers, **debtor name —
+  STRIP IT, RODO**). Notice ids (~37–44k) and item ids (~70–75k) are separate
+  sequences; items include movables.
+- Item pages `/licytacje/<id>/<slug>` are CSR shells (always 200, no data) —
+  useless for scraping. The JSON search API
+  (`POST /services/item-back/rest/item/search/bailiff`) is WAF-blocked for
+  curl + reCAPTCHA-gated — **not needed** (SSR poll + notice enumeration
+  covers everything); headless Chromium is the fallback if that changes.
+
+### Why our stack wins
+- **RCN gap per auction** — `rcnstats.py` town/size-bucket benchmarks drop in
+  as-is: "cena wywołania vs transakcje RCN: −45 %".
+- **Auctions come with KW + exact address + działka** — rentgen's hardest
+  problem (address discovery) doesn't exist here; `uldk.py`/`rcncheck`
+  parcel-anchored matching gives the *exact property's* past sale prices.
+- **Cross-ref with portal listings**: photo/address match against rentgen data
+  → "this flat is/was on Otodom at 520k; auction opens at 333k".
+- **Round tracking**: pierwsza (3/4 oszacowania) vs druga (2/3) licytacja —
+  przetargimiejskie's round logic, applied nationally.
+- Serverless model (Actions cron → data branch → Pages) transfers unchanged.
+
+### MVP steps
+- [ ] **`scraper/licytacje.py`**: backfill notices id 30000→now (polite rate,
+      resumable, committed cache like phash), then incremental: poll search
+      SSR for new items + forward-scan notice ids; parse notice HTML into the
+      auction schema (openingValue, estimate, dates, address, KW, parcel,
+      round, e-auction). Strip debtor names at ingest.
+- [ ] **Dataset**: `site/data/aukcje/` (auctions are nationwide — not
+      per-region like listings); slim index + detail shards via payload.py.
+- [ ] **RCN integration**: gap vs rcnstats bucket per auction; parcel/KW/
+      address-anchored deed history per property (rcncheck path).
+- [ ] **Dashboard**: auction cards (round badge, countdown, wywołanie vs
+      estimate vs RCN), map view (geo.py — addresses are exact), filters
+      (province/category/price/round/e-auction).
+- [ ] **Test from GH Actions early** — przetargimiejskie saw Polish hosts
+      block Azure/GH runner IPs; if blocked, Pi-scrape + data-branch push is
+      already a supported flow.
+- [ ] **Verify RCN captures enforcement sales** (przysądzenie własności is a
+      court decision, not a notarial deed): run rcncheck against a few known
+      2025 auction outcomes. Determines whether "sold at auction for X" and
+      post-auction outcome tracking are showable.
+
+### Open decisions / risks
+- **Packaging**: new card type inside rentgen-ofert vs standalone repo/domain
+  reusing scraper libs (deweloperuch analogy + przetargimiejskie lead-gen GTM
+  suggest standalone; sharing rcn/geo/uldk argues in-repo). Decide at MVP end.
+- **RODO / legal**: never republish debtor names (the portal has a statutory
+  basis we don't); review `/regulamin` before any public launch; link back to
+  source notices, personal-scale etiquette as with portals.
+- **Later phases to be truly "all auctions"**: syndyk/bankruptcy sales (KRZ),
+  municipal auctions (przetargimiejskie already covers), AMW/KOWR/PKP,
+  urzędy skarbowe. Komornik alone is a complete MVP.
 
 ## Done (property lifetime timeline + RCN — earlier round)
 - [x] **RCN integration (`scraper/rcn.py`).** Pulls all Śląskie flat +
