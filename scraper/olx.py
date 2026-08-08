@@ -17,14 +17,30 @@ import time
 
 import requests
 
+from . import coverage
 from .normalize import olx_rooms, to_float, to_int
 
 # Whole-voivodeship search by default; override with RENTGEN_REGION.
 REGION = os.environ.get("RENTGEN_REGION", "slaskie")
-SEARCH = {
-    "house": f"https://www.olx.pl/nieruchomosci/domy/sprzedaz/{REGION}/",
-    "flat": f"https://www.olx.pl/nieruchomosci/mieszkania/sprzedaz/{REGION}/",
-}
+PATHS = {"house": "domy", "flat": "mieszkania"}
+
+
+def search_url(typ: str, where: str) -> str:
+    """The location is one slug in a fixed path position, so the same builder
+    makes a region search and a town search — which is what subdivision needs.
+    Verified on the sibling portals reachable from a dev machine:
+    `gratka.pl/nieruchomosci/domy/gliwice` and `morizon.pl/domy/gliwice/` both
+    answer with that town's listings from the region URL's slug position."""
+    return f"https://www.olx.pl/nieruchomosci/{PATHS[typ]}/sprzedaz/{where}/"
+
+
+SEARCH = {typ: search_url(typ, REGION) for typ in PATHS}
+
+# OLX stops paginating long before it runs out of ads — the region search dies
+# at page 25 whatever `totalPages` claims. That is not our cap and no amount of
+# RENTGEN_MAX_PAGES fixes it; the only way to see the rest is to ask narrower
+# questions, so an overflowing search is re-run per town and merged.
+HARD_PAGE_CAP = 25
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -89,30 +105,70 @@ def parse_ads(ads, typ: str):
     return out
 
 
+def _walk(base_url, typ, tag, max_pages, delay, session, log, seen, out):
+    """Page through one search. Returns its coverage row."""
+    page = 1
+    got = 0
+    total_pages = None
+    stopped = coverage.OK
+    while page <= max_pages:
+        url = f"{base_url}?page={page}"
+        try:
+            r = session.get(url, headers=HEADERS, timeout=30)
+            r.raise_for_status()
+            state = extract_state(r.text)
+            listing = state["listing"]["listing"]
+        except Exception as exc:  # keep what we have, stop this search
+            log(f"  olx {typ}/{tag} page {page} error: {exc}")
+            stopped = coverage.ERROR
+            break
+        ads = listing.get("ads", [])
+        batch = [a for a in parse_ads(ads, typ) if a["url"] not in seen]
+        for a in batch:
+            seen.add(a["url"])
+        out.extend(batch)
+        got += len(batch)
+        total_pages = listing.get("totalPages", 1) or 1
+        log(f"  olx {typ}/{tag} page {page}/{min(total_pages, max_pages)}: +{len(batch)}")
+        if not ads:
+            # An empty page is how OLX enforces its own limit: it keeps claiming
+            # `totalPages` in the hundreds and just stops serving ads. Running
+            # out for real means we reached the last page it claimed.
+            page -= 1                     # the empty page held nothing
+            if total_pages > page:
+                stopped = coverage.PORTAL_CAP
+            break
+        if page >= min(total_pages, max_pages):
+            if total_pages > max_pages:
+                stopped = coverage.OUR_CAP
+            break
+        page += 1
+        time.sleep(delay)
+    return coverage.row("olx", typ, tag, page, got, stopped, portal_pages=total_pages)
+
+
 def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
-           types=("house", "flat")):
+           types=("house", "flat"), towns=None):
+    """`towns`: {slug: display} used ONLY to subdivide a search that OLX refused
+    to paginate. Subdivision is additive — the region results are kept and the
+    per-town results merged into them by URL — so a wrong town slug costs one
+    request and can never lose a listing we already had."""
     session = session or requests.Session()
     out = []
-    for typ, base_url in SEARCH.items():
+    cov = []
+    for typ in PATHS:
         if typ not in types:
             continue
-        page = 1
-        while page <= max_pages:
-            url = f"{base_url}?page={page}"
-            try:
-                r = session.get(url, headers=HEADERS, timeout=30)
-                r.raise_for_status()
-                state = extract_state(r.text)
-                listing = state["listing"]["listing"]
-            except Exception as exc:  # keep what we have, stop this category
-                log(f"  olx {typ} page {page} error: {exc}")
-                break
-            batch = parse_ads(listing.get("ads", []), typ)
-            out.extend(batch)
-            total_pages = listing.get("totalPages", 1) or 1
-            log(f"  olx {typ} page {page}/{min(total_pages, max_pages)}: +{len(batch)}")
-            if page >= min(total_pages, max_pages) or not listing.get("ads"):
-                break
-            page += 1
+        seen = set()
+        row = _walk(SEARCH[typ], typ, REGION, max_pages, delay, session, log, seen, out)
+        cov.append(row)
+        if row["stopped"] != coverage.PORTAL_CAP or not towns:
+            continue
+        log(f"  olx {typ}: region search capped at page {row['pages']} of "
+            f"{row.get('portal_pages')} — subdividing into {len(towns)} towns")
+        for slug in towns:
+            cov.append(_walk(search_url(typ, slug), typ, slug, max_pages,
+                             delay, session, log, seen, out))
             time.sleep(delay)
+    scrape.last_coverage = cov
     return out

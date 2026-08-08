@@ -26,7 +26,7 @@ import pathlib
 import sys
 
 from . import cache as phcache
-from . import delist, geo, gratka, history, marketstats, morizon, net, nieruchomosci_online, olx, otodom, overrides, payload, photomatch, rcn, rcnstats
+from . import coverage, delist, geo, gratka, history, marketstats, morizon, net, nieruchomosci_online, olx, otodom, overrides, payload, photomatch, rcn, rcnstats
 from .normalize import dedupe, link_same_size
 
 # Region = the unit of everything (data dir, caches, RCN snapshot). Output goes
@@ -62,7 +62,12 @@ TERYT = {
 
 
 def run() -> int:
-    max_pages = int(os.environ.get("RENTGEN_MAX_PAGES", "50"))
+    # 200, not the old 50: with 50 EVERY paginated portal stopped on our cap
+    # inside śląskie alone (gratka's domy search alone runs to page 72 and only
+    # then 404s, so ~700 houses were being dropped silently). The scrapers all
+    # terminate on the portal's own end, so a generous cap costs nothing where
+    # it isn't needed and `coverage` reports it when it still binds.
+    max_pages = int(os.environ.get("RENTGEN_MAX_PAGES", "200"))
     delay = float(os.environ.get("RENTGEN_DELAY", "0.7"))
     types = tuple(t.strip() for t in os.environ.get("RENTGEN_TYPES", "house,flat").split(",") if t.strip())
     verify_max = int(os.environ.get("RENTGEN_VERIFY_MAX", "300"))
@@ -72,8 +77,17 @@ def run() -> int:
     raw = []
     errors = []
     http = net.session()
+    cov_rows = []
     for name, mod in SOURCES:
         kwargs = dict(max_pages=max_pages, delay=delay, types=types, session=http)
+        if mod is olx:
+            # OLX caps its own pagination; a capped search is re-run per town.
+            # Towns come from the same resolver n-online uses, but OLX runs
+            # BEFORE the others have filled `raw`, so this leans on the cached
+            # list from previous runs (empty on a region's very first run —
+            # subdivision then starts one run later, which is harmless).
+            kwargs["towns"] = nieruchomosci_online.resolve_towns(
+                REGION, raw, cache_path=NOL_TOWNS)
         if mod is nieruchomosci_online:
             # This portal has no region-wide search — it needs a town list, and
             # the portal publishes no index to build one from. Derive it from the
@@ -88,6 +102,13 @@ def run() -> int:
         except Exception as exc:  # one portal failing must not lose the others
             errors.append(f"{name}: {exc}")
             print(f"  !! {name} failed: {exc}", file=sys.stderr)
+        cov_rows.extend(getattr(mod.scrape, "last_coverage", None) or [])
+
+    # Truncation is silent by nature — a capped search returns a plausible pile
+    # of listings and no hint that more exist. Say so, loudly, every run.
+    for line in coverage.warnings(cov_rows):
+        print(line, file=sys.stderr)
+        errors.append(line.strip().lstrip("! "))
 
     if not raw:
         print("No listings collected - aborting (keeping previous data).", file=sys.stderr)
@@ -216,6 +237,7 @@ def run() -> int:
                       "gap_pairs": (rcn_stats["gap"].get("all") or {}).get("n", 0)}
                      if rcn_stats else None,
         "sold_confirmed": sum(1 for a in archive if a.get("sold")),
+        "coverage": coverage.summarise(cov_rows),
         "errors": errors,
     }
     (DATA_DIR / "meta.json").write_text(

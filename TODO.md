@@ -3,6 +3,44 @@
 > Keep this file and `README.md` updated after each change.
 > Last updated: 2026-08-08
 
+## Done (2026-08-08) — overflow detection + subdivision (rollout step 1)
+- [x] **The caps were ours, not the portals'.** Probed gratka directly:
+      `domy/slaskie` reports **2509 ogłoszeń**, paginates to **page 72** and
+      404s on 73 — no portal-side limit at all. Same shape on morizon. So the
+      old `RENTGEN_MAX_PAGES=50` was the entire truncation. Raised the default
+      to **200** and measured it live: gratka houses **1 751 → 2 508 (+757)**,
+      stop reason flipping from `cap` to `end` at page 72, matching the
+      portal's own count. The scrapers all terminate on the portal's end, so a
+      generous cap costs nothing where it isn't needed.
+- [x] **`scraper/coverage.py`** — every search records why it ended: `end`
+      (portal ran out), `cap` (we cut it off), `portal_cap` (portal refused to
+      go deeper), `error`. Folded into `meta.json` → `coverage` and printed as
+      a warning per truncated search, so truncation stops being something you
+      have to infer from suspiciously round counts. Otodom and OLX state their
+      own `totalPages`, which is what makes "is the cap still binding?"
+      answerable from each CI run.
+- [x] **OLX subdivision.** OLX is the one portal that caps *itself* — it stops
+      serving at page 25 while still claiming hundreds of `totalPages`, and no
+      value of `RENTGEN_MAX_PAGES` helps. A capped OLX search is now re-run per
+      town (same slug position as the region: verified on the reachable sibling
+      portals, `gratka.pl/nieruchomosci/domy/gliwice` and
+      `morizon.pl/domy/gliwice/` both answer) and merged by URL. **Additive by
+      design** — region results are kept and town results merged in — so a
+      wrong slug costs one request and can never lose a listing.
+      A test caught the detection bug this hid: OLX signals its cap with an
+      *empty* page, which broke the loop before the cap check ever ran.
+
+Still open from this round:
+- [ ] **Does otodom still overflow at 200 pages?** Unknown — Otodom 403s a
+      residential IP, so it can only be measured from CI. The next run's
+      `meta.json` → `coverage` answers it: a row with `stopped: "cap"` and
+      `portal_pages` far above 200 means otodom needs subdividing too, and its
+      town URLs are a different shape (`/region/powiat/gmina/city`) than the
+      one-slug form that works for OLX/gratka/morizon.
+- [ ] **Watch the run time and the photo budget.** More listings means more
+      gallery hashing; `RENTGEN_PHOTO_BUDGET_MIN=90` absorbs it over several
+      runs by design, but the first run after this change will be heavy.
+
 ## Done (2026-08-08) — de-Gliwice-ing (whole-Poland rollout step 2)
 - [x] **`normalize.CITY` deleted** — dead constant, referenced nowhere.
 - [x] **n-online town list is per region now.** The portal has no region-wide
@@ -359,14 +397,12 @@ Naive ×16, *before* the coverage fix makes regions bigger:
   Pages cap is reached before the region set is complete.
 
 ### Rollout order (revised 2026-08-08 — Krok 1 and 3 already shipped)
-1. [ ] **Overflow detection + subdivision.** The real prerequisite now that the
-   caps are known to bind. Log when a search ends on `page == cap`, then
-   subdivide: per-powiat URLs (36 in śląskie, 380 in Poland) or price-band
-   slices, generalising what `nieruchomosci_online.py` already does per town.
-   Validate on śląskie alone, where the coverage gain is measurable against
-   today's 21k raw / 17.8k unique. Do this first: it changes every size and
-   runtime estimate, and without it a second region just adds a second
-   partially-scraped dataset.
+1. [x] **Overflow detection + subdivision — done 2026-08-08.** Turned out the
+   caps were mostly ours: raising `RENTGEN_MAX_PAGES` 50 → 200 recovered +757
+   gratka houses alone, and only OLX caps itself (page 25) and needed real
+   subdivision. `scraper/coverage.py` now reports every truncated search in
+   `meta.json`. See the Done section at the top; otodom's true depth is the one
+   open question and the next CI run answers it.
 2. [x] **Finish de-Gliwice-ing — done 2026-08-08.** Dead `normalize.CITY`
    removed; `nieruchomosci_online.py` builds its town list per region from the
    portal's own city index (cached, with the śląskie list as fallback);

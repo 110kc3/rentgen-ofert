@@ -12,6 +12,7 @@ import time
 import requests
 from bs4 import BeautifulSoup
 
+from . import coverage
 from .normalize import location_parts, to_float, to_int
 
 BASE = "https://www.morizon.pl"
@@ -113,6 +114,7 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
            types=("house", "flat")):
     session = session or requests.Session()
     out = []
+    cov = []
     for typ, bases in SEARCH.items():
         if typ not in types:
             continue
@@ -120,23 +122,34 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
         for base in bases:
             tag = base.rstrip("/").split("/")[-1]
             page = 1
-            while page <= max_pages:
+            got = 0
+            stopped = coverage.OK
+            while True:
+                if page > max_pages:
+                    stopped = coverage.OUR_CAP   # morizon 404s past its last page
+                    page -= 1
+                    break
                 url = base if page == 1 else f"{base}?page={page}"
                 try:
                     r = session.get(url, headers=HEADERS, timeout=30)
                     if r.status_code == 404:
+                        page -= 1
                         break
                     r.raise_for_status()
                     batch = [c for c in parse_cards(r.text, typ) if c["url"] not in seen]
                 except Exception as exc:  # keep what we have, move on
                     log(f"  morizon {typ}/{tag} page {page} error: {exc}")
+                    stopped = coverage.ERROR
                     break
                 for c in batch:
                     seen.add(c["url"])
                 out.extend(batch)
+                got += len(batch)
                 log(f"  morizon {typ}/{tag} page {page}: +{len(batch)}")
                 if not batch:
                     break
                 page += 1
                 time.sleep(delay)
+            cov.append(coverage.row("morizon", typ, tag, max(page, 0), got, stopped))
+    scrape.last_coverage = cov
     return out

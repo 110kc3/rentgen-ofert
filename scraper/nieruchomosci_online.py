@@ -31,6 +31,7 @@ from collections import Counter
 
 import requests
 
+from . import coverage
 from .normalize import to_float, to_int
 from .rcn import _fold
 
@@ -211,10 +212,14 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
         towns = SEED_TOWNS.get(os.environ.get("RENTGEN_REGION", "slaskie")) or {}
     session = session or requests.Session()
     out = []
+    cov = []
     for typ, path in PATHS.items():
         if typ not in types:
             continue
         seen = set()
+        pages_total = 0
+        got = 0
+        capped = 0
         for town in towns:
             base = f"https://{town}.nieruchomosci-online.pl/{path}/"
             page = 1
@@ -232,6 +237,7 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
                 for b in fresh:
                     seen.add(b["url"])
                 out.extend(fresh)
+                got += len(fresh)
                 if fresh:
                     log(f"  nieruchomosci-online {typ}/{town} page {page}: +{len(fresh)}")
                 if not batch:
@@ -248,4 +254,13 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
                     dup_pages = 0
                 page += 1
                 time.sleep(delay)
+                if page > max_pages:
+                    capped += 1       # a town with more pages than we allowed
+            pages_total += page - 1
+        # one row per type, not per town: 60 towns x 2 types would bury the
+        # other portals in meta.json, and the towns share one budget anyway
+        cov.append(coverage.row(
+            "nieruchomosci-online", typ, f"{len(towns)} towns", pages_total, got,
+            coverage.OUR_CAP if capped else coverage.OK))
+    scrape.last_coverage = cov
     return out

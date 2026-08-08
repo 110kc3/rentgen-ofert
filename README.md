@@ -64,6 +64,18 @@ force-pushed fresh each run (the price history lives *inside*
   the benchmark is older than it looks, the Statystyki note names the worst
   offenders (or explains why the selected town's RCN line just stops), and the
   empty *Sprzedane wg RCN* view says so outright instead of looking broken.
+- **Coverage — knowing when a search was truncated.** A capped search returns a
+  plausible pile of listings and no hint that more exist, and with the old
+  50-page default *every* paginated portal was stopping on our cap inside
+  śląskie alone. Each scraper now records why each search ended — the portal ran
+  out (`end`), we cut it off (`cap`), or the portal refused to paginate further
+  (`portal_cap`) — into `meta.json`'s `coverage` block, with a warning per
+  truncated search in the run log. Raising the default to 200 pages recovered
+  **757 houses on gratka alone** (1 751 → 2 508, matching gratka's own "2509
+  ogłoszeń"). OLX is the one portal that caps itself — it stops serving at page
+  25 while still claiming hundreds — so an OLX search that hits that wall is
+  re-run per town and merged; subdivision is additive, so a bad town slug costs
+  one request and can never lose a listing already collected.
 - **Empty views explain themselves.** When a filter combination returns
   nothing, the dashboard re-runs the filter with each dimension relaxed and
   offers the ones that would bring results back ("Miejscowość: Gliwice — 43"),
@@ -177,7 +189,7 @@ RENTGEN_MAX_PAGES=3 RENTGEN_DELAY=0.3 python -m scraper.main
 | Env var | Default | Meaning |
 |---|---|---|
 | `RENTGEN_REGION` | slaskie | voivodeship slug to scrape (e.g. `malopolskie`) |
-| `RENTGEN_MAX_PAGES` | 50 | max result pages per portal per type |
+| `RENTGEN_MAX_PAGES` | 200 | max result pages per portal per search (was 50, which silently truncated every portal — see *Coverage*) |
 | `RENTGEN_DELAY` | 0.7 | seconds between requests (be polite) |
 | `RENTGEN_PHOTOS` | 1 | photo-match ambiguous listings; `0` skips the detail fetches |
 | `RENTGEN_PHOTO_BUDGET_MIN` | 90 | max minutes of photo fetching per run (`0` = unlimited); skipped listings retry next run |
@@ -261,6 +273,7 @@ python -m pytest -q          # parser + dedupe unit tests (offline, use fixtures
 scraper/
   otodom.py  olx.py  gratka.py  morizon.py  nieruchomosci_online.py   per-portal scrapers
   net.py         shared HTTP session with 429 back-off; history.py  property lifecycle store
+  coverage.py    per-search truncation reporting (our cap vs the portal's)
   normalize.py   shared schema, value helpers, cross-portal dedupe
   photomatch.py  perceptual hashing of galleries to confirm same-property merges
   cache.py       photo-hash cache (URL -> hashes + gallery URLs), reused run-to-run

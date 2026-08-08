@@ -13,6 +13,7 @@ import time
 
 import requests
 
+from . import coverage
 from .normalize import otodom_rooms, to_int
 
 BASE = "https://www.otodom.pl"
@@ -85,10 +86,15 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
            types=("house", "flat")):
     session = session or requests.Session()
     out = []
+    cov = []
     for typ, path in SEARCH.items():
         if typ not in types:
             continue
         page = 1
+        got = 0
+        total_pages = None
+        total_ads = None
+        stopped = coverage.OK
         while page <= max_pages:
             url = f"{BASE}{path}?page={page}"
             try:
@@ -97,16 +103,29 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
                 sa = extract_search_ads(r.text)
             except Exception as exc:  # keep what we have, stop this category
                 log(f"  otodom {typ} page {page} error: {exc}")
+                stopped = coverage.ERROR
                 break
             items = sa.get("items") or []
             batch = parse_items(items, typ)
             out.extend(batch)
-            total_pages = (sa.get("pagination") or {}).get("totalPages", 1) or 1
+            got += len(batch)
+            pg = sa.get("pagination") or {}
+            total_pages = pg.get("totalPages", 1) or 1
+            total_ads = sa.get("totalResults") or sa.get("count") or total_ads
             log(f"  otodom {typ} page {page}/{min(total_pages, max_pages)}: +{len(batch)}")
             # stop on an empty RESULT page, not an empty parsed batch — a page of
             # nothing but INVESTMENT bundles filters to [] while more pages exist
-            if page >= min(total_pages, max_pages) or not items:
+            if not items:
+                break
+            if page >= min(total_pages, max_pages):
+                # Otodom states its own totalPages, so we know exactly which
+                # limit bit: ours (more pages exist) or the portal's end.
+                stopped = (coverage.OUR_CAP if total_pages > max_pages
+                           else coverage.OK)
                 break
             page += 1
             time.sleep(delay)
+        cov.append(coverage.row("otodom", typ, None, page, got, stopped,
+                                portal_pages=total_pages, portal_total=total_ads))
+    scrape.last_coverage = cov
     return out
