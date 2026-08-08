@@ -109,7 +109,11 @@ async function boot() {
         const b = benchOf(l);
         if (b) { l._bench = b; l._gap = b.gapPct; }
       }
+      // towns whose powiat has stopped reporting deeds (scraper/rcnstats.py
+      // _freshness) — keyed by the same folded name benchOf() looks up
+      state.stale = new Map((state.rcnstats.stale || []).map((s) => [s.town, s]));
     }
+    state.meta = meta;
     renderStats(meta);
   } catch (e) {
     $("#grid").innerHTML =
@@ -335,6 +339,124 @@ function activeFilters() {
   return out;
 }
 
+// ---- empty state that names the culprit ------------------------------------
+// "Brak ofert dla wybranych filtrów" is useless when the filter at fault is one
+// you set three visits ago and the view remembers. So when the grid comes back
+// empty we re-run the filter with each dimension relaxed in turn and offer the
+// ones that would actually bring results back. Only ever computed on an empty
+// grid, over the pool already in memory.
+
+/** The active filter dimensions, as {k, label} using the chip key vocabulary.
+ *  Localities collapse to one key — clearing them one at a time rarely helps.
+ *  owner/market are skipped in archive mode because passes() ignores them there. */
+function filterDims() {
+  const out = [];
+  const arch = inArchive();
+  if (state.type !== "all") out.push({ k: "seg:type", label: "Typ: " + (TYPE_LABEL[state.type] || state.type) });
+  if (state.source !== "all") out.push({ k: "seg:source", label: "Źródło: " + label(state.source) });
+  if (!arch && state.owner !== "all") out.push({ k: "seg:owner", label: OWNER_LABEL[state.owner] || state.owner });
+  if (!arch && state.market !== "all") out.push({ k: "seg:market", label: MARKET_LABEL[state.market] || state.market });
+  if (state.distance !== "all") out.push({ k: "distance", label: "≤ " + state.distance + " km od Gliwic" });
+  if (state.localities.length) out.push({ k: "loc:*", label: "Miejscowość: " + state.localities.join(", ") });
+  const nf = (id, lab) => { const v = ($("#" + id).value || "").trim(); if (v) out.push({ k: "num:" + id, label: lab + " " + v }); };
+  nf("min-price", "Cena od"); nf("max-price", "Cena do");
+  nf("min-area", "m² od"); nf("max-area", "m² do"); nf("min-rooms", "Pokoje od");
+  const q = ($("#q").value || "").trim();
+  if (q) out.push({ k: "q", label: "szukaj: „" + q + "”" });
+  return out;
+}
+
+/** How many rows would pass if dimension `k` were cleared. Mutates state for
+ *  the duration of the count and restores it — passes() reads state directly. */
+function countWithout(pool, f, k) {
+  const saved = { type: state.type, source: state.source, owner: state.owner,
+                  market: state.market, distance: state.distance };
+  const g = { ...f };
+  if (k.startsWith("seg:")) state[k.slice(4)] = "all";
+  else if (k === "distance") state.distance = "all";
+  else if (k === "loc:*") g.locs = null;
+  else if (k === "num:min-price") g.minPrice = null;
+  else if (k === "num:max-price") g.maxPrice = null;
+  else if (k === "num:min-area") g.minArea = null;
+  else if (k === "num:max-area") g.maxArea = null;
+  else if (k === "num:min-rooms") g.minRooms = null;
+  else if (k === "q") g.q = "";
+  let n = 0;
+  for (const l of pool) if (passes(l, g)) n++;
+  Object.assign(state, saved);
+  return n;
+}
+
+function topTowns(rows, k) {
+  const c = new Map();
+  for (const l of rows) {
+    const t = normLoc(l.locality);
+    if (t) c.set(t, (c.get(t) || 0) + 1);
+  }
+  return [...c.entries()].sort((a, b) => b[1] - a[1]).slice(0, k)
+    .map(([t, n]) => `${escapeHtml(t)} (${n})`).join(", ");
+}
+
+function emptyMessage(pool, f) {
+  const parts = [];
+
+  // "Sprzedane wg RCN" is the view most likely to look broken: it is a thin
+  // slice to begin with, and in a town whose register has stopped it can never
+  // fill up at all — say both things outright rather than showing a blank grid.
+  if (state.history === "sold_rcn") {
+    const all = pool.filter((l) => l.sold);
+    if (all.length) {
+      parts.push(`<p><b>${PLN.format(all.length)}</b> potwierdzonych sprzedaży w archiwum — żadna nie pasuje do pozostałych filtrów.</p>`);
+      const stale = state.localities.map(staleOf).filter(Boolean);
+      if (stale.length) {
+        parts.push(`<p class="empty-warn">` + stale.map((s) =>
+          `<b>${escapeHtml(s.name)}</b>: ostatni akt notarialny w rejestrze RCN pochodzi z <b>${escapeHtml(s.last)}</b> (${s.lag} dni temu)`
+        ).join("; ") + `. Ten powiat nie raportuje na bieżąco, więc świeżej sprzedaży nie da się tu potwierdzić — niezależnie od tego, jak długo narzędzie zbiera dane.</p>`);
+      }
+      const where = topTowns(all, 4);
+      if (where) parts.push(`<p class="empty-muted">Potwierdzone sprzedaże są w: ${where}.</p>`);
+    } else {
+      parts.push(`<p>Żadna obserwowana oferta nie ma jeszcze dopasowanego aktu notarialnego.</p>`);
+    }
+  }
+
+  const dims = filterDims()
+    .map((d) => ({ ...d, n: countWithout(pool, f, d.k) }))
+    .filter((d) => d.n > 0)
+    .sort((a, b) => b.n - a.n);
+  if (dims.length) {
+    parts.push(`<p>Zdejmij jeden z filtrów:</p><div class="empty-actions">` +
+      dims.map((d) => `<button class="chip" data-k="${escapeHtml(d.k)}">${escapeHtml(d.label)} <span class="n">${PLN.format(d.n)}</span></button>`).join("") +
+      `<button class="chip reset" data-k="__all__">Wyczyść wszystko</button></div>`);
+  } else if (!parts.length) {
+    parts.push(`<p>Brak ofert dla wybranych filtrów.</p>`);
+  } else {
+    parts.push(`<div class="empty-actions"><button class="chip reset" data-k="__all__">Wyczyść wszystko</button></div>`);
+  }
+  return `<div class="empty">${parts.join("")}</div>`;
+}
+
+// ---- counts on the archive segment buttons ---------------------------------
+// Both archive views are small slices of a big dataset, so an empty grid reads
+// as a broken button. The totals come from meta.json (known before the archive
+// is even fetched); the active view shows what survives the other filters.
+
+function setSegCount(sel, n, total) {
+  const el = $(sel);
+  if (!el || n == null) return;
+  el.textContent = PLN.format(n);
+  el.classList.toggle("zero", n === 0);
+  el.title = (total != null && n !== total)
+    ? `${PLN.format(n)} z ${PLN.format(total)} — reszta odpadła na pozostałych filtrach`
+    : "";
+}
+
+function updateSegCounts(viewLen) {
+  const m = state.meta || {};
+  setSegCount("#cnt-sold", state.history === "sold" ? viewLen : m.archive, m.archive);
+  setSegCount("#cnt-sold-rcn", state.history === "sold_rcn" ? viewLen : m.sold_confirmed, m.sold_confirmed);
+}
+
 function renderChips() {
   const af = activeFilters();
   const el = $("#chips");
@@ -346,18 +468,29 @@ function renderChips() {
     `<button class="chip reset" data-k="__all__">Wyczyść wszystko</button>`;
 }
 
+/** Clear one filter by its chip key. Shared by the chip row and the
+ *  empty-state buttons, which speak the same vocabulary (plus "loc:*"). */
+function clearFilter(k) {
+  if (k === "__all__") { resetAll(); return; }
+  if (k.startsWith("seg:")) setSeg(k.slice(4), "all");
+  else if (k === "distance") { state.distance = "all"; const d = $("#distance"); if (d) d.value = "all"; }
+  else if (k === "loc:*") { state.localities = []; renderLocalityList(($("#loc-search") || {}).value || ""); }
+  else if (k.startsWith("loc:")) removeLocality(k.slice(4));
+  else if (k.startsWith("num:")) { const el = $("#" + k.slice(4)); if (el) el.value = ""; }
+  else if (k === "q") { const el = $("#q"); if (el) el.value = ""; }
+  apply();
+}
+
 function wireChips() {
   $("#chips").addEventListener("click", (e) => {
     const b = e.target.closest("button.chip");
-    if (!b) return;
-    const k = b.dataset.k;
-    if (k === "__all__") { resetAll(); return; }
-    if (k.startsWith("seg:")) setSeg(k.slice(4), "all");
-    else if (k === "distance") { state.distance = "all"; const d = $("#distance"); if (d) d.value = "all"; }
-    else if (k.startsWith("loc:")) removeLocality(k.slice(4));
-    else if (k.startsWith("num:")) { const el = $("#" + k.slice(4)); if (el) el.value = ""; }
-    else if (k === "q") { const el = $("#q"); if (el) el.value = ""; }
-    apply();
+    if (b) clearFilter(b.dataset.k);
+  });
+  // the empty state offers the same buttons; it lives inside #grid, whose card
+  // handlers all key off .card and so ignore these
+  $("#grid").addEventListener("click", (e) => {
+    const b = e.target.closest(".empty button[data-k]");
+    if (b) { e.stopPropagation(); clearFilter(b.dataset.k); }
   });
 }
 
@@ -447,6 +580,14 @@ function benchOf(l) {
   const b = town[l.type] && town[l.type][bucket] && town[l.type][bucket][l.development ? "p" : "w"];
   if (!b) return null;
   return { ...b, bucket, townName: town.name, gapPct: (ppm - b.med) / b.med * 100 };
+}
+
+// Is this town's slice of the RCN register stale? A powiat that stopped
+// reporting can confirm no recent sale at all and its deed benchmarks quietly
+// age, so every RCN surface has to be able to admit it.
+function staleOf(locality) {
+  if (!state.stale || !locality) return null;
+  return state.stale.get(foldTown(normLoc(locality))) || null;
 }
 
 // how sales end around here: town gap stat, else voivodeship-wide per type
@@ -593,11 +734,12 @@ function render() {
   $("#count").textContent = view.length ? `${PLN.format(view.length)} wyników` : "";
   $("#grid").innerHTML = view.length
     ? `<div id="more-sentinel" class="sentinel"></div>`
-    : `<div class="empty">Brak ofert dla wybranych filtrów.</div>`;
+    : emptyMessage(pool, f);
   appendChunk();
   watchSentinel();
   syncLocalityLabel();
   renderChips();
+  updateSegCounts(view.length);
   if (state.mapOn) updateMapMarkers();
 }
 
@@ -745,6 +887,13 @@ function negoBlock(l) {
       `<b>${Math.abs(g.med_pct).toFixed(0)}% ${g.med_pct <= 0 ? "poniżej" : "powyżej"}</b> ostatniej ceny ofertowej` +
       (g.med_days ? `, po ~${g.med_days} dniach od wystawienia` : "") +
       ` (${g.n} obserwowanych sprzedaży wg RCN)`);
+  }
+  // a benchmark built on a register that stopped months ago is still useful,
+  // but you should know its age before quoting it at a seller
+  const st = staleOf(l.locality);
+  if (st && (b || g)) {
+    rows.push(`⚠ rejestr RCN dla: ${escapeHtml(st.name)} kończy się na <b>${escapeHtml(st.last)}</b> ` +
+      `(${st.lag} dni temu) — nowszych transakcji powiat jeszcze nie zgłosił, więc powyższe liczby są starsze niż wyglądają`);
   }
   const days = l.first_seen ? Math.round((Date.now() - new Date(l.first_seen)) / 864e5) : null;
   if (days != null && days >= 0) {

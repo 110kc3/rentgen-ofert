@@ -46,6 +46,15 @@ h1 { margin: 0; font-size: 22px; letter-spacing: -.02em; }
   padding: 5px 10px; border-radius: 6px; font-size: 13px;
 }
 .seg button.active { background: var(--card); color: var(--text); box-shadow: var(--shadow); }
+/* how many rows a view holds — an empty archive view otherwise reads as broken */
+.segcount {
+  display: inline-block; margin-left: 6px; padding: 0 5px; border-radius: 999px;
+  background: var(--line); color: var(--muted);
+  font-size: 11px; font-weight: 700; line-height: 16px; vertical-align: 1px;
+}
+.seg button.active .segcount { background: var(--accent); color: #fff; }
+.segcount.zero { opacity: .55; }
+.seg button.active .segcount.zero { background: var(--line); color: var(--muted); }
 input.num, input.txt, select {
   background: var(--card); color: var(--text); border: 1px solid var(--line);
   border-radius: 8px; padding: 6px 8px; font-size: 13px;
@@ -115,6 +124,13 @@ main { max-width: 1280px; margin: 14px auto 60px; padding: 0 18px; }
 .hist .trail { color: var(--text); }
 .hist .since { opacity: .75; }
 .empty { text-align: center; color: var(--muted); padding: 60px 0; }
+.empty p { margin: 0 auto 10px; max-width: 60ch; line-height: 1.5; }
+.empty b { color: var(--text); }
+.empty-warn { color: var(--text); background: var(--chip); border: 1px solid var(--line);
+  border-radius: 10px; padding: 10px 14px; }
+.empty-muted { font-size: 12.5px; opacity: .85; }
+.empty-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 14px; }
+.empty-actions .chip .n { color: var(--muted); font-size: 11px; font-weight: 700; }
 /* town multi-select */
 .ms { position: relative; }
 .ms-btn {

@@ -82,3 +82,54 @@ def test_build_gap_summaries():
     assert out["gap"]["all"]["n"] == 5
     assert out["gap"]["flat"]["med_pct"] == -6.0
     assert "house" not in out["gap"]
+
+
+# --- register freshness ------------------------------------------------------
+# A powiat that stops reporting can confirm no recent sale at all, so the town's
+# newest deed date is published and the laggards are listed. (Real case: Gliwice
+# was 5 months behind its neighbours in 2026-08 — see _freshness.)
+
+def _town(msc, last, n=rcnstats.STALE_MIN_DEEDS):
+    """n deeds for `msc`, all dated `last` (enough of them to be benchmarked)."""
+    return [_lok(last, 9000 * 50, 50.0, msc=msc) for _ in range(n)]
+
+
+def test_freshness_lag_per_town():
+    snap = {"lokale": _town("Gliwice", "2026-02-25") + _town("Katowice", "2026-07-01")}
+    fresh = rcnstats._freshness(snap, TODAY)
+    assert fresh["gliwice"]["last"] == "2026-02-25"
+    assert fresh["gliwice"]["lag"] == 132          # 2026-02-25 -> 2026-07-07
+    assert fresh["katowice"]["lag"] == 6
+    assert fresh["gliwice"]["name"] == "Gliwice"
+
+
+def test_freshness_spans_both_layers():
+    snap = {"lokale": _town("Gliwice", "2026-01-01", n=1),
+            "budynki": _town("Gliwice", "2026-06-01", n=1)}
+    assert rcnstats._freshness(snap, TODAY)["gliwice"]["last"] == "2026-06-01"
+
+
+def test_build_flags_stale_towns():
+    snap = {"lokale": _town("Gliwice", "2026-02-25") + _town("Katowice", "2026-07-01")}
+    out = rcnstats.build(snap, [], today=TODAY)
+    assert out["stale_days"] == rcnstats.STALE_DAYS
+    assert [s["name"] for s in out["stale"]] == ["Gliwice"]   # Katowice is current
+    assert out["stale"][0]["lag"] == 132
+    # a town the dashboard can look up keeps its own freshness stamp, stale or not
+    assert out["towns"]["gliwice"]["deeds"] == {"last": "2026-02-25", "lag": 132}
+    assert out["towns"]["katowice"]["deeds"]["lag"] == 6
+
+
+def test_stale_town_listed_even_without_benchmarks():
+    """`towns` only holds towns with publishable benchmarks, so the standalone
+    `stale` list is what the empty-state explanation has to read."""
+    snap = {"lokale": _town("Lubliniec", "2019-01-01")}      # far outside the window
+    out = rcnstats.build(snap, [], today=TODAY)
+    assert "lubliniec" not in out["towns"]
+    assert [s["name"] for s in out["stale"]] == ["Lubliniec"]
+
+
+def test_stale_ignores_thin_towns():
+    """A hamlet with three deeds ever is not a reporting failure worth naming."""
+    snap = {"lokale": _town("Pyskowice", "2020-01-01", n=3)}
+    assert rcnstats.build(snap, [], today=TODAY)["stale"] == []

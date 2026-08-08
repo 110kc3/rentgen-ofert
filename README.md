@@ -54,6 +54,22 @@ force-pushed fresh each run (the price history lives *inside*
   market / relists / price cuts. New sort: *Cena vs transakcje RCN ↑*. House
   zł/m² benchmarks are deliberately not published (the RCN budynki layer
   usually carries building-value fragments, not house sale prices).
+- **Register freshness — which powiats stopped reporting.** RCN is fed by each
+  powiat's own office and they do not keep pace: in 2026-08 Gliwice's newest
+  deed was **2026-02-25** while Katowice, Częstochowa and neighbouring Knurów
+  were current to mid-July. A stale town silently ages every RCN number and
+  makes *Sprzedane wg RCN* permanently empty there, so `rcnstats.py` publishes
+  each town's newest deed date (`towns.<town>.deeds`) plus a `stale[]` list of
+  the laggards. It surfaces in three places: the negotiation block warns that
+  the benchmark is older than it looks, the Statystyki note names the worst
+  offenders (or explains why the selected town's RCN line just stops), and the
+  empty *Sprzedane wg RCN* view says so outright instead of looking broken.
+- **Empty views explain themselves.** When a filter combination returns
+  nothing, the dashboard re-runs the filter with each dimension relaxed and
+  offers the ones that would bring results back ("Miejscowość: Gliwice — 43"),
+  rather than the old dead-end "Brak ofert dla wybranych filtrów". The two
+  archive segments carry live counts (*Archiwum · 1 534*, *Sprzedane wg RCN ·
+  43*) so a thin slice is visibly thin before you click it.
 - **Map view.** The dashboard's **🗺 Mapa** toggle plots the currently
   filtered listings on an OpenStreetMap map (Leaflet + clustering, loaded
   on demand), with markers colored by the listing's price vs local RCN
@@ -242,7 +258,8 @@ scraper/
   cache.py       photo-hash cache (URL -> hashes + gallery URLs), reused run-to-run
   delist.py      URL-verifies vanished listings before marking them "wycofane"
   rcn.py         RCN (notarial-deed prices) WFS pull + probabilistic sale matching
-  rcnstats.py    deed zł/m² benchmarks + ask-vs-sold gap -> rcnstats.json
+  rcnstats.py    deed zł/m² benchmarks + ask-vs-sold gap + per-town register
+                 freshness (stale powiats) -> rcnstats.json
   marketstats.py weekly/monthly market time series -> stats.json (Statystyki page)
   geo.py         UUG geocoding of towns/streets + EPSG:2180 -> WGS84 (map view)
   uldk.py        address -> canonical street + cadastral parcel (UUG + ULDK)

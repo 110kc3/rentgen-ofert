@@ -26,6 +26,9 @@ async function boot() {
     ]);
     state.data = data;
     state.gap = rcnstats && rcnstats.gap ? rcnstats.gap : null;
+    // towns whose powiat stopped reporting deeds — the RCN line simply ends
+    // there, which looks like "no transactions" unless we say otherwise
+    state.stale = (rcnstats && rcnstats.stale) || [];
   } catch (e) {
     $("main").innerHTML = `<div class="empty">Nie udało się wczytać danych (data/stats.json).</div>`;
     return;
@@ -303,8 +306,31 @@ function priceChart() {
     note: state.type === "house"
       ? "Linie RCN dotyczą tylko mieszkań — rejestr budynków nie niesie wiarygodnej ceny domu (fragmenty wartości większych aktów)."
       : (state.town ? "RCN pierwotny dostępny tylko dla całego województwa. Ostatnie miesiące mogą być puste — akty trafiają do rejestru z opóźnieniem." :
-                      "Ostatnie miesiące mogą być puste — akty notarialne trafiają do rejestru z opóźnieniem."),
+                      "Ostatnie miesiące mogą być puste — akty notarialne trafiają do rejestru z opóźnieniem.") + staleNote(),
   });
+}
+
+// must fold town names exactly like scraper/rcn.py _fold() — stats.json is keyed
+// by display name, rcnstats.stale[] by the folded one
+const foldTown = (s) => !s ? "" :
+  s.replace(/ł/g, "l").replace(/Ł/g, "L").normalize("NFKD")
+   .replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9 ]/g, " ").trim();
+
+/** The generic "deeds arrive late" caveat is true everywhere, but some powiats
+ *  are late by months and that is a different story — name them.
+ *  Returned as plain text: lineChart() escapes the whole note itself. */
+function staleNote() {
+  const stale = state.stale || [];
+  if (!stale.length) return "";
+  if (state.town) {
+    const key = foldTown(state.town);
+    const s = stale.find((x) => x.town === key);
+    return s
+      ? ` ⚠ Dla: ${state.town} rejestr kończy się na ${s.last} (${s.lag} dni temu) — linia RCN urywa się tam nie dlatego, że nie ma transakcji, tylko dlatego, że powiat ich jeszcze nie zgłosił.`
+      : "";
+  }
+  const worst = stale.slice(0, 4).map((s) => `${s.name} (${s.last})`).join(", ");
+  return ` ⚠ Nie każdy powiat raportuje na bieżąco — najbardziej opóźnione: ${worst}${stale.length > 4 ? ` i ${stale.length - 4} inne` : ""}.`;
 }
 
 function supplyChart() {

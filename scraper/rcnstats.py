@@ -11,6 +11,8 @@ pieces, both computed here so the browser only downloads a small lookup:
       from properties we watched vanish AND matched to a deed:
       med_pct  = median (deed price - last asking price) / asking, in %
       med_days = median days from first sighting to delisting
+  towns.<town>.deeds / stale[] -> {last, lag}   how current the register is for
+      that town (see _freshness — a stale town can confirm nothing recent)
 
 Buckets with fewer than MIN_N deeds are dropped — a thin median misleads more
 than it helps, so the dashboard shows nothing rather than a shaky number.
@@ -26,6 +28,15 @@ WINDOW_MONTHS = 24
 MIN_N = 5            # fewer deeds than this -> no benchmark published
 PPM_MIN, PPM_MAX = 500, 40000   # zl/m2 outside this is a data error / udział
 GAP_MAX_PCT = 40     # |deed vs ask| beyond this is a mismatch, not a discount
+
+STALE_DAYS = 90        # newest deed older than this -> the town is flagged stale
+STALE_MIN_DEEDS = 1000 # ...but only for towns big enough for it to be news.
+                       # Calibrated on the 2026-08 snapshot (479 towns): at 50 the
+                       # list is 64 hamlets that simply have no market (Paczynka's
+                       # last deed is 2021) and the real cities are buried; at 1000
+                       # it is 7 towns, all of them places you might actually buy in
+                       # (Tarnowskie Góry, Radzionków, Piekary, Gliwice, Sosnowiec…).
+STALE_MAX = 30         # cap the published list
 
 FLAT_BUCKETS = ((40, "<40"), (60, "40-59"), (80, "60-79"), (120, "80-119"), (None, "120+"))
 HOUSE_BUCKETS = ((100, "<100"), (150, "100-149"), (220, "150-219"), (None, "220+"))
@@ -102,6 +113,64 @@ def _bucket_stats(snapshot, cutoff, min_n):
     return out
 
 
+def _display_name(counter):
+    """The register mixes casings — 'RYBNIK' and 'PIEKARY ŚLĄSKIE' arrive
+    shouting next to 'Rybnik'. Prefer the commonest mixed-case spelling, and
+    title-case a name that only ever shows up in capitals."""
+    shouted = None
+    for name, _ in counter.most_common():
+        if not name.isupper():
+            return name
+        shouted = shouted or name
+    return shouted.title() if shouted else None
+
+
+def _freshness(snapshot, today):
+    """town(folded) -> {name, last, lag, n}: the newest deed the register holds
+    for that town and how many days behind `today` that is.
+
+    RCN is fed by each powiat's own office and they do not report at the same
+    pace. In 2026-08 Gliwice's newest deed was 2026-02-25 while Katowice,
+    Częstochowa and neighbouring Knurów were current to mid-July — so no Gliwice
+    listing could be confirmed sold, however long we watched it. That is a fact
+    about the register, not about the market, and the dashboard has to be able
+    to say so instead of just rendering an empty view.
+
+    Both layers are scanned: the lag is a property of the reporting office, not
+    of one layer (the two agreed exactly for every town checked).
+    """
+    seen = {}
+    names = {}
+    folded = {}          # msc -> folded key; _fold over ~666k rows is worth caching
+    for rows in (snapshot.get("lokale") or [], snapshot.get("budynki") or []):
+        for r in rows:
+            d, msc = r.get("d"), r.get("msc")
+            if not d or not msc:
+                continue
+            town = folded.get(msc)
+            if town is None:
+                town = folded[msc] = _fold(msc)
+            if not town:
+                continue
+            names.setdefault(town, Counter())[msc] += 1
+            e = seen.get(town)
+            if e is None:
+                seen[town] = {"last": d, "n": 1}
+            else:
+                e["n"] += 1
+                if d > e["last"]:
+                    e["last"] = d
+
+    t0 = dt.date.fromisoformat(today)
+    for town, e in seen.items():
+        e["name"] = _display_name(names[town])
+        try:
+            e["lag"] = (t0 - dt.date.fromisoformat(e["last"])).days
+        except ValueError:
+            e["lag"] = None
+    return seen
+
+
 def gap_pairs(records):
     """(town, town_display, type, gap_pct, days_on_market) for every watched
     property that vanished and got an RCN deed attached.
@@ -145,7 +214,7 @@ def _gap_summary(pairs):
 
 
 def build(snapshot, records, today=None,
-          window_months=WINDOW_MONTHS, min_n=MIN_N):
+          window_months=WINDOW_MONTHS, min_n=MIN_N, stale_days=STALE_DAYS):
     """Assemble the rcnstats.json payload. Small: towns x buckets x 2 markets."""
     today = today or dt.date.today().isoformat()
     # real calendar months back, not months*30 days (720 days ≠ the advertised
@@ -175,5 +244,20 @@ def build(snapshot, records, today=None,
         if g:
             gap[key] = g
 
+    # how current the register is, per town — attached to the towns the
+    # dashboard already looks up, plus a standalone list of the laggards
+    fresh = _freshness(snapshot or {}, today)
+    for town, entry in towns.items():
+        f = fresh.get(town)
+        if f and f.get("lag") is not None:
+            entry["deeds"] = {"last": f["last"], "lag": f["lag"]}
+    stale = sorted(
+        ({"town": t, "name": f["name"], "last": f["last"], "lag": f["lag"]}
+         for t, f in fresh.items()
+         if f.get("lag") is not None and f["lag"] > stale_days
+         and f["n"] >= STALE_MIN_DEEDS),
+        key=lambda x: -x["lag"])[:STALE_MAX]
+
     return {"built": today, "window_months": window_months, "min_n": min_n,
-            "towns": towns, "gap": gap}
+            "towns": towns, "gap": gap,
+            "stale_days": stale_days, "stale": stale}

@@ -1,7 +1,43 @@
 # TODO — rentgen-ofert
 
 > Keep this file and `README.md` updated after each change.
-> Last updated: 2026-07-14
+> Last updated: 2026-08-08
+
+## Done (2026-08-08) — "Sprzedane wg RCN shows nothing"
+Reported as a broken filter; it was not broken. The real findings, in order:
+- [x] **The filter works** — the deployed `app.js` run against the live
+      `archive.json` returns 43 rows and renders them. It looked dead because
+      **none of the 43 are in Gliwice**, and the town filter persists between
+      visits (localStorage + URL), so a Gliwice-shaped view is always empty.
+- [x] **Root cause: the register, not the tool.** RCN is fed by each powiat's
+      own office. Gliwice's newest deed is **2026-02-25** — 164 days stale —
+      while Katowice/Częstochowa/Bytom sit at 18–19 days and neighbouring
+      Knurów (a different office: powiat gliwicki, not the city) is current.
+      A sale is confirmed by a deed dated around when the ad vanished, so **no
+      Gliwice listing can ever be confirmed sold** until that office catches
+      up. Both RCN layers agree on the date, so it is the office, not a layer.
+- [x] **`rcnstats.py` publishes freshness**: `towns.<t>.deeds {last, lag}` for
+      every benchmarked town plus a `stale[]` list of laggards. Threshold
+      calibrated on the real snapshot (479 towns): `STALE_MIN_DEEDS = 1000`
+      gives 7 real towns; at 50 it was 64 hamlets with no market at all
+      (Paczynka's last deed is 2021) and the cities were buried. Register
+      casing is normalised too — it ships `RYBNIK` next to `Rybnik`.
+- [x] **Surfaced in three places**: the negotiation block ("powyższe liczby są
+      starsze niż wyglądają"), the Statystyki chart note, and the empty
+      *Sprzedane wg RCN* view.
+- [x] **Empty views now name the culprit filter.** On an empty grid the filter
+      is re-run with each dimension relaxed and the ones that would restore
+      results become one-click buttons with their counts. Chip-clearing was
+      factored into `clearFilter()` so chips and the empty state share it.
+- [x] **Counts on the archive segments** (`Archiwum · 1 534`,
+      `Sprzedane wg RCN · 43`) from `meta.json`, dropping to the filtered count
+      with a "0 z 43" tooltip when your other filters exclude everything.
+
+Still open from this round:
+- [ ] **Gliwice cannot confirm sales until the powiat reports.** Nothing to fix
+      in code — worth re-checking `rcnstats.json`'s `stale[]` every few weeks.
+      If Gliwice is still ~6 months behind by 2026-10, the *Sprzedane wg RCN*
+      view is decorative for this region and could be folded into *Archiwum*.
 
 ## Done (bug sweep — 2026-07-11)
 Full-codebase review (4 areas: scrapers, pipeline, RCN/stats, dashboard);
