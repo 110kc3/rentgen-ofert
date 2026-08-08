@@ -1,4 +1,4 @@
-"""morizon.pl scraper for Gliwice + powiat gliwicki sale listings.
+"""morizon.pl scraper — region-wide sale listings (RENTGEN_REGION).
 
 morizon uses the same server-rendered ``data-cy`` card frontend as gratka (same
 media group), so the parsing mirrors the gratka scraper.
@@ -44,12 +44,13 @@ def _first_price(text):
 def _locality(location):
     """City = the broadest (last) breadcrumb part of 'street, district, city,
     voivodeship', e.g. 'Tarnogórska, Szobiszowice, Gliwice, śląskie' -> 'Gliwice'
-    (taking the first segment stored street names like 'Tarnogórska' as fake towns)."""
+    (taking the first segment stored street names like 'Tarnogórska' as fake towns).
+
+    Nothing is folded by prefix — see the note in gratka._locality()."""
     parts = location_parts(location)
     if not parts:
         return None
-    city = parts[-1]
-    return "Gliwice" if city.startswith("Gliwice") else (city or None)
+    return parts[-1] or None
 
 
 def _district(location):

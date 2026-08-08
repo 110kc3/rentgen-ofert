@@ -186,6 +186,7 @@ RENTGEN_MAX_PAGES=3 RENTGEN_DELAY=0.3 python -m scraper.main
 | `RENTGEN_RCN` | 1 | `0` skips RCN; `force` re-pulls the transaction snapshot now |
 | `RENTGEN_GEO` | 1 | `0` skips geocoding listings for the map view |
 | `RENTGEN_GEO_MAX` | 500 | max new UUG geocoder lookups per run (cache does the rest) |
+| `RENTGEN_NOL_TOWNS` | 60 | max nieruchomości-online town sub-domains per region |
 
 **Rate limiting (HTTP 429):** the scraper backs off and retries automatically. If a
 portal still rate-limits you (nieruchomości-online is strict, especially on repeat
@@ -239,9 +240,16 @@ python -m pytest -q          # parser + dedupe unit tests (offline, use fixtures
 
 ## Customise
 
-- **Region** — set `RENTGEN_REGION` (a voivodeship slug); see the
-  whole-Poland plan in `TODO.md` before going multi-region. For rentals or
-  other scopes, edit the `SEARCH` URLs in each `scraper/<portal>.py`.
+- **Region** — set `RENTGEN_REGION` (a voivodeship slug). The scrapers, caches,
+  data dir and RCN pull are all region-driven; nieruchomości-online (which has
+  no region-wide search) derives its town list from the other portals' results
+  and caches it in `cache/nol_towns.json`. For the dashboard, add an entry to
+  `REGION_CONFIG` in `site/app.js` — the label and the optional
+  distance-from-anchor filter; a region without an anchor city simply hides that
+  control. **Read the whole-Poland plan in `TODO.md` first**: every portal's
+  pagination cap already truncates śląskie, so a second region would add a
+  second partially-scraped dataset until that is fixed. For rentals or other
+  scopes, edit the `SEARCH` URLs in each `scraper/<portal>.py`.
 - **Add a portal** — write a module exposing `scrape(max_pages, delay, ...)`
   that returns the shared listing dict (see the docstring in
   `scraper/normalize.py`) and add it to `SOURCES` in `scraper/main.py`.
@@ -269,6 +277,7 @@ cache/                 (on the `data` branch, gitignored on main)
   phash_<region>.json   gallery-hash cache, reused run-to-run (auto-pruned)
   rcn_<region>.json.gz  RCN transaction snapshot (refreshed weekly)
   geo_cache.json        geocode cache, shared across regions (town/street -> lat,lon)
+  nol_towns.json        per-region town lists for n-online (slug -> display name)
 site/
   index.html  app.js  styles.css        listings dashboard + map view (GitHub Pages)
   stats.html  stats.js  stats.css       Statystyki market dashboard (SVG charts)

@@ -50,6 +50,60 @@ def test_nieruchomosci_online_parse_offers():
         assert r["price"] is None or isinstance(r["price"], int)
 
 
+# --- n-online town resolution (no region-wide search, no portal index) -------
+
+def test_nol_slugify_matches_every_seeded_subdomain():
+    """The derived slug has to spell sub-domains exactly as the portal does —
+    the hand-curated śląskie list is the ground truth for that."""
+    for slug, name in nol.SEED_TOWNS["slaskie"].items():
+        assert nol.slugify(name) == slug, f"{name} -> {nol.slugify(name)} != {slug}"
+
+
+def test_nol_resolve_towns_derives_from_other_portals(tmp_path):
+    """A region with no seed list still gets a town list, built from the
+    localities the other four portals already returned this run."""
+    cache = tmp_path / "nol_towns.json"
+    listings = ([{"locality": "Kraków"}] * 3 + [{"locality": "Nowy Sącz"}] * 2
+                + [{"locality": "Zakopane"}] + [{"locality": ""}])
+    towns = nol.resolve_towns("malopolskie", listings, cache_path=cache)
+    assert towns == {"krakow": "Kraków", "nowy-sacz": "Nowy Sącz",
+                     "zakopane": "Zakopane"}
+    # busiest first, and the empty locality contributed nothing
+    assert list(towns) == ["krakow", "nowy-sacz", "zakopane"]
+    # cached for the next run, per region
+    assert json.loads(cache.read_text(encoding="utf-8"))["malopolskie"] == towns
+
+
+def test_nol_resolve_towns_seed_wins_and_survives_a_dead_portal(tmp_path):
+    cache = tmp_path / "nol_towns.json"
+    # śląskie keeps its curated spelling even when a portal reports nothing
+    towns = nol.resolve_towns("slaskie", [], cache_path=cache)
+    assert towns["dabrowa-gornicza"] == "Dąbrowa Górnicza"
+    assert len(towns) == len(nol.SEED_TOWNS["slaskie"])
+    # a later run with no listings at all still has the cached list
+    again = nol.resolve_towns("slaskie", None, cache_path=cache)
+    assert again == towns
+
+
+def test_nol_resolve_towns_skips_powiat_names(tmp_path):
+    """Portals leak powiat names into the locality field, always in the
+    lowercase adjectival form ('cieszyński'). They are not towns."""
+    listings = [{"locality": "cieszyński"}] * 9 + [{"locality": "Cieszyn"}]
+    towns = nol.resolve_towns("malopolskie", listings, cache_path=tmp_path / "c.json")
+    assert towns == {"cieszyn": "Cieszyn"}
+
+
+def test_nol_resolve_towns_caps_the_list(tmp_path):
+    """Each town costs at least one request per type, so the tail is dropped —
+    seeded towns rank above discovered ones."""
+    listings = [{"locality": f"Wioska {i}"} for i in range(200)]
+    towns = nol.resolve_towns("slaskie", listings,
+                              cache_path=tmp_path / "c.json", max_towns=50)
+    assert len(towns) == 50
+    assert "katowice" in towns          # seeded, kept
+    assert "wioska-199" not in towns    # discovered tail, dropped
+
+
 def test_nieruchomosci_online_filters_rentals():
     offers = [
         {"url": "https://x/dom,na-wynajem/1.html", "price": "3000", "itemOffered": {}},

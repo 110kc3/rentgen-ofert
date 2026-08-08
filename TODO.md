@@ -3,6 +3,53 @@
 > Keep this file and `README.md` updated after each change.
 > Last updated: 2026-08-08
 
+## Done (2026-08-08) — de-Gliwice-ing (whole-Poland rollout step 2)
+- [x] **`normalize.CITY` deleted** — dead constant, referenced nowhere.
+- [x] **n-online town list is per region now.** The portal has no region-wide
+      search, so it needs a town list — and (probed 2026-08-08) it publishes
+      nothing to build one from: `/sitemap.xml` 404s, robots.txt declares no
+      sitemap, and its region landing pages name no towns at all. So
+      `resolve_towns()` derives the list from the localities the other four
+      portals already returned this run (they run first in `SOURCES` precisely
+      for this, so a brand-new region works on its FIRST run), ranked by
+      listing count, capped at `RENTGEN_NOL_TOWNS=60`, cached in
+      `cache/nol_towns.json` so a dead portal can't wipe it. Śląskie keeps its
+      hand-curated seed list, which also wins on spelling. `town_name()`'s
+      `slug.title()` fallback is gone — an unmapped slug now yields no locality
+      rather than inventing "Dabrowa-Gornicza" and splitting dedupe keys.
+      `slugify()` is tested against every seeded sub-domain.
+- [x] **Dashboard anchor city is per-region config.** `REGION_CONFIG` in
+      `app.js` carries the label, the anchor city (with its Polish genitive for
+      "od Gliwic") and the district→city fold that used to be
+      `GLIWICE_DISTRICTS`. A region with no anchor hides the distance control
+      instead of silently filtering everything out. Page title/h1 relabel for
+      non-śląskie regions (static meta stays śląskie until a region picker
+      exists). ⚠️ Found while testing: `const REGION` was declared *below* the
+      new config that reads it — temporal dead zone, the page died on load.
+      Caught by running the real `app.js` in node, not by `node --check`.
+- [x] **`distOf` prefers the listing's own `ll`** over the ~90-entry
+      `TOWN_COORDS` table, which closes the "Precise distances" backlog item:
+      the radius filter now works in any region, and coverage went 82.2% →
+      84.9% in śląskie. `TOWN_COORDS` stays as the fallback purely because
+      archive entries still have no `ll`.
+- [x] **Dropped the `startswith("Gliwice")` locality fold** in gratka/morizon.
+      Checked against live data first: no locality starting with "Gliwice"
+      other than "Gliwice" exists, so it never fired — and generalising it
+      would corrupt real villages ('Żarki-Letnisko' is not 'Żarki', 'Góra
+      Włodowska' is not 'Góra'). Deleted rather than generalised.
+- [x] Stale "scraper for Gliwice" module docstrings corrected to region-wide.
+
+Found while doing this, NOT fixed (own item):
+- [ ] **Powiat names sit in the `locality` field of 2 586 listings.** Always the
+      lowercase adjectival form — `cieszyński` (406), `bielski` (372),
+      `tarnogórski` (292), 17 in total — so a powiat shows up as a "town" in the
+      dashboard's town multi-select, and those listings are geocoded to a powiat
+      rather than a place. `resolve_towns()` now skips them (case is a reliable
+      filter: all 318 real localities are capitalised), but the underlying
+      breadcrumb parsing in gratka/morizon still lets them through. Fix where
+      `_locality()` picks the last segment: if it is lowercase, fall back to the
+      segment before it.
+
 ## Done (2026-08-08) — "Sprzedane wg RCN shows nothing"
 Reported as a broken filter; it was not broken. The real findings, in order:
 - [x] **The filter works** — the deployed `app.js` run against the live
@@ -195,19 +242,72 @@ shards + hashed filenames. Do it before adding a second region.
       expanded; same hash implemented in app.js, parity-tested). Offers list
       became a collapsible section. Verified in a real browser: first paint
       from the index alone, 1 shard fetch on first expand, 0 before.
-- [ ] **Multi-voivodeship / whole Poland — NEXT.** Prerequisites all done;
-      start with the pilot region (małopolskie or dolnośląskie) per the
+- [ ] **Multi-voivodeship / whole Poland — NEXT.** Krok 1 + Krok 3 shipped
+      2026-07-11. Re-audit 2026-08-08 found the blocker is no longer storage
+      but **coverage**: every paginated portal already hits its cap inside
+      śląskie, so a second region would only add a second partially-scraped
+      dataset. Start with overflow detection + subdivision, per the revised
       rollout order below ↓.
 - [ ] **Licytacje komornicze — "deweloperuch dla licytacji"** (nationwide
       bailiff auctions + RCN gap per auction). Feasibility verified
       2026-07-14; full plan in its own section below ↓.
 
-## Plan: scraping whole Poland (notes, 2026-07-07)
+## Plan: scraping whole Poland (notes 2026-07-07, re-audited 2026-08-08)
 
 Region (voivodeship) stays the unit of everything: one scrape job, one data
 dir, one dashboard, one RCN snapshot per region. "Poland" = 16 regions, not
-one giant run. Rough scale: Śląskie is ~18k unique / ~29k raw listings, Poland
+one giant run. Rough scale: Śląskie is ~18k unique / ~21k raw listings, Poland
 is ~8–12× that (Otodom alone lists ~250k sales nationwide).
+
+### Status of this plan (re-audit 2026-08-08)
+**Krok 1 and Krok 3 are DONE** (2026-07-11) — region is already the build unit
+and the storage switch has shipped. What is left is Krok 0, Krok 2, and two
+things this plan did not know about, below.
+
+**The finding that reorders everything: the pagination caps are already
+binding in śląskie, today.** From the last successful run's logs:
+
+```
+gratka  flat/slaskie  page 50   morizon flat/slaskie  page 50
+gratka  house/slaskie page 50   morizon house/slaskie page 50
+otodom  flat          page 50   olx     flat          page 25  <- OLX hard cap
+otodom  house         page 50   olx     house         page 25
+```
+
+gratka/morizon only break on a 404 or an empty page, so reaching the cap means
+they never ran out of results. Corroborating signal in the same run:
+**n-online returns 10 178 raw listings, Otodom only 3 310** — and Otodom is by
+far the bigger portal nationally. n-online leads precisely because it is the
+one scraper that already subdivides (~40 town subdomains, each paginated), so
+no single search hits a cap.
+
+So "whole Poland" is not 16× the current pipeline — **the current pipeline
+does not fully cover even one region.** Subdivision has to come first, and it
+makes each region bigger and slower, which invalidates every estimate below
+that was made from today's śląskie run.
+
+### Measured cost per region (śląskie, 2026-08-08)
+| | |
+|---|---|
+| scrape runtime | 85–110 min, 2×/day |
+| published to Pages | 53 MB (74 MB less `history.json.gz`, which deploy.yml strips) |
+| on the `data` branch | 141 MB — site/data 74 + phash 54.3 + RCN 12.2 |
+| RCN snapshot | 12.2 MB gz, 666k deeds (198k lokale + 468k budynki) |
+
+Naive ×16, *before* the coverage fix makes regions bigger:
+- **Pages ~850 MB against the 1 GB soft cap** — and śląskie is mid-sized. This
+  is the new hard ceiling, now that Krok 3 removed the old one.
+- **`data` branch ~2.3 GB, and every region's run would fetch all of it**:
+  `update.yml` does `git fetch origin data` + checkout of `site/data cache`
+  regardless of which region it is scraping. Fix before region #2 — one branch
+  per region (`data-slaskie`, `data-malopolskie`) so a job pulls only its own
+  ~140 MB.
+- Runtime is *not* a cost problem: the repo is public, so Actions minutes are
+  unmetered. Portal rate-limiting is the constraint — hence the staggered
+  1×/day-per-region matrix in Krok 2.
+- Portal 403s are real and already observable: Otodom serves the search JSON to
+  GitHub runners but refuses this Pi's residential IP (`__NEXT_DATA__ not
+  found`). Relevant if scraping ever moves off CI.
 
 ### Krok 0 — de-Gliwice the code (prereq, cheap)
 - 4/5 scrapers already take `RENTGEN_REGION` as a URL slug (otodom, olx,
@@ -228,12 +328,12 @@ is ~8–12× that (Otodom alone lists ~250k sales nationwide).
   every portal's cap — without this, coverage silently drops and the delist
   sweep starts URL-checking thousands of "missing" listings.
 
-### Krok 1 — layout: region = build unit
-- `site/data/<region>/{listings,history,archive,meta,rcnstats,stats}.json`;
-  per-region caches (`cache/phash_<region>.json`, `cache/rcn_<region>.json.gz`).
-- Dashboard + stats page load from the region's data dir (path or `?region=`);
-  root `index.html` becomes a region picker with per-region counts.
-- TERYT map for RCN already covers all 16 regions — nothing to do there.
+### Krok 1 — layout: region = build unit  ✅ DONE 2026-07-11
+- `site/data/<region>/…` + per-region caches (`cache/phash_<region>.json`,
+  `cache/rcn_<region>.json.gz`); dashboard + stats read `data/<region>/` via
+  `?region=`. TERYT map for RCN already covers all 16 regions.
+- Still open from this step: root `index.html` is not yet a region picker with
+  per-region counts (single region, so nothing to pick between).
 
 ### Krok 2 — CI
 - Matrix over regions with `max-parallel: 1–2` and staggered crons (each
@@ -248,28 +348,38 @@ is ~8–12× that (Otodom alone lists ~250k sales nationwide).
   order: lower frequency, local scrape + push (already supported — output
   files ARE the cache), self-hosted runner.
 
-### Krok 3 — storage (the actual blocker)
-- **GitHub hard limits bite before anything else**: 100 MB/file (śląskie
-  history.json is already 63 MB — Mazowieckie will cross 100 MB), repo grows
-  by ~40 MB of JSON diffs per commit × 16 regions × daily, Pages caps at
-  1 GB site / 100 GB-mo bandwidth.
-- Stop committing data into main's history before it balloons. Options:
-  (a) orphan `data` branch, force-pushed each run (keeps "local scrape IS
-  the cache" workflow, history stays 1 commit deep);
-  (b) no commit at all — carry history.json between runs as an Actions
-  artifact/cache and deploy Pages straight from the artifact;
-  (c) external storage (Cloudflare R2 / S3) once even that outgrows.
-- Shard or gzip history.json per region either way; the browser never loads
-  it, only the pipeline does.
-- The **"Payload split"** backlog item above stops being optional at this
-  scale: per-region slim index + lazy detail shards, hashed filenames.
+### Krok 3 — storage  ✅ DONE 2026-07-11 (option (a))
+- Orphan `data` branch, force-pushed as one commit each run; history gzipped
+  (63 MB → 21 MB) and stripped from the Pages artifact by `deploy.yml`; payload
+  split into slim index + 64 lazy detail shards. Main carries code only.
+- **What the 2026-08-08 re-audit adds**: the per-file and repo-history limits
+  are solved, but two new ceilings appear at 16 regions — the 1 GB Pages cap
+  (~850 MB projected) and the whole-branch fetch in `update.yml`. See "Measured
+  cost per region" above. Option (c) (R2/S3) remains the escape hatch if the
+  Pages cap is reached before the region set is complete.
 
-### Rollout order
-1. Krok 0 audit + fixes, still śląskie-only (no behavior change).
-2. Pilot ONE extra region end-to-end (małopolskie or dolnośląskie — mid-size,
-   tests the n-online gap and the overflow subdivision).
-3. Krok 3 storage switch while the repo is still small.
-4. Add regions in batches of 3–4, watching portal error rates in meta.json.
+### Rollout order (revised 2026-08-08 — Krok 1 and 3 already shipped)
+1. [ ] **Overflow detection + subdivision.** The real prerequisite now that the
+   caps are known to bind. Log when a search ends on `page == cap`, then
+   subdivide: per-powiat URLs (36 in śląskie, 380 in Poland) or price-band
+   slices, generalising what `nieruchomosci_online.py` already does per town.
+   Validate on śląskie alone, where the coverage gain is measurable against
+   today's 21k raw / 17.8k unique. Do this first: it changes every size and
+   runtime estimate, and without it a second region just adds a second
+   partially-scraped dataset.
+2. [x] **Finish de-Gliwice-ing — done 2026-08-08.** Dead `normalize.CITY`
+   removed; `nieruchomosci_online.py` builds its town list per region from the
+   portal's own city index (cached, with the śląskie list as fallback);
+   dashboard anchor city is per-region config (`REGION_ANCHOR` in `app.js`)
+   instead of a hardcoded Gliwice, and `GLIWICE_DISTRICTS` became a per-region
+   district→city fold. See the Done section at the top.
+3. [ ] **Split the `data` branch per region** (`data-<region>`) before region #2
+   exists — same reasoning as doing Krok 3 early: cheap now, painful later.
+4. [ ] **Pilot ONE extra region** end-to-end (małopolskie or dolnośląskie —
+   mid-size, exercises the n-online city index and the subdivision).
+5. [ ] **Region picker** on the root page with per-region counts.
+6. [ ] **Krok 2 CI matrix**, then add regions in batches of 3–4, watching portal
+   error rates in `meta.json` and the total Pages payload against the 1 GB cap.
 - [ ] **Sparkline price chart** on cards instead of the text price trail.
 - [ ] **Rental listings dataset** -> estimated gross yield per sale listing
       from rental comps (town + size bucket); attracts the investor crowd.

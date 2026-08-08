@@ -8,6 +8,8 @@ const PLN = new Intl.NumberFormat("pl-PL");
 const REGION = ((new URLSearchParams(location.search).get("region") || "slaskie")
   .replace(/[^a-z-]/g, "")) || "slaskie";
 const DATA = `data/${REGION}`;
+// keep in sync with REGION_CONFIG[...].label in app.js (this page needs only the name)
+const REGION_LABEL = { slaskie: "woj. śląskie" };
 const $ = (sel) => document.querySelector(sel);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -36,6 +38,12 @@ async function boot() {
   if (REGION !== "slaskie") {              // keep the region across page links
     const a = document.querySelector('a[href="index.html"]');
     if (a) a.href = `index.html?region=${REGION}`;
+    // static markup is written for śląskie; relabel for any other region
+    // (REGION_LABEL mirrors REGION_CONFIG[...].label in app.js)
+    const lab = REGION_LABEL[REGION] || REGION;
+    document.title = `Statystyki rynku — Rentgen ofert, ${lab}`;
+    const h1 = document.querySelector("header h1");
+    if (h1) h1.textContent = `Statystyki rynku — ${lab}`;
   }
   $("#stats").innerHTML = `dane z ${esc(state.data.built || "—")} · oferty tygodniowo (od startu narzędzia) · akty notarialne miesięcznie (RCN/GUGiK)`;
   const towns = Object.keys(state.data.weekly.towns || {});

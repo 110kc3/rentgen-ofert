@@ -1,4 +1,4 @@
-"""OLX scraper for Gliwice sale listings.
+"""OLX scraper — region-wide sale listings (RENTGEN_REGION).
 
 OLX embeds its search state in a `window.__PRERENDERED_STATE__ = "..."`
 assignment where the value is a JSON string that has itself been JSON-encoded

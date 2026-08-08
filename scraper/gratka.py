@@ -1,8 +1,10 @@
-"""gratka.pl scraper for Gliwice + powiat gliwicki sale listings.
+"""gratka.pl scraper — region-wide sale listings (RENTGEN_REGION).
 
 gratka hydrates its Nuxt state client-side (``window.__NUXT__`` is empty) but
 renders result cards server-side with stable ``data-cy`` hooks, parsed here with
-BeautifulSoup. Gliwice city and the surrounding powiat are separate search URLs.
+BeautifulSoup. `SEARCH` keeps a list of base URLs per type so a region can be
+split into several searches — needed once the pagination cap forces per-powiat
+subdivision (see TODO.md, whole-Poland plan).
 """
 from __future__ import annotations
 
@@ -47,12 +49,17 @@ def _locality(location):
     e.g. 'Szafirowa, Stare Gliwice, Gliwice, śląskie' -> 'Gliwice'. Gratka/Morizon
     order the breadcrumb specific->general, so the city is the last segment after
     the voivodeship is dropped (taking the first stored street names like
-    'Szafirowa' as fake towns)."""
+    'Szafirowa' as fake towns).
+
+    Nothing is folded by prefix. A `startswith("Gliwice")` special case lived
+    here from the Gliwice-city days; voivodeship-wide it never fires (no such
+    locality exists in the data), and generalising it would corrupt real
+    villages — 'Żarki-Letnisko' is not 'Żarki', 'Góra Włodowska' is not 'Góra'.
+    """
     parts = location_parts(location)
     if not parts:
         return None
-    city = parts[-1]
-    return "Gliwice" if city.startswith("Gliwice") else (city or None)
+    return parts[-1] or None
 
 
 def _district(location):

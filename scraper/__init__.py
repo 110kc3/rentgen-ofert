@@ -1,1 +1,1 @@
-"""rentgen-ofert: aggregate Gliwice house & flat sale listings into one place."""
+"""rentgen-ofert: aggregate a voivodeship's house & flat sale listings into one place."""

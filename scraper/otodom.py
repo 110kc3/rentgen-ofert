@@ -1,4 +1,4 @@
-"""Otodom scraper for Gliwice sale listings.
+"""Otodom scraper — region-wide sale listings (RENTGEN_REGION).
 
 Otodom is a Next.js app that ships the full search result set inside a
 `<script id="__NEXT_DATA__">` JSON blob in the initial HTML, so no headless

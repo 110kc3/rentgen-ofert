@@ -9,19 +9,46 @@ const HIST_LABEL = { relisted: "Wystawione ponownie", dropped: "Z obniżką", rc
 const MARKET_LABEL = { secondary: "Rynek wtórny", primary: "Inwestycje (rynek pierwotny)" };
 const inArchive = () => state.history === "sold" || state.history === "sold_rcn";
 
-// Gliwice neighbourhoods that sometimes arrive as a "locality" -> fold into Gliwice
-const GLIWICE_DISTRICTS = new Set([
-  "Śródmieście", "Sośnica", "Trynek", "Łabędy", "Wójtowa Wieś", "Szobiszowice",
-  "Ostropa", "Żerniki", "Brzezinka", "Stare Gliwice", "Wilcze Gardło", "Bojków",
-  "Sikornik", "Zatorze", "Kopernik", "Politechnika", "Obrońców Pokoju",
-  "Ligota Zabrska", "Czechowice", "Baildona", "Sośnica Wschód",
-]);
-const normLoc = (loc) => (!loc ? null : GLIWICE_DISTRICTS.has(loc) ? "Gliwice" : loc);
+// data lives per voivodeship in data/<region>/ (see TODO.md "storage switch");
+// ?region=malopolskie switches once more regions are scraped. Declared here
+// because the per-region config below reads it — `const` has no hoisting, so
+// moving this back down puts REGION in the temporal dead zone and the page
+// dies on load.
+const REGION = ((new URLSearchParams(location.search).get("region") || "slaskie")
+  .replace(/[^a-z-]/g, "")) || "slaskie";
+const DATA = `data/${REGION}`;
 
-// town -> [lat, lon]; distance from Gliwice powers the (optional) radius filter.
-// Voivodeship-wide this can't cover every village, so the town filter is the
-// primary geographic control and distance is just a convenience for known towns.
-const GLIWICE = [50.2945, 18.6714];
+// ---- per-region dashboard config -------------------------------------------
+// Adding a voivodeship = adding an entry here. `anchor` is the city the optional
+// radius filter measures from (omit it and the control hides itself); `gen` is
+// the Polish genitive for the label ("od Gliwic"). `districts` maps neighbourhood
+// names that portals sometimes return in the locality field onto their parent
+// city, so they don't become separate towns in the filter list.
+// KNOWN LIMITATION: district names are not unique across Poland ("Śródmieście"
+// exists in most cities), so this fold is only safe while one region is live.
+// Keying it on district+city needs a city the portals often don't send.
+const REGION_CONFIG = {
+  slaskie: {
+    label: "woj. śląskie",
+    anchor: { name: "Gliwice", gen: "Gliwic", ll: [50.2945, 18.6714] },
+    districts: [
+      "Śródmieście", "Sośnica", "Trynek", "Łabędy", "Wójtowa Wieś", "Szobiszowice",
+      "Ostropa", "Żerniki", "Brzezinka", "Stare Gliwice", "Wilcze Gardło", "Bojków",
+      "Sikornik", "Zatorze", "Kopernik", "Politechnika", "Obrońców Pokoju",
+      "Ligota Zabrska", "Czechowice", "Baildona", "Sośnica Wschód",
+    ].reduce((m, d) => (m[d] = "Gliwice", m), {}),
+  },
+};
+const CFG = REGION_CONFIG[REGION] || {};
+const ANCHOR = CFG.anchor || null;
+const DISTRICTS = CFG.districts || {};
+const anchorLabel = () => (ANCHOR ? (ANCHOR.gen || ANCHOR.name) : "");
+const normLoc = (loc) => (!loc ? null : (DISTRICTS[loc] || loc));
+
+// town -> [lat, lon]: the FALLBACK for the radius filter. Listings now carry
+// their own UUG-geocoded `ll` (86% of them), which distOf prefers — this table
+// only still earns its place because archive entries have no `ll` yet. It is
+// śląskie-only; other regions rely on `ll` alone.
 const TOWN_COORDS = {
   "Gliwice": [50.2945, 18.6714], "Knurów": [50.2197, 18.6741], "Pyskowice": [50.3958, 18.6286],
   "Gierałtowice": [50.2069, 18.7333], "Pilchowice": [50.1814, 18.6047], "Sośnicowice": [50.2206, 18.5378],
@@ -63,21 +90,19 @@ function haversine(a, b) {
   const h = Math.sin(dLa / 2) ** 2 + Math.cos(a[0] * p) * Math.cos(b[0] * p) * Math.sin(dLo / 2) ** 2;
   return Math.round(2 * R * Math.asin(Math.sqrt(h)));
 }
-function distOf(locality) {
-  const n = normLoc(locality);
-  const c = n && TOWN_COORDS[n];
-  return c ? haversine(GLIWICE, c) : null;
+/** km from the region's anchor city. Prefers the listing's own geocoded point
+ *  (street- or town-precise, and it exists for every region) and falls back to
+ *  TOWN_COORDS for records without one — chiefly archive entries. */
+function distOf(l) {
+  if (!ANCHOR || !l) return null;
+  if (Array.isArray(l.ll) && l.ll.length === 2) return haversine(ANCHOR.ll, l.ll);
+  const c = TOWN_COORDS[normLoc(l.locality)];
+  return c ? haversine(ANCHOR.ll, c) : null;
 }
 
 const state = { all: [], archive: null, type: "all", source: "all", owner: "all", history: "all", market: "all", distance: "all", sort: "newest", localities: [] };
 let locOptions = [];                         // [ [name, count], ... ] sorted by count
 const FILTER_KEY = "rentgen.filters.v2";
-
-// data lives per voivodeship in data/<region>/ (see TODO.md "storage switch");
-// ?region=malopolskie switches once more regions are scraped
-const REGION = ((new URLSearchParams(location.search).get("region") || "slaskie")
-  .replace(/[^a-z-]/g, "")) || "slaskie";
-const DATA = `data/${REGION}`;
 
 const $ = (sel) => document.querySelector(sel);
 const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) =>
@@ -123,7 +148,14 @@ async function boot() {
   if (REGION !== "slaskie") {              // keep the region across page links
     const a = document.querySelector('a[href="stats.html"]');
     if (a) a.href = `stats.html?region=${REGION}`;
+    // the static markup is written for śląskie (the only region with an SEO
+    // story today); relabel it for anything else until a region picker exists
+    const lab = CFG.label || REGION;
+    document.title = `Rentgen ofert — ${lab}`;
+    const h1 = document.querySelector("header h1");
+    if (h1) h1.textContent = `Rentgen ofert — ${lab}`;
   }
+  applyAnchorUi();
   buildSourceFilter();
   buildLocalityOptions();
   wireControls();
@@ -135,6 +167,20 @@ async function boot() {
   restoreFilters();
   render();
   wireMap();   // after render so the first marker pass sees the filtered view
+}
+
+/** The radius filter only means something with an anchor city configured for
+ *  the region — otherwise hide it rather than offer a control that filters
+ *  everything out. */
+function applyAnchorUi() {
+  const group = $("#distance-group");
+  if (!ANCHOR) {
+    if (group) group.hidden = true;
+    state.distance = "all";
+    return;
+  }
+  const lab = $("#distance-label");
+  if (lab) lab.textContent = `Odległość od ${anchorLabel()} (orientacyjnie)`;
 }
 
 function renderStats(meta) {
@@ -329,7 +375,7 @@ function activeFilters() {
   if (state.owner !== "all") out.push({ k: "seg:owner", label: OWNER_LABEL[state.owner] || state.owner });
   if (state.history !== "all") out.push({ k: "seg:history", label: HIST_LABEL[state.history] || state.history });
   if (state.market !== "all") out.push({ k: "seg:market", label: MARKET_LABEL[state.market] || state.market });
-  if (state.distance !== "all") out.push({ k: "distance", label: "≤ " + state.distance + " km od Gliwic" });
+  if (state.distance !== "all") out.push({ k: "distance", label: "≤ " + state.distance + " km od " + anchorLabel() });
   state.localities.forEach((loc) => out.push({ k: "loc:" + loc, label: loc }));
   const nf = (id, lab) => { const v = ($("#" + id).value || "").trim(); if (v) out.push({ k: "num:" + id, label: lab + " " + v }); };
   nf("min-price", "Cena od"); nf("max-price", "Cena do");
@@ -356,7 +402,7 @@ function filterDims() {
   if (state.source !== "all") out.push({ k: "seg:source", label: "Źródło: " + label(state.source) });
   if (!arch && state.owner !== "all") out.push({ k: "seg:owner", label: OWNER_LABEL[state.owner] || state.owner });
   if (!arch && state.market !== "all") out.push({ k: "seg:market", label: MARKET_LABEL[state.market] || state.market });
-  if (state.distance !== "all") out.push({ k: "distance", label: "≤ " + state.distance + " km od Gliwic" });
+  if (state.distance !== "all") out.push({ k: "distance", label: "≤ " + state.distance + " km od " + anchorLabel() });
   if (state.localities.length) out.push({ k: "loc:*", label: "Miejscowość: " + state.localities.join(", ") });
   const nf = (id, lab) => { const v = ($("#" + id).value || "").trim(); if (v) out.push({ k: "num:" + id, label: lab + " " + v }); };
   nf("min-price", "Cena od"); nf("max-price", "Cena do");
@@ -528,7 +574,7 @@ function passes(l, f) {
     if (!n || !f.locs.has(n)) return false;
   }
   if (state.distance !== "all") {
-    const d = distOf(l.locality);
+    const d = distOf(l);
     if (d == null || d > Number(state.distance)) return false;
   }
   if (f.minPrice != null && (l.price == null || l.price < f.minPrice)) return false;
@@ -1255,7 +1301,7 @@ function card(l) {
     l.type === "house" && l.plot_area != null ? `działka ${PLN.format(l.plot_area)} m²` : null,
   ].filter(Boolean).join(" · ");
   const town = normLoc(l.locality);
-  const td = distOf(l.locality);
+  const td = distOf(l);
   const townLabel = town ? (td ? `${town} • ${td} km` : town) : null;
   const loc = [townLabel, l.district].filter(Boolean).join(", ");
   const img = l.image

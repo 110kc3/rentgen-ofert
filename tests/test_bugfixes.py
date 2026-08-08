@@ -164,9 +164,18 @@ def test_location_parts_strips_any_voivodeship():
 
 
 def test_nol_town_slug_gets_proper_name():
-    assert nol.town_name("dabrowa-gornicza") == "Dąbrowa Górnicza"
-    assert nol.town_name("bielsko-biala") == "Bielsko-Biała"
-    assert nol.town_name("unknown-town") == "Unknown Town"
+    """A sub-domain slug must never be title-cased into a locality: "Dabrowa-
+    Gornicza" would split dedupe/geocoding keys away from "Dąbrowa Górnicza".
+    Display names come from the resolved town map; an unmapped slug yields no
+    locality at all rather than an invented one."""
+    towns = nol.SEED_TOWNS["slaskie"]
+    offer = {"url": "https://x/dom,na-sprzedaz/1.html", "price": "500000",
+             "itemOffered": {}}
+    named = nol.parse_offers([offer], "house", "dabrowa-gornicza", towns)
+    assert named[0]["locality"] == "Dąbrowa Górnicza"
+    assert nol.parse_offers([offer], "house", "bielsko-biala", towns)[0]["locality"] \
+        == "Bielsko-Biała"
+    assert nol.parse_offers([offer], "house", "unknown-town", towns)[0]["locality"] is None
 
 
 def test_morizon_has_photo_extractor():

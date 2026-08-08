@@ -41,6 +41,7 @@ CACHE_DIR = ROOT / "cache"
 CACHE_PATH = CACHE_DIR / f"phash_{REGION}.json"
 RCN_CACHE = CACHE_DIR / f"rcn_{REGION}.json.gz"
 GEO_CACHE = CACHE_DIR / "geo_cache.json"
+NOL_TOWNS = CACHE_DIR / "nol_towns.json"   # per-region town lists for n-online
 
 SOURCES = (
     ("otodom", otodom),
@@ -72,9 +73,18 @@ def run() -> int:
     errors = []
     http = net.session()
     for name, mod in SOURCES:
+        kwargs = dict(max_pages=max_pages, delay=delay, types=types, session=http)
+        if mod is nieruchomosci_online:
+            # This portal has no region-wide search — it needs a town list, and
+            # the portal publishes no index to build one from. Derive it from the
+            # localities the other four just returned (they run first in SOURCES
+            # precisely for this) so a brand-new region works on its first run.
+            kwargs["towns"] = nieruchomosci_online.resolve_towns(
+                REGION, raw, cache_path=NOL_TOWNS)
+            print(f"  n-online towns for {REGION}: {len(kwargs['towns'])}")
         try:
             print(f"Scraping {name} ...")
-            raw.extend(mod.scrape(max_pages=max_pages, delay=delay, types=types, session=http))
+            raw.extend(mod.scrape(**kwargs))
         except Exception as exc:  # one portal failing must not lose the others
             errors.append(f"{name}: {exc}")
             print(f"  !! {name} failed: {exc}", file=sys.stderr)
