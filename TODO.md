@@ -526,8 +526,9 @@ region's listing count:
 ### Rollout order (rewritten 2026-08-08 evening, from the measurements above)
 
 The ordering rule: anything that is wrong *per region* gets fixed before it is
-copied 16 times. Steps 1–3 are all "śląskie only" work that never touches the
-region count, and they are what makes the region count worth raising.
+copied 16 times. Steps 0–4 are all "śląskie only" work that never touches the
+region count, and they are what makes the region count worth raising. **Steps 0
+and 1 shipped on 2026-08-08; the live work starts at Step 2.**
 
 **Step 0 — unpin the page cap in CI.  ✅ DONE 2026-08-08** (see the Done
 section at the top). `RENTGEN_MAX_PAGES: "50"` is gone from `update.yml`; the
