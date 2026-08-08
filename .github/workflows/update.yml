@@ -43,8 +43,11 @@ jobs:
     runs-on: ubuntu-latest
     # a wedged portal must not hold the runner for GitHub's full 6 h default —
     # per-request retry waits are capped in scraper/net.py and the photo phase
-    # has its own budget, this is the last-resort backstop
-    timeout-minutes: 300
+    # has its own budget, this is the last-resort backstop. 350, not 300: the
+    # first runs after the page cap was unpinned are the heaviest the project
+    # has had (every portal paginates deeper, OLX subdivides per town, and the
+    # phash cache is cold for everything that was previously invisible).
+    timeout-minutes: 350
     env:
       REGION: ${{ github.event.inputs.region || 'slaskie' }}
     steps:
@@ -71,7 +74,11 @@ jobs:
       - name: Scrape listings
         env:
           RENTGEN_REGION: ${{ env.REGION }}
-          RENTGEN_MAX_PAGES: "50"
+          # NO RENTGEN_MAX_PAGES here on purpose. It used to be pinned to "50",
+          # which silently overrode the 200 default in scraper/main.py — so the
+          # cap raise that recovered +757 gratka houses locally never once ran
+          # in CI. The default lives in one place now; the run's `coverage`
+          # block reports whether it still binds.
           RENTGEN_DELAY: "0.7"
           RENTGEN_RCN: ${{ github.event.inputs.rcn || '1' }}
         run: python -u -m scraper.main   # -u: unbuffered logs, visible while running

@@ -3,6 +3,63 @@
 > Keep this file and `README.md` updated after each change.
 > Last updated: 2026-08-08
 
+## Done (2026-08-08, late) — whole-Poland steps 0 + 1: the cap, and the truth
+
+**Where to pick up: "Rollout order" in the whole-Poland plan below, at Step 2
+(price-band subdivision).** Steps 0 and 1 are done and described here; every
+number they rest on was measured and is written down in that plan section, so
+nothing needs re-probing to continue.
+
+- [x] **Step 0 — CI no longer pins the page cap.** `update.yml` set
+      `RENTGEN_MAX_PAGES: "50"` in the scrape step, silently overriding the 200
+      default in `main.py`. Every "we raised the cap" measurement so far was a
+      local one; CI never ran it. The env var is gone from the workflow (with a
+      comment saying why), so the default lives in exactly one place.
+- [x] **Step 1 — every portal's own count is now recorded and compared.**
+      A stop reason alone lies: gratka 404s past page 200 *identically* to how
+      it 404s past a genuine last page, so a truncated search looked finished.
+      Each scraper now reads the portal's stated total and the coverage row
+      carries it:
+      - **otodom** `pagination.totalItems` — the old code read `totalResults` /
+        `count` off `searchAds`, neither of which exists, so `portal_total` was
+        null on every row ever written.
+      - **gratka** "9856 ogłoszeń" from the meta description (exact).
+      - **morizon** "ponad 9000 ogłoszeń" — rounds to whole thousands, so it is
+        stored as a LOWER bound (`total_is_min`): below it proves truncation,
+        above it proves nothing. Shared parser: `normalize.stated_total()`.
+      - **olx** `visibleElements` (5 503) vs `totalElements` (1 000 = its cap).
+- [x] **Two silent truncations became loud.** `gratka`/`morizon` classify a
+      clean-looking 404 as `portal_cap` when the collected count falls short of
+      the stated total (5% slack, `coverage.COMPLETE_ENOUGH`); `olx` classifies
+      `visibleElements > totalElements` as `portal_cap`, **which is the trigger
+      the per-town subdivision built on 2026-08-08 was waiting for — it had
+      never once fired**, because OLX states its cap as a smaller total plus a
+      matching `totalPages: 25` and the walk therefore ended as "end".
+- [x] **`meta.json` → `coverage.by_source` gains `portal_total` + `pct`**, and
+      the run log prints one `coverage <source>: N listings … of M the portals
+      state (P%)` line per portal. Two runs are now comparable by one number
+      instead of a diff of stop reasons. `pct` is a FLOOR, not a defect rate:
+      each scraper filters while parsing (otodom drops INVESTMENT bundles, olx
+      drops Otodom-syndicated and price-on-request ads), so a complete search
+      legitimately lands below 100%.
+- [x] Tests: `tests/test_coverage.py` +8 (119 total, offline) — the gratka
+      404-wall case, morizon's lower-bound total (including "collected more
+      than the rounded total" staying silent), the OLX stated-cap case and its
+      subdivision, and `stated_total()` against both portals' real meta strings.
+- [x] `timeout-minutes` 300 → 350: the first run after this is the heaviest one
+      the project has had (uncapped pages + OLX subdivision firing for the first
+      time + a cold phash cache for everything newly visible).
+
+**What to check on the next CI run** (this is the acceptance test for both
+steps, and the input to Step 2):
+- `meta.json` → `coverage.by_source.*.pct` — the first real coverage numbers.
+- gratka/morizon should report `portal_cap` at ~7 000 of 9 856 (their 200-page
+  wall), otodom `cap` at 200 of 515 pages, olx `portal_cap` **plus 60 town
+  subdivision rows**.
+- Run time: the scrape phase was 60 min; expect meaningfully more (n-online's
+  per-town cap also rose from 50 to 200 pages). If the job approaches the 350-min
+  timeout, drop `RENTGEN_NOL_TOWNS` or give n-online its own smaller cap.
+
 ## Done (2026-08-08) — overflow detection + subdivision (rollout step 1)
 - [x] **The caps were ours, not the portals'.** Probed gratka directly:
       `domy/slaskie` reports **2509 ogłoszeń**, paginates to **page 72** and
@@ -31,15 +88,18 @@
       *empty* page, which broke the loop before the cap check ever ran.
 
 Still open from this round:
-- [ ] **Does otodom still overflow at 200 pages?** Unknown — Otodom 403s a
-      residential IP, so it can only be measured from CI. The next run's
-      `meta.json` → `coverage` answers it: a row with `stopped: "cap"` and
-      `portal_pages` far above 200 means otodom needs subdividing too, and its
-      town URLs are a different shape (`/region/powiat/gmina/city`) than the
-      one-slug form that works for OLX/gratka/morizon.
+- [x] **Does otodom still overflow at 200 pages? YES, by 2.5×** — answered
+      2026-08-08 evening by probing otodom directly from the Pi (it now answers
+      a residential IP; the old 403 is gone). Śląskie flats:
+      `pagination.totalItems = 18 505`, **515 pages**. See the rewritten
+      whole-Poland plan below — this, plus the fact that CI never actually used
+      the new 200-page default, reorders everything again.
 - [ ] **Watch the run time and the photo budget.** More listings means more
       gallery hashing; `RENTGEN_PHOTO_BUDGET_MIN=90` absorbs it over several
       runs by design, but the first run after this change will be heavy.
+      Status after the 2026-08-08 18:00 UTC run: the photo phase used **80 of
+      the 90 minutes** and the budget is now the binding constraint (2 h 40 m
+      run: 60 min scrape, 80 min photo, 20 min history/RCN/geo/write).
 
 ## Done (2026-08-08) — de-Gliwice-ing (whole-Poland rollout step 2)
 - [x] **`normalize.CITY` deleted** — dead constant, referenced nowhere.
@@ -281,11 +341,12 @@ shards + hashed filenames. Do it before adding a second region.
       became a collapsible section. Verified in a real browser: first paint
       from the index alone, 1 shard fetch on first expand, 0 before.
 - [ ] **Multi-voivodeship / whole Poland — NEXT.** Krok 1 + Krok 3 shipped
-      2026-07-11. Re-audit 2026-08-08 found the blocker is no longer storage
-      but **coverage**: every paginated portal already hits its cap inside
-      śląskie, so a second region would only add a second partially-scraped
-      dataset. Start with overflow detection + subdivision, per the revised
-      rollout order below ↓.
+      2026-07-11, Krok 0 (de-Gliwice) 2026-08-08. Measurement on 2026-08-08
+      evening put hard numbers on the blocker: it is **coverage and dedupe, not
+      storage** — otodom alone lists 18 505 śląskie flats against our 1 482,
+      CI still pins the page cap at 50, and ~2 400 morizon cards are unmerged
+      duplicates of gratka cards. Steps 0–3 of the rollout order below are all
+      single-region work; the region count only goes up after them ↓.
 - [ ] **Licytacje komornicze — "deweloperuch dla licytacji"** (nationwide
       bailiff auctions + RCN gap per auction). Feasibility verified
       2026-07-14; full plan in its own section below ↓.
@@ -294,58 +355,124 @@ shards + hashed filenames. Do it before adding a second region.
 
 Region (voivodeship) stays the unit of everything: one scrape job, one data
 dir, one dashboard, one RCN snapshot per region. "Poland" = 16 regions, not
-one giant run. Rough scale: Śląskie is ~18k unique / ~21k raw listings, Poland
-is ~8–12× that (Otodom alone lists ~250k sales nationwide).
+one giant run. Scale, measured 2026-08-08 from otodom's own pagination totals:
+śląskie holds **18 505 flats** on otodom alone (we publish 18 385 properties
+from all five portals), mazowieckie is 772 pages ≈ 28k, and `cala-polska` is
+4 188 pages ≈ **150 000 flats** — so Poland is ~8× śląskie *at full coverage*,
+and we are currently at roughly a fifth of śląskie.
 
-### Status of this plan (re-audit 2026-08-08)
-**Krok 1 and Krok 3 are DONE** (2026-07-11) — region is already the build unit
-and the storage switch has shipped. What is left is Krok 0, Krok 2, and two
-things this plan did not know about, below.
+### Status of this plan (re-measured 2026-08-08 evening — READ THIS FIRST)
+**Krok 1 and Krok 3 are DONE** (2026-07-11). Krok 0's de-Gliwice-ing is done
+(2026-08-08). What is left is coverage, dedupe correctness, and Krok 2.
 
-**The finding that reorders everything: the pagination caps are already
-binding in śląskie, today.** From the last successful run's logs:
+Every number below was measured, not estimated: the 2026-08-08 18:00 UTC run's
+`meta.json` + run log, plus direct probes of each portal from the Pi. **Otodom
+now answers a Polish residential IP** (search pages returned 200 with a full
+`__NEXT_DATA__`), so portal shape no longer needs a CI round-trip to measure —
+and local scraping is a real fallback for capacity, not a theory.
 
-```
-gratka  flat/slaskie  page 50   morizon flat/slaskie  page 50
-gratka  house/slaskie page 50   morizon house/slaskie page 50
-otodom  flat          page 50   olx     flat          page 25  <- OLX hard cap
-otodom  house         page 50   olx     house         page 25
-```
+**Finding 1 — the 200-page default never took effect.** `update.yml` pins
+`RENTGEN_MAX_PAGES: "50"` in the scrape step, which overrides the new default.
+The 2026-08-08 18:00 run therefore still stopped every portal at page 50. The
++757 gratka houses measured yesterday were never collected in CI.
 
-gratka/morizon only break on a 404 or an empty page, so reaching the cap means
-they never ran out of results. Corroborating signal in the same run:
-**n-online returns 10 178 raw listings, Otodom only 3 310** — and Otodom is by
-far the bigger portal nationally. n-online leads precisely because it is the
-one scraper that already subdivides (~40 town subdomains, each paginated), so
-no single search hits a cap.
+**Finding 2 — every portal states its true size, and we are far below it.**
+Śląskie *flats* alone, portal's own count vs what we collected:
 
-So "whole Poland" is not 16× the current pipeline — **the current pipeline
-does not fully cover even one region.** Subdivision has to come first, and it
-makes each region bigger and slower, which invalidates every estimate below
-that was made from today's śląskie run.
+| portal | portal says | we collected | how it is stated |
+|---|---|---|---|
+| otodom | **18 505** (515 pages) | 1 482 | `pagination.totalItems` |
+| gratka | **9 856** (282 pages needed) | 1 750 | "9 856 ogłoszeń" in the HTML |
+| morizon | **~9 000** (rounded) | 1 750 | "9 000 ogłoszeń", rounds to 1000s |
+| olx | **5 503** visible, serves 1 000 | ~250 native | `visibleElements` vs `totalElements` |
+| n-online | town-by-town, no region count | 11 089 (both types) | — |
 
-### Measured cost per region (śląskie, 2026-08-08)
+Otodom's śląskie flats alone outnumber our entire published dataset (18 385
+properties, all portals, both types). Whole-Poland scale from the same source:
+`.../sprzedaz/mieszkanie/cala-polska` reports **4 188 pages ≈ 150 000 flats**;
+mazowieckie alone is 772 pages.
+
+**Finding 3 — the reachable window per portal is a hard, measured number.**
+- **otodom**: serves the full depth (page 500 of 515 answers), but deep pages
+  come back thin and erratic (page 300 → 4 items, 450 → 12, 490 → 1), so deep
+  pagination is not a trustworthy way to enumerate. `&limit=72` is honoured and
+  halves the requests (515 → 258 pages, verified).
+- **gratka / morizon**: **hard 404 past page 200** (bisected: 200 → 200 OK,
+  201 → 404, on both portals). 200 × 35 = **7 000 ads per search, ever** —
+  and our new default cap of 200 sits exactly on that wall, so a search that
+  ends there looks finished while dropping 2 856 gratka flats.
+- **olx**: `totalElements: 1 000` with `visibleElements: 5 503` — the cap is
+  reported as a *smaller total*, and `totalPages: 25` matches it, so our
+  current detection records "end" and the town subdivision built yesterday
+  never fires. That is why OLX contributes 470 listings for a whole region.
+- **n-online**: no region search, already subdivided per town — the only
+  portal that was never truncated, and the reason it leads the source counts.
+
+**Finding 4 — price bands subdivide all four portals, and are verified.**
+Every paginated portal accepts a price range, so subdivision needs no
+per-portal location taxonomy (otodom's is `region/powiat/gmina/city`, the
+others' is one slug — they will never share a tree):
+
+| portal | param | probe |
+|---|---|---|
+| otodom | `?priceMin=300000&priceMax=400000` | 3 348 items / 93 pages |
+| gratka | `?cena-calkowita:min=200000&cena-calkowita:max=300000` | 1 209 ogłoszeń |
+| morizon | `?ps[price_from]=200000&ps[price_to]=300000` | 1 000 ogłoszeń |
+| olx | `?search[filter_float_price:from|to]` | ≤200k → 575 = visibleElements |
+
+**Finding 5 — morizon has been photo-blind since some CDN change, and it costs
+~2 400 duplicate cards.** In the published data, `('gratka','morizon')` appears
+as a merged source pair **zero** times, while 2 428 of the 3 501 morizon cards
+have a gratka card with an identical (type, area, rooms, price, town) — same
+titles, e.g. "Klasyczna elegancja przy Parku Repeckim!". Cause: detail pages
+now serve galleries from `img1.staticmorizon.com.pl`, which `photomatch._morizon`
+does not match (it looks for `thumbs.cdngr.pl` / `img*.morizon.pl`), so every
+morizon listing carries an empty `phashes` and can never merge with anything.
+Two bonuses found while diagnosing it:
+- the morizon URL embeds the **same base64 origin** as gratka's
+  (`aHR0cHM6Ly9kLWdyLmNkbmdyLnBs…` → `d-gr.cdngr.pl/kadry/…/48544917_…jpg`,
+  gratka's own ad id inside it) — an exact, free merge key for the pair with no
+  image fetch at all;
+- the first 5 gallery URLs on both portals are the **xs/s/m/l/og renditions of
+  one photo**, so `MAX_IMAGES = 5` currently hashes a single photo five times.
+  Dedupe by the base64 payload and take one rendition each.
+
+So "whole Poland" is still not 16× the current pipeline: **the pipeline sees
+roughly a fifth of the region it already claims, and inflates what it does see
+by ~13% with unmerged morizon duplicates.** Fix coverage and dedupe first —
+both fixes get multiplied by 16 afterwards, and both change every cost estimate.
+
+### Measured cost per region (śląskie, 2026-08-08 18:00 UTC run)
 | | |
 |---|---|
-| scrape runtime | 85–110 min, 2×/day |
-| published to Pages | 53 MB (74 MB less `history.json.gz`, which deploy.yml strips) |
-| on the `data` branch | 141 MB — site/data 74 + phash 54.3 + RCN 12.2 |
-| RCN snapshot | 12.2 MB gz, 666k deeds (198k lokale + 468k budynki) |
+| total runtime | 2 h 40 m, 2×/day |
+| — scrape | 60 min (otodom 3, olx 2, gratka 3, morizon 3, **n-online 48**) |
+| — photo hashing | 80 min — **hit the 90-min budget**, 53 150 listings |
+| — history + archive ingest | 9 min |
+| — delist sweep | 5 min (300 checks against a **21 639-record** stale backlog) |
+| — RCN match + stats + geo + write | 6 min |
+| published to Pages | 53 MB for 18 385 listings ≈ 2.9 KB/listing |
+| on the `data` branch | 141 MB — site/data 74 + phash **54.3** + RCN 12.2 |
+| RCN snapshot | 12.2 MB gz, 666k deeds |
 
-Naive ×16, *before* the coverage fix makes regions bigger:
-- **Pages ~850 MB against the 1 GB soft cap** — and śląskie is mid-sized. This
-  is the new hard ceiling, now that Krok 3 removed the old one.
-- **`data` branch ~2.3 GB, and every region's run would fetch all of it**:
-  `update.yml` does `git fetch origin data` + checkout of `site/data cache`
-  regardless of which region it is scraping. Fix before region #2 — one branch
-  per region (`data-slaskie`, `data-malopolskie`) so a job pulls only its own
-  ~140 MB.
-- Runtime is *not* a cost problem: the repo is public, so Actions minutes are
-  unmetered. Portal rate-limiting is the constraint — hence the staggered
-  1×/day-per-region matrix in Krok 2.
-- Portal 403s are real and already observable: Otodom serves the search JSON to
-  GitHub runners but refuses this Pi's residential IP (`__NEXT_DATA__ not
-  found`). Relevant if scraping ever moves off CI.
+What that implies at 16 regions, *after* the coverage fix roughly doubles each
+region's listing count:
+- **phash cache already trips GitHub's 50 MB file warning** (54.3 MB, printed
+  in the push step of the last run). Doubled, and for a region larger than
+  śląskie, it crosses the **100 MB hard limit** and the run simply fails to
+  push. Gzip it (like history/RCN) and store the 256-bit hashes base64-packed
+  instead of 78-char decimal strings — that is ~5× off the top.
+- **Pages 1 GB**: ~100 MB per full-coverage region × 16 ≈ 0.9–1.4 GB, plus an
+  archive that only grows. It will be breached — not on day one, but within the
+  first year. Decision point, see step 6.
+- **`data` branch ~2.3 GB fetched by every job**: `update.yml` checks out
+  `site/data cache` from one shared branch regardless of region. One branch per
+  region before region #2.
+- **The delist sweep never catches up**: 300 checks/run against 21 639 stale
+  records is a 72-run backlog *today*, in one region.
+- Runtime is not a billing problem (public repo, unmetered minutes) but it is a
+  scheduling one: 16 × ~3 h at `max-parallel: 1–2` fills the day. Portal
+  politeness, not minutes, is the real constraint.
 
 ### Krok 0 — de-Gliwice the code (prereq, cheap)
 - 4/5 scrapers already take `RENTGEN_REGION` as a URL slug (otodom, olx,
@@ -396,26 +523,112 @@ Naive ×16, *before* the coverage fix makes regions bigger:
   cost per region" above. Option (c) (R2/S3) remains the escape hatch if the
   Pages cap is reached before the region set is complete.
 
-### Rollout order (revised 2026-08-08 — Krok 1 and 3 already shipped)
-1. [x] **Overflow detection + subdivision — done 2026-08-08.** Turned out the
-   caps were mostly ours: raising `RENTGEN_MAX_PAGES` 50 → 200 recovered +757
-   gratka houses alone, and only OLX caps itself (page 25) and needed real
-   subdivision. `scraper/coverage.py` now reports every truncated search in
-   `meta.json`. See the Done section at the top; otodom's true depth is the one
-   open question and the next CI run answers it.
-2. [x] **Finish de-Gliwice-ing — done 2026-08-08.** Dead `normalize.CITY`
-   removed; `nieruchomosci_online.py` builds its town list per region from the
-   portal's own city index (cached, with the śląskie list as fallback);
-   dashboard anchor city is per-region config (`REGION_ANCHOR` in `app.js`)
-   instead of a hardcoded Gliwice, and `GLIWICE_DISTRICTS` became a per-region
-   district→city fold. See the Done section at the top.
-3. [ ] **Split the `data` branch per region** (`data-<region>`) before region #2
-   exists — same reasoning as doing Krok 3 early: cheap now, painful later.
-4. [ ] **Pilot ONE extra region** end-to-end (małopolskie or dolnośląskie —
-   mid-size, exercises the n-online city index and the subdivision).
-5. [ ] **Region picker** on the root page with per-region counts.
-6. [ ] **Krok 2 CI matrix**, then add regions in batches of 3–4, watching portal
-   error rates in `meta.json` and the total Pages payload against the 1 GB cap.
+### Rollout order (rewritten 2026-08-08 evening, from the measurements above)
+
+The ordering rule: anything that is wrong *per region* gets fixed before it is
+copied 16 times. Steps 1–3 are all "śląskie only" work that never touches the
+region count, and they are what makes the region count worth raising.
+
+**Step 0 — unpin the page cap in CI.  ✅ DONE 2026-08-08** (see the Done
+section at the top). `RENTGEN_MAX_PAGES: "50"` is gone from `update.yml`; the
+200 default in `main.py` is now the only cap.
+
+**Step 1 — portal ground truth in `coverage.py`.  ✅ DONE 2026-08-08.** Every
+portal's stated total is read and compared (otodom `pagination.totalItems`,
+gratka/morizon `normalize.stated_total()`, olx `visibleElements` vs
+`totalElements`); a short-of-total 404 and OLX's stated cap are now
+`portal_cap`, and `meta.json` → `coverage.by_source` carries `portal_total` +
+`pct`. Details and the numbers to expect are in the Done section at the top.
+
+**Step 2 — price-band subdivision (`scraper/bands.py`), the general fix.**
+- [ ] One helper, four portals, params verified above. Contract: run the
+      unbanded search first (so priceless ads and anything the filter drops are
+      still collected), then while a search's stated total exceeds its reachable
+      window, bisect its price range and recurse; merge everything by URL.
+      **Additive, exactly like the OLX town subdivision** — a bad band costs one
+      request and can never lose a listing already held.
+- [ ] Reachable windows (measured, put them in the code as named constants):
+      otodom ~100 pages/band (full depth works but goes thin and erratic past
+      ~150 — do not trust it), gratka/morizon **7 000 ads** (200-page 404 wall),
+      olx **1 000 ads**.
+- [ ] otodom `&limit=72`: free 2× fewer requests on the biggest portal.
+- [ ] Bands are half-open `[min, max)` so a listing priced exactly on a boundary
+      lands in exactly one band; assert the band totals sum to ≥ the unbanded
+      total, and log it when they do not (that is how a portal's filter
+      silently dropping ads gets caught).
+- [ ] Expected cost for genuinely full śląskie coverage: ~2 500–3 000 requests
+      ≈ 35–45 min at `RENTGEN_DELAY=0.7` (today: ~1 200 requests / 60 min, of
+      which n-online is 48). The scrape phase roughly doubles; it is not the
+      bottleneck, the photo phase is.
+- [ ] Re-measure after landing: śląskie should go from 18 385 to somewhere
+      around 30–40k unique properties. If it does not, the bands are wrong.
+
+Where it plugs in (the seams already exist — nothing needs restructuring):
+- `gratka.SEARCH` / `morizon.SEARCH` are already `{type: [base_url, …]}` lists
+  precisely so one type can become several searches; the page loop and the
+  coverage row are per base URL already.
+- `olx.search_url(typ, where)` + the additive `seen`/merge in `olx.scrape()`
+  are the working precedent for "re-run a capped search narrower and merge by
+  URL" — bands follow the same contract, and after Step 1 the `portal_cap` that
+  triggers it actually fires.
+- `otodom.SEARCH` is `{type: path}`; add the query string alongside `&limit=72`.
+- `coverage.short_of_total()` / `covered()` are the loop-exit conditions: keep
+  bisecting a band while it is short of its own stated total.
+
+**Step 3 — the dedupe defects, before they get multiplied by 16.**
+- [ ] `photomatch._morizon`: add `img\d*\.staticmorizon\.com\.pl` to the host
+      pattern, with a fixture test pinned to a real page (this regex has now
+      broken twice — the fixture is the point, not the regex).
+- [ ] Dedupe gallery URLs by the **base64 origin payload** in the thumb URL and
+      hash one rendition per distinct origin, so `MAX_IMAGES = 5` means five
+      photos instead of five sizes of one photo. Improves every gratka/morizon
+      merge and shrinks the phash cache at the same time.
+- [ ] Use that decoded origin as a **direct merge key** for gratka↔morizon:
+      identical origin = same ad, no image fetch, no threshold. Cheapest merge
+      in the whole pipeline and it removes ~2 400 duplicate cards in śląskie.
+- [ ] Re-check `('gratka','morizon')` in the source-pair histogram afterwards —
+      it must stop being zero. Same query is the regression test.
+
+**Step 4 — make one region affordable at ~2× the listings.**
+- [ ] **phash cache**: gzip it and pack hashes as base64 rather than 78-char
+      decimal strings (54.3 MB → ~10 MB). Unblocks the 50 MB warning today and
+      the 100 MB hard failure that a bigger region would hit.
+- [ ] **Photo budget**: it is already the binding constraint (80 of 90 min).
+      Step 3 removes the wasted rendition fetches; after that, re-time and
+      decide between a larger budget, more workers, or hashing only listings
+      that actually have a size-collision.
+- [ ] **Delist sweep**: 300 checks against 21 639 stale records never converges.
+      Prioritise (oldest-first is not the same as most-likely-gone), use HEAD
+      where the portal allows it, and scale `RENTGEN_VERIFY_MAX` with the record
+      count instead of pinning it at 300.
+- [ ] **Geo**: 500 lookups/run at 84.9% located — fine for one region, hopeless
+      for 16. Scale the budget per region and let a region converge before the
+      next one starts.
+
+**Step 5 — region infrastructure (Krok 2, unchanged in substance).**
+- [ ] Split the `data` branch per region (`data-<region>`) so a job fetches its
+      own ~150 MB, not everyone's 2.3 GB. Do it before region #2 exists.
+- [ ] CI matrix over regions, `max-parallel: 1–2`, staggered crons, 1×/day per
+      region, per-region concurrency group and `RENTGEN_VERIFY_MAX`.
+- [ ] Region picker on the root page with per-region counts; per-region meta /
+      OG / sitemap (static meta is still śląskie-only).
+- [ ] **Pilot ONE region end-to-end** — małopolskie or dolnośląskie: mid-size,
+      and it exercises the n-online town derivation and the bands on a region
+      whose shape nobody has looked at. Measure it, then add in batches of 3–4,
+      watching `meta.json` error rates and the Pages payload.
+
+**Step 6 — the hosting ceiling (decide before region #4).**
+- [ ] Pages' 1 GB will be reached by 16 full-coverage regions plus archive
+      growth. Two ways out, and they are not exclusive:
+      **(a)** shrink the payload — the index is ~700 B/listing of verbose JSON;
+      an array-of-arrays encoding with a column header is ~3× smaller, and the
+      archive wants the same shard treatment the listings got;
+      **(b)** stop serving data from Pages — the `data` branch is already the
+      store, so jsDelivr (`cdn.jsdelivr.net/gh/<user>/<repo>@data/…`, note the
+      ~20 MB per-file limit → shards must stay small) or R2 serves it with CORS,
+      and Pages goes back to hosting a few MB of code.
+      Recommendation: do (a) anyway because it also cuts load time, and treat
+      (b) as the escape hatch the moment the published total passes ~600 MB.
 - [ ] **Sparkline price chart** on cards instead of the text price trail.
 - [ ] **Rental listings dataset** -> estimated gross yield per sale listing
       from rental comps (town + size bucket); attracts the investor crowd.

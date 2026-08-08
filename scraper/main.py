@@ -5,7 +5,9 @@ Run from the repo root:
     python -m scraper.main
 
 Environment overrides (optional):
-    RENTGEN_MAX_PAGES   max pages per source/type (default 50)
+    RENTGEN_MAX_PAGES   max pages per source/type (default 200; CI deliberately
+                        does NOT set it — it was pinned to 50 there, which
+                        overrode this default on every scheduled run)
     RENTGEN_DELAY       seconds between requests   (default 0.7)
     RENTGEN_TYPES       which to scrape, e.g. "house" (default "house,flat")
     RENTGEN_PHOTOS      "0" to skip photo hashing (disables dedupe-by-photo and
@@ -109,6 +111,19 @@ def run() -> int:
     for line in coverage.warnings(cov_rows):
         print(line, file=sys.stderr)
         errors.append(line.strip().lstrip("! "))
+
+    # Coverage as a number, so two runs are comparable without diffing stop
+    # reasons. `pct` is a floor: each scraper filters while parsing (otodom
+    # drops INVESTMENT bundles, olx drops Otodom-syndicated ads), so even a
+    # complete search lands below 100%.
+    cov_summary = coverage.summarise(cov_rows)
+    for name, s in cov_summary["by_source"].items():
+        total = s.get("portal_total")
+        against = (f" of {'≥' if s.get('total_is_min') else ''}{total}"
+                   f" the portals state ({s['pct']}%)" if total else "")
+        print(f"  coverage {name}: {s['listings']} listings from {s['searches']} "
+              f"search(es), {s['pages']} pages{against}"
+              + (f", {s['truncated']} truncated" if s["truncated"] else ""))
 
     if not raw:
         print("No listings collected - aborting (keeping previous data).", file=sys.stderr)
@@ -237,7 +252,7 @@ def run() -> int:
                       "gap_pairs": (rcn_stats["gap"].get("all") or {}).get("n", 0)}
                      if rcn_stats else None,
         "sold_confirmed": sum(1 for a in archive if a.get("sold")),
-        "coverage": coverage.summarise(cov_rows),
+        "coverage": cov_summary,
         "errors": errors,
     }
     (DATA_DIR / "meta.json").write_text(

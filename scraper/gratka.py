@@ -16,7 +16,7 @@ import requests
 from bs4 import BeautifulSoup
 
 from . import coverage
-from .normalize import location_parts, to_float, to_int
+from .normalize import location_parts, stated_total, to_float, to_int
 
 BASE = "https://gratka.pl"
 # Whole-voivodeship search by default; override with RENTGEN_REGION.
@@ -142,12 +142,11 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
             tag = base.rstrip("/").split("/")[-1]
             page = 1
             got = 0
+            total = None
+            total_min = False
             stopped = coverage.OK
             while True:
                 if page > max_pages:
-                    # gratka has no cap of its own — it 404s past the last page
-                    # (verified: domy/slaskie serves 72 pages, 404s on 73), so
-                    # reaching this means WE truncated the region.
                     stopped = coverage.OUR_CAP
                     page -= 1
                     break
@@ -158,6 +157,8 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
                         page -= 1
                         break  # gratka 404s once you page past the last results page
                     r.raise_for_status()
+                    if total is None:
+                        total, total_min = stated_total(r.text)
                     batch = [c for c in parse_cards(r.text, typ) if c["url"] not in seen]
                 except Exception as exc:  # keep what we have, move on
                     log(f"  gratka {typ}/{tag} page {page} error: {exc}")
@@ -172,6 +173,14 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
                     break
                 page += 1
                 time.sleep(delay)
-            cov.append(coverage.row("gratka", typ, tag, max(page, 0), got, stopped))
+            # gratka's 404 means "no more pages", NOT "no more results": it
+            # refuses to serve past page 200 whatever the search holds
+            # (bisected 2026-08-08 — page 200 OK, 201 404, on a search whose
+            # own header says 9 856 ads = 282 pages). The page loop cannot tell
+            # that from a genuine last page, so the stated total decides.
+            if stopped == coverage.OK and coverage.short_of_total(got, total):
+                stopped = coverage.PORTAL_CAP
+            cov.append(coverage.row("gratka", typ, tag, max(page, 0), got, stopped,
+                                    portal_total=total, total_is_min=total_min))
     scrape.last_coverage = cov
     return out

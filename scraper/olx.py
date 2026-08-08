@@ -110,6 +110,8 @@ def _walk(base_url, typ, tag, max_pages, delay, session, log, seen, out):
     page = 1
     got = 0
     total_pages = None
+    visible = None          # ads OLX says match the search   (5 503 for śląskie flats)
+    servable = None         # ads OLX will actually hand over (1 000 — its cap)
     stopped = coverage.OK
     while page <= max_pages:
         url = f"{base_url}?page={page}"
@@ -129,6 +131,8 @@ def _walk(base_url, typ, tag, max_pages, delay, session, log, seen, out):
         out.extend(batch)
         got += len(batch)
         total_pages = listing.get("totalPages", 1) or 1
+        visible = listing.get("visibleElements") or visible
+        servable = listing.get("totalElements") or servable
         log(f"  olx {typ}/{tag} page {page}/{min(total_pages, max_pages)}: +{len(batch)}")
         if not ads:
             # An empty page is how OLX enforces its own limit: it keeps claiming
@@ -144,7 +148,15 @@ def _walk(base_url, typ, tag, max_pages, delay, session, log, seen, out):
             break
         page += 1
         time.sleep(delay)
-    return coverage.row("olx", typ, tag, page, got, stopped, portal_pages=total_pages)
+    # The cap OLX actually enforces is stated, not hit: for a region search it
+    # answers `visibleElements: 5503` (ads matching) with `totalElements: 1000`
+    # and `totalPages: 25` (ads it will serve). Walking those 25 pages therefore
+    # looks like a completed search — which is why śląskie yielded 470 listings
+    # and the town subdivision below never once fired. Measured 2026-08-08.
+    if stopped == coverage.OK and visible and servable and visible > servable:
+        stopped = coverage.PORTAL_CAP
+    return coverage.row("olx", typ, tag, page, got, stopped,
+                        portal_pages=total_pages, portal_total=visible)
 
 
 def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,

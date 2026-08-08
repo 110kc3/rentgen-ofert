@@ -64,18 +64,25 @@ force-pushed fresh each run (the price history lives *inside*
   the benchmark is older than it looks, the Statystyki note names the worst
   offenders (or explains why the selected town's RCN line just stops), and the
   empty *Sprzedane wg RCN* view says so outright instead of looking broken.
-- **Coverage — knowing when a search was truncated.** A capped search returns a
-  plausible pile of listings and no hint that more exist, and with the old
-  50-page default *every* paginated portal was stopping on our cap inside
-  śląskie alone. Each scraper now records why each search ended — the portal ran
-  out (`end`), we cut it off (`cap`), or the portal refused to paginate further
-  (`portal_cap`) — into `meta.json`'s `coverage` block, with a warning per
-  truncated search in the run log. Raising the default to 200 pages recovered
-  **757 houses on gratka alone** (1 751 → 2 508, matching gratka's own "2509
-  ogłoszeń"). OLX is the one portal that caps itself — it stops serving at page
-  25 while still claiming hundreds — so an OLX search that hits that wall is
-  re-run per town and merged; subdivision is additive, so a bad town slug costs
-  one request and can never lose a listing already collected.
+- **Coverage — knowing when a search was truncated, and by how much.** A capped
+  search returns a plausible pile of listings and no hint that more exist. Each
+  scraper records why each search ended — the portal ran out (`end`), we cut it
+  off (`cap`), the portal refused to serve the rest (`portal_cap`) — into
+  `meta.json`'s `coverage` block, with a warning per truncated search in the run
+  log. **The stop reason alone is not enough**, because the two look identical
+  from the page loop: gratka 404s past page 200 exactly like it 404s past a real
+  last page. So every portal's own count is read and compared —
+  otodom's `pagination.totalItems` (18 505 śląskie flats), gratka's "9856
+  ogłoszeń", morizon's "ponad 9000" (a lower bound — it rounds to thousands),
+  OLX's `visibleElements` vs the `totalElements` it will actually serve — and a
+  search that ends short of it is reported as truncated whatever the stop reason
+  said. `coverage.by_source` carries `portal_total` and `pct`, so "did coverage
+  improve" is one number per run. (`pct` is a floor: each scraper filters while
+  parsing, e.g. otodom drops INVESTMENT bundles and OLX drops ads syndicated
+  from Otodom, so a complete search still lands below 100%.) OLX caps itself at
+  1 000 ads per search, so a capped OLX search is re-run per town and merged;
+  subdivision is additive, so a bad town slug costs one request and can never
+  lose a listing already collected.
 - **Empty views explain themselves.** When a filter combination returns
   nothing, the dashboard re-runs the filter with each dimension relaxed and
   offers the ones that would bring results back ("Miejscowość: Gliwice — 43"),

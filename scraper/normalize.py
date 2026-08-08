@@ -24,6 +24,7 @@ new-build units); the trade-off was chosen for coverage over precision.
 """
 from __future__ import annotations
 
+import re
 from collections import defaultdict
 
 OTODOM_ROOMS = {
@@ -52,6 +53,30 @@ def location_parts(location):
     if parts and parts[-1].lower() in VOIVODESHIPS:
         parts = parts[:-1]
     return parts
+
+
+# gratka and morizon (same media group, same frontend) put the search's total
+# in the meta description: "Mieszkania na sprzedaż śląskie. 9856 ogłoszeń." on
+# gratka, "Mieszkania na sprzedaż - ponad 9000 ogłoszeń" on morizon. That total
+# is the only thing that distinguishes "the results ran out" from "the portal
+# 404s past page 200" — both of which the page loop sees as a 404.
+# `\s` covers the non-breaking and narrow spaces the portals group digits with
+_STATED_TOTAL = re.compile(r"(ponad\s+)?(\d[\d\s.]*)\s*ogłosze", re.I)
+
+
+def stated_total(html):
+    """(total, is_min) from a gratka/morizon results page, or (None, False).
+
+    morizon says "ponad 9000" and rounds to whole thousands, so its number is a
+    LOWER bound: below it proves truncation, above it proves nothing.
+    """
+    m = _STATED_TOTAL.search(html or "")
+    if not m:
+        return None, False
+    digits = re.sub(r"[^\d]", "", m.group(2))
+    if not digits:
+        return None, False
+    return int(digits), bool(m.group(1))
 
 DISPLAY_FIELDS = ("title", "type", "area", "rooms", "plot_area", "floor",
                   "locality", "district", "street", "image", "is_private", "agency",

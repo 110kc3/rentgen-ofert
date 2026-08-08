@@ -13,7 +13,7 @@ import requests
 from bs4 import BeautifulSoup
 
 from . import coverage
-from .normalize import location_parts, to_float, to_int
+from .normalize import location_parts, stated_total, to_float, to_int
 
 BASE = "https://www.morizon.pl"
 # Whole-voivodeship search by default; override with RENTGEN_REGION.
@@ -123,6 +123,8 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
             tag = base.rstrip("/").split("/")[-1]
             page = 1
             got = 0
+            total = None
+            total_min = False
             stopped = coverage.OK
             while True:
                 if page > max_pages:
@@ -136,6 +138,8 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
                         page -= 1
                         break
                     r.raise_for_status()
+                    if total is None:
+                        total, total_min = stated_total(r.text)
                     batch = [c for c in parse_cards(r.text, typ) if c["url"] not in seen]
                 except Exception as exc:  # keep what we have, move on
                     log(f"  morizon {typ}/{tag} page {page} error: {exc}")
@@ -150,6 +154,13 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
                     break
                 page += 1
                 time.sleep(delay)
-            cov.append(coverage.row("morizon", typ, tag, max(page, 0), got, stopped))
+            # Same 200-page wall as gratka (bisected 2026-08-08), same blind
+            # spot: the 404 looks like the end of the results. morizon's own
+            # count is phrased "ponad 9000" and rounds to whole thousands, so
+            # it is a lower bound — which is still enough to prove truncation.
+            if stopped == coverage.OK and coverage.short_of_total(got, total):
+                stopped = coverage.PORTAL_CAP
+            cov.append(coverage.row("morizon", typ, tag, max(page, 0), got, stopped,
+                                    portal_total=total, total_is_min=total_min))
     scrape.last_coverage = cov
     return out

@@ -111,7 +111,11 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
             got += len(batch)
             pg = sa.get("pagination") or {}
             total_pages = pg.get("totalPages", 1) or 1
-            total_ads = sa.get("totalResults") or sa.get("count") or total_ads
+            # `pagination.totalItems` is where Otodom states its count (18 505
+            # śląskie flats on 2026-08-08). The old code read `totalResults` /
+            # `count` off searchAds — neither key exists, so portal_total was
+            # silently null on every coverage row it ever wrote.
+            total_ads = pg.get("totalItems") or total_ads
             log(f"  otodom {typ} page {page}/{min(total_pages, max_pages)}: +{len(batch)}")
             # stop on an empty RESULT page, not an empty parsed batch — a page of
             # nothing but INVESTMENT bundles filters to [] while more pages exist
