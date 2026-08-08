@@ -51,7 +51,9 @@ nothing needs re-probing to continue.
       time + a cold phash cache for everything newly visible).
 
 **What to check on the next CI run** (this is the acceptance test for both
-steps, and the input to Step 2):
+steps, and the input to Step 2). That run is **Actions run 31281062431**,
+triggered by the commit that shipped these two steps and still in flight when
+this was written — `gh run view 31281062431 --log | grep -E "coverage |!!"`:
 - `meta.json` → `coverage.by_source.*.pct` — the first real coverage numbers.
 - gratka/morizon should report `portal_cap` at ~7 000 of 9 856 (their 200-page
   wall), otodom `cap` at 200 of 515 pages, olx `portal_cap` **plus 60 town
