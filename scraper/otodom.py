@@ -13,7 +13,7 @@ import time
 
 import requests
 
-from . import coverage
+from . import bands, coverage
 from .normalize import otodom_rooms, to_int
 
 BASE = "https://www.otodom.pl"
@@ -32,6 +32,9 @@ HEADERS = {
     "Accept-Language": "pl-PL,pl;q=0.9,en;q=0.8",
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
 }
+# Otodom honours &limit: 72 is the largest it serves and halves the request
+# count on the biggest portal (515 pages -> 258 for śląskie flats, verified).
+PAGE_SIZE = 72
 _NEXT = re.compile(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', re.S)
 
 
@@ -82,54 +85,80 @@ def parse_items(items, typ: str):
     return out
 
 
+def _walk(path, typ, tag, max_pages, delay, session, log, seen, out, extra=""):
+    """Page through one search (optionally price-banded). Returns its cov row."""
+    page = 1
+    got = 0
+    served = 0        # ads Otodom handed over, before the INVESTMENT filter
+    total_pages = None
+    total_ads = None
+    stopped = coverage.OK
+    while page <= max_pages:
+        url = f"{BASE}{path}?page={page}&limit={PAGE_SIZE}" + (f"&{extra}" if extra else "")
+        try:
+            r = session.get(url, headers=HEADERS, timeout=30)
+            r.raise_for_status()
+            sa = extract_search_ads(r.text)
+        except Exception as exc:  # keep what we have, stop this category
+            log(f"  otodom {typ}/{tag} page {page} error: {exc}")
+            stopped = coverage.ERROR
+            break
+        items = sa.get("items") or []
+        served += len(items)
+        batch = [a for a in parse_items(items, typ) if a["url"] not in seen]
+        for a in batch:
+            seen.add(a["url"])
+        out.extend(batch)
+        got += len(batch)
+        pg = sa.get("pagination") or {}
+        total_pages = pg.get("totalPages", 1) or 1
+        # `pagination.totalItems` is where Otodom states its count (18 505
+        # śląskie flats on 2026-08-08). The old code read `totalResults` /
+        # `count` off searchAds — neither key exists, so portal_total was
+        # silently null on every coverage row it ever wrote.
+        total_ads = pg.get("totalItems") or total_ads
+        log(f"  otodom {typ}/{tag} page {page}/{min(total_pages, max_pages)}: +{len(batch)}")
+        # stop on an empty RESULT page, not an empty parsed batch — a page of
+        # nothing but INVESTMENT bundles filters to [] while more pages exist
+        if not items:
+            break
+        if page >= min(total_pages, max_pages):
+            # Otodom states its own totalPages, so we know exactly which
+            # limit bit: ours (more pages exist) or the portal's end.
+            stopped = (coverage.OUR_CAP if total_pages > max_pages
+                       else coverage.OK)
+            break
+        page += 1
+        time.sleep(delay)
+    return coverage.row("otodom", typ, tag, page, got, stopped,
+                        portal_pages=total_pages, portal_total=total_ads,
+                        served=served)
+
+
 def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
-           types=("house", "flat")):
+           types=("house", "flat"), banded=True):
     session = session or requests.Session()
     out = []
     cov = []
     for typ, path in SEARCH.items():
         if typ not in types:
             continue
-        page = 1
-        got = 0
-        total_pages = None
-        total_ads = None
-        stopped = coverage.OK
-        while page <= max_pages:
-            url = f"{BASE}{path}?page={page}"
-            try:
-                r = session.get(url, headers=HEADERS, timeout=30)
-                r.raise_for_status()
-                sa = extract_search_ads(r.text)
-            except Exception as exc:  # keep what we have, stop this category
-                log(f"  otodom {typ} page {page} error: {exc}")
-                stopped = coverage.ERROR
-                break
-            items = sa.get("items") or []
-            batch = parse_items(items, typ)
-            out.extend(batch)
-            got += len(batch)
-            pg = sa.get("pagination") or {}
-            total_pages = pg.get("totalPages", 1) or 1
-            # `pagination.totalItems` is where Otodom states its count (18 505
-            # śląskie flats on 2026-08-08). The old code read `totalResults` /
-            # `count` off searchAds — neither key exists, so portal_total was
-            # silently null on every coverage row it ever wrote.
-            total_ads = pg.get("totalItems") or total_ads
-            log(f"  otodom {typ} page {page}/{min(total_pages, max_pages)}: +{len(batch)}")
-            # stop on an empty RESULT page, not an empty parsed batch — a page of
-            # nothing but INVESTMENT bundles filters to [] while more pages exist
-            if not items:
-                break
-            if page >= min(total_pages, max_pages):
-                # Otodom states its own totalPages, so we know exactly which
-                # limit bit: ours (more pages exist) or the portal's end.
-                stopped = (coverage.OUR_CAP if total_pages > max_pages
-                           else coverage.OK)
-                break
-            page += 1
-            time.sleep(delay)
-        cov.append(coverage.row("otodom", typ, None, page, got, stopped,
-                                portal_pages=total_pages, portal_total=total_ads))
+        seen = set()
+        row = _walk(path, typ, REGION, max_pages, delay, session, log, seen, out)
+        cov.append(row)
+        if not banded or not bands.overflows(row, "otodom"):
+            continue
+        # 18 505 flats behind a window worth ~7 200: the region search can only
+        # ever show a third of them, so ask by price instead. Additive — the
+        # unbanded results above are kept.
+        log(f"  otodom {typ}: {row.get('portal_total')} ads stated, past the "
+            f"reachable window — subdividing by price")
+        rows, seeds = bands.subdivide(
+            "otodom",
+            lambda lo, hi, tag: _walk(path, typ, tag, max_pages, delay, session,
+                                      log, seen, out, bands.qs("otodom", lo, hi)),
+            log=log)
+        cov.extend(rows)
+        bands.check_totals("otodom", typ, row.get("portal_total"), seeds, log=log)
     scrape.last_coverage = cov
     return out

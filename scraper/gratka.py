@@ -15,7 +15,7 @@ import time
 import requests
 from bs4 import BeautifulSoup
 
-from . import coverage
+from . import bands, coverage
 from .normalize import location_parts, stated_total, to_float, to_int
 
 BASE = "https://gratka.pl"
@@ -32,6 +32,9 @@ HEADERS = {
     ),
     "Accept-Language": "pl-PL,pl;q=0.9,en;q=0.8",
 }
+# Hard 404 past here whatever the search holds (bisected 2026-08-08: page 200
+# OK, 201 404). At ~35 ads a page that is the 7 000-ad ceiling in bands.WINDOW.
+PORTAL_PAGE_WALL = 200
 
 
 def _text(card, cy):
@@ -129,8 +132,68 @@ def parse_cards(html: str, typ: str):
     return out
 
 
+def _walk(base, typ, tag, max_pages, delay, session, log, seen, out, extra=""):
+    """Page through one search (optionally price-banded). Returns its cov row."""
+    page = 1
+    got = 0
+    total = None
+    total_min = False
+    stopped = coverage.OK
+    while True:
+        if page > max_pages:
+            stopped = coverage.OUR_CAP
+            page -= 1
+            break
+        query = "&".join(q for q in (f"page={page}" if page > 1 else "", extra) if q)
+        url = f"{base}?{query}" if query else base
+        try:
+            r = session.get(url, headers=HEADERS, timeout=30)
+            if r.status_code == 404:
+                page -= 1
+                break  # gratka 404s once you page past the last results page
+            r.raise_for_status()
+            if total is None:
+                total, total_min = stated_total(r.text)
+            cards = parse_cards(r.text, typ)
+            batch = [c for c in cards if c["url"] not in seen]
+        except Exception as exc:  # keep what we have, move on
+            log(f"  gratka {typ}/{tag} page {page} error: {exc}")
+            stopped = coverage.ERROR
+            break
+        for c in batch:
+            seen.add(c["url"])
+        out.extend(batch)
+        got += len(batch)
+        log(f"  gratka {typ}/{tag} page {page}: +{len(batch)}")
+        # Stop on an empty PAGE, not an empty batch. A price band re-sorts the
+        # results, so its first pages are often ads the unbanded pass already
+        # took while later pages hold new ones — breaking on "nothing new here"
+        # would silently abandon the band at page 1.
+        if not cards:
+            break
+        page += 1
+        time.sleep(delay)
+    # gratka's 404 means "no more pages", NOT "no more results": it
+    # refuses to serve past page 200 whatever the search holds
+    # (bisected 2026-08-08 — page 200 OK, 201 404, on a search whose
+    # own header says 9 856 ads = 282 pages). The page loop cannot tell
+    # that from a genuine last page, so the stated total decides.
+    #
+    # `got` counts only URLs new to this search's `seen`, so once bands are
+    # running a band legitimately collects fewer ads than it states — the
+    # overlap was already taken by the unbanded pass. Judge truncation on the
+    # PAGE count against the wall, and fall back to the total only for the
+    # unbanded search that owns the whole `seen` set.
+    if stopped == coverage.OK and page >= PORTAL_PAGE_WALL:
+        stopped = coverage.PORTAL_CAP
+    elif stopped == coverage.OK and not extra and coverage.short_of_total(got, total):
+        stopped = coverage.PORTAL_CAP
+    return coverage.row("gratka", typ, tag, max(page, 0), got, stopped,
+                        portal_total=total, total_is_min=total_min)
+
+
 def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
-           types=("house", "flat")):
+           types=("house", "flat"), banded=True):
     session = session or requests.Session()
     out = []
     cov = []
@@ -140,47 +203,21 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
         seen = set()
         for base in bases:
             tag = base.rstrip("/").split("/")[-1]
-            page = 1
-            got = 0
-            total = None
-            total_min = False
-            stopped = coverage.OK
-            while True:
-                if page > max_pages:
-                    stopped = coverage.OUR_CAP
-                    page -= 1
-                    break
-                url = base if page == 1 else f"{base}?page={page}"
-                try:
-                    r = session.get(url, headers=HEADERS, timeout=30)
-                    if r.status_code == 404:
-                        page -= 1
-                        break  # gratka 404s once you page past the last results page
-                    r.raise_for_status()
-                    if total is None:
-                        total, total_min = stated_total(r.text)
-                    batch = [c for c in parse_cards(r.text, typ) if c["url"] not in seen]
-                except Exception as exc:  # keep what we have, move on
-                    log(f"  gratka {typ}/{tag} page {page} error: {exc}")
-                    stopped = coverage.ERROR
-                    break
-                for c in batch:
-                    seen.add(c["url"])
-                out.extend(batch)
-                got += len(batch)
-                log(f"  gratka {typ}/{tag} page {page}: +{len(batch)}")
-                if not batch:
-                    break
-                page += 1
-                time.sleep(delay)
-            # gratka's 404 means "no more pages", NOT "no more results": it
-            # refuses to serve past page 200 whatever the search holds
-            # (bisected 2026-08-08 — page 200 OK, 201 404, on a search whose
-            # own header says 9 856 ads = 282 pages). The page loop cannot tell
-            # that from a genuine last page, so the stated total decides.
-            if stopped == coverage.OK and coverage.short_of_total(got, total):
-                stopped = coverage.PORTAL_CAP
-            cov.append(coverage.row("gratka", typ, tag, max(page, 0), got, stopped,
-                                    portal_total=total, total_is_min=total_min))
+            row = _walk(base, typ, tag, max_pages, delay, session, log, seen, out)
+            cov.append(row)
+            if not banded or not bands.overflows(row, "gratka"):
+                continue
+            # 9 856 flats behind a 7 000-ad wall: the rest are only reachable by
+            # asking a narrower question. Additive — the unbanded pass is kept.
+            log(f"  gratka {typ}/{tag}: {row.get('portal_total')} ads stated, "
+                f"past the 200-page wall — subdividing by price")
+            rows, seeds = bands.subdivide(
+                "gratka",
+                lambda lo, hi, btag: _walk(base, typ, f"{tag}/{btag}", max_pages,
+                                           delay, session, log, seen, out,
+                                           bands.qs("gratka", lo, hi)),
+                log=log)
+            cov.extend(rows)
+            bands.check_totals("gratka", typ, row.get("portal_total"), seeds, log=log)
     scrape.last_coverage = cov
     return out

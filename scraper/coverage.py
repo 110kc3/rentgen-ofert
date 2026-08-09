@@ -58,9 +58,12 @@ COMPLETE_ENOUGH = 0.95
 
 
 def row(source, typ, tag, pages, listings, stopped,
-        portal_pages=None, portal_total=None, total_is_min=False) -> dict:
+        portal_pages=None, portal_total=None, total_is_min=False,
+        served=None) -> dict:
     out = {"source": source, "type": typ, "pages": pages,
            "listings": listings, "stopped": stopped}
+    if served is not None and served != listings:
+        out["served"] = served
     if tag and tag != typ:
         out["tag"] = tag
     if portal_pages is not None:
@@ -70,6 +73,20 @@ def row(source, typ, tag, pages, listings, stopped,
         if total_is_min:
             out["total_is_min"] = True
     return out
+
+
+def seen_by(r) -> int:
+    """Ads the portal actually handed over for a search, before OUR filters.
+
+    This, not the kept count, is what a stated total must be compared against.
+    OLX states `visibleElements` for everything matching the search but we drop
+    the ads it syndicates from Otodom (collected at the source) — on a town
+    search that is most of them, so comparing kept-vs-stated declared every one
+    of ~60 town searches truncated. The 2026-08-08 run printed 126 such
+    warnings, nearly all false, which is an excellent way to stop reading them.
+    """
+    served = r.get("served")
+    return r.get("listings") if served is None else served
 
 
 def short_of_total(collected, portal_total, tolerance=COMPLETE_ENOUGH) -> bool:
@@ -117,10 +134,12 @@ def summarise(rows) -> dict:
     by_source = {}
     for r in rows or ():
         s = by_source.setdefault(r["source"], {"searches": 0, "pages": 0,
-                                               "listings": 0, "truncated": 0})
+                                               "listings": 0, "seen": 0,
+                                               "truncated": 0})
         s["searches"] += 1
         s["pages"] += r.get("pages") or 0
         s["listings"] += r.get("listings") or 0
+        s["seen"] += seen_by(r) or 0
         s["truncated"] += 1 if r.get("stopped") in TRUNCATED else 0
         if r.get("portal_total"):
             s["portal_total"] = s.get("portal_total", 0) + r["portal_total"]
@@ -129,9 +148,14 @@ def summarise(rows) -> dict:
             if r.get("total_is_min"):
                 s["total_is_min"] = True
     for s in by_source.values():
-        pct = covered(s["listings"], s.get("portal_total"))
+        # `pct` answers "how much of the portal did we get to see", so it counts
+        # what was served. What we kept is `listings`; the gap is our own
+        # filtering (syndicated ads, INVESTMENT bundles), not missed coverage.
+        pct = covered(s["seen"], s.get("portal_total"))
         if pct is not None:
             s["pct"] = pct
+        if s["seen"] == s["listings"]:
+            del s["seen"]
     return {
         "by_source": by_source,
         "truncated": [r for r in rows or () if r.get("stopped") in TRUNCATED],
@@ -148,8 +172,10 @@ def _of_total(r) -> str:
     if not total:
         return ""
     approx = "≥" if r.get("total_is_min") else ""
-    return (f" — collected {r.get('listings')} of {approx}{total}"
-            f" ({covered(r.get('listings'), total)}%)")
+    seen = seen_by(r)
+    kept = "" if seen == r.get("listings") else f", kept {r.get('listings')}"
+    return (f" — collected {seen} of {approx}{total}"
+            f" ({covered(seen, total)}%){kept}")
 
 
 def warnings(rows) -> list:
@@ -162,7 +188,7 @@ def warnings(rows) -> list:
             # truncated — gratka 404s past page 200 exactly like it 404s past
             # its last page. The stated total is the only thing that tells
             # those two apart, so it gets the last word.
-            if short_of_total(r.get("listings"), r.get("portal_total")):
+            if short_of_total(seen_by(r), r.get("portal_total")):
                 out.append(f"  !! {_where(r)}: search ended cleanly but short of "
                            f"the portal's own count{_of_total(r)} — subdivide it")
             continue

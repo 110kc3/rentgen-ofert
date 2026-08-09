@@ -12,7 +12,7 @@ import time
 import requests
 from bs4 import BeautifulSoup
 
-from . import coverage
+from . import bands, coverage, photomatch
 from .normalize import location_parts, stated_total, to_float, to_int
 
 BASE = "https://www.morizon.pl"
@@ -29,6 +29,8 @@ HEADERS = {
     ),
     "Accept-Language": "pl-PL,pl;q=0.9,en;q=0.8",
 }
+# Same 200-page 404 wall as gratka — same frontend, same database.
+PORTAL_PAGE_WALL = 200
 
 
 def _text(card, cy):
@@ -85,9 +87,17 @@ def parse_cards(html: str, typ: str):
         url = href if href.startswith("http") else BASE + href
         m_id = re.search(r"mzn(\d+)", url)
         loc = _text(card, "propertyCardLocation")
+        image = _image(card)
         out.append({
             "source": "morizon",
             "source_id": m_id.group(1) if m_id else url,
+            # morizon and gratka are one database: the card thumbnail is a
+            # base64-wrapped `d-gr.cdngr.pl` origin carrying GRATKA's ad id, so
+            # the duplicate is provable here, off the search page, with no
+            # detail fetch and no photo hashing (see photomatch.gratka_ad_id and
+            # normalize._link_twins). Absent on the `gr-col` id space, which
+            # still needs photos.
+            "gratka_id": photomatch.gratka_ad_id(image),
             "url": url,
             "title": _text(card, "propertyCardTitle"),
             "type": typ,
@@ -103,15 +113,69 @@ def parse_cards(html: str, typ: str):
             "street": None,
             "is_private": None,
             "agency": None,
-            "image": _image(card),
+            "image": image,
             "created": _date(_text(card, "descriptionAddedAtDate")),
             "also_on": [],
         })
     return out
 
 
+def _walk(base, typ, tag, max_pages, delay, session, log, seen, out, extra=""):
+    """Page through one search (optionally price-banded). Returns its cov row."""
+    page = 1
+    got = 0
+    total = None
+    total_min = False
+    stopped = coverage.OK
+    while True:
+        if page > max_pages:
+            stopped = coverage.OUR_CAP   # morizon 404s past its last page
+            page -= 1
+            break
+        query = "&".join(q for q in (f"page={page}" if page > 1 else "", extra) if q)
+        url = f"{base}?{query}" if query else base
+        try:
+            r = session.get(url, headers=HEADERS, timeout=30)
+            if r.status_code == 404:
+                page -= 1
+                break
+            r.raise_for_status()
+            if total is None:
+                total, total_min = stated_total(r.text)
+            cards = parse_cards(r.text, typ)
+            batch = [c for c in cards if c["url"] not in seen]
+        except Exception as exc:  # keep what we have, move on
+            log(f"  morizon {typ}/{tag} page {page} error: {exc}")
+            stopped = coverage.ERROR
+            break
+        for c in batch:
+            seen.add(c["url"])
+        out.extend(batch)
+        got += len(batch)
+        log(f"  morizon {typ}/{tag} page {page}: +{len(batch)}")
+        # Stop on an empty PAGE, not an empty batch. A price band re-sorts the
+        # results, so its first pages are often ads the unbanded pass already
+        # took while later pages hold new ones — breaking on "nothing new here"
+        # would silently abandon the band at page 1.
+        if not cards:
+            break
+        page += 1
+        time.sleep(delay)
+    # Same 200-page wall as gratka (bisected 2026-08-08), same blind spot: the
+    # 404 looks like the end of the results. morizon's own count is phrased
+    # "ponad 9000" and rounds to whole thousands, so it is a lower bound —
+    # which is still enough to prove truncation. See the note in gratka._walk
+    # for why a banded search is judged on pages rather than on that total.
+    if stopped == coverage.OK and page >= PORTAL_PAGE_WALL:
+        stopped = coverage.PORTAL_CAP
+    elif stopped == coverage.OK and not extra and coverage.short_of_total(got, total):
+        stopped = coverage.PORTAL_CAP
+    return coverage.row("morizon", typ, tag, max(page, 0), got, stopped,
+                        portal_total=total, total_is_min=total_min)
+
+
 def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
-           types=("house", "flat")):
+           types=("house", "flat"), banded=True):
     session = session or requests.Session()
     out = []
     cov = []
@@ -121,46 +185,19 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
         seen = set()
         for base in bases:
             tag = base.rstrip("/").split("/")[-1]
-            page = 1
-            got = 0
-            total = None
-            total_min = False
-            stopped = coverage.OK
-            while True:
-                if page > max_pages:
-                    stopped = coverage.OUR_CAP   # morizon 404s past its last page
-                    page -= 1
-                    break
-                url = base if page == 1 else f"{base}?page={page}"
-                try:
-                    r = session.get(url, headers=HEADERS, timeout=30)
-                    if r.status_code == 404:
-                        page -= 1
-                        break
-                    r.raise_for_status()
-                    if total is None:
-                        total, total_min = stated_total(r.text)
-                    batch = [c for c in parse_cards(r.text, typ) if c["url"] not in seen]
-                except Exception as exc:  # keep what we have, move on
-                    log(f"  morizon {typ}/{tag} page {page} error: {exc}")
-                    stopped = coverage.ERROR
-                    break
-                for c in batch:
-                    seen.add(c["url"])
-                out.extend(batch)
-                got += len(batch)
-                log(f"  morizon {typ}/{tag} page {page}: +{len(batch)}")
-                if not batch:
-                    break
-                page += 1
-                time.sleep(delay)
-            # Same 200-page wall as gratka (bisected 2026-08-08), same blind
-            # spot: the 404 looks like the end of the results. morizon's own
-            # count is phrased "ponad 9000" and rounds to whole thousands, so
-            # it is a lower bound — which is still enough to prove truncation.
-            if stopped == coverage.OK and coverage.short_of_total(got, total):
-                stopped = coverage.PORTAL_CAP
-            cov.append(coverage.row("morizon", typ, tag, max(page, 0), got, stopped,
-                                    portal_total=total, total_is_min=total_min))
+            row = _walk(base, typ, tag, max_pages, delay, session, log, seen, out)
+            cov.append(row)
+            if not banded or not bands.overflows(row, "morizon"):
+                continue
+            log(f"  morizon {typ}/{tag}: {row.get('portal_total')} ads stated, "
+                f"past the 200-page wall — subdividing by price")
+            rows, seeds = bands.subdivide(
+                "morizon",
+                lambda lo, hi, btag: _walk(base, typ, f"{tag}/{btag}", max_pages,
+                                           delay, session, log, seen, out,
+                                           bands.qs("morizon", lo, hi)),
+                log=log)
+            cov.extend(rows)
+            bands.check_totals("morizon", typ, row.get("portal_total"), seeds, log=log)
     scrape.last_coverage = cov
     return out

@@ -1,6 +1,7 @@
 """Regression tests for the 2026-07 bug sweep. Offline — no network."""
 import gzip
 import json
+import pathlib
 
 from scraper import delist, gratka, history, morizon, olx, rcn
 from scraper import nieruchomosci_online as nol
@@ -179,12 +180,18 @@ def test_nol_town_slug_gets_proper_name():
 
 
 def test_morizon_has_photo_extractor():
+    """Pinned to real pages, not to invented URLs — see tests/test_photomatch.py.
+
+    The previous version of this test asserted against two made-up URLs, so it
+    passed happily for however long morizon was serving its galleries from a
+    host the extractor didn't match and returning zero hashes for every ad.
+    """
     from scraper import photomatch
-    html = ('<img src="https://thumbs.cdngr.pl/thumb/abc.jpg">'
-            '<img src="https://img2.morizon.pl/g/def.webp">')
-    assert photomatch._EXTRACTORS["morizon"](html) == [
-        "https://thumbs.cdngr.pl/thumb/abc.jpg",
-        "https://img2.morizon.pl/g/def.webp"]
+    html = (pathlib.Path(__file__).parent / "fixtures" / "morizon_detail.html"
+            ).read_text(encoding="utf-8")
+    urls = photomatch._EXTRACTORS["morizon"](html)
+    assert urls, "morizon must extract SOMETHING from a real detail page"
+    assert all("staticmorizon.com.pl" in u for u in urls)
 
 
 # ---- rcn -----------------------------------------------------------------------
@@ -260,3 +267,52 @@ def test_withdrawal_week_is_on_axis_without_live_obs():
     gone = out["global"]["house"]["gone"]
     assert "2026-06-22" in weeks           # the delisting's week exists on the axis
     assert gone[weeks.index("2026-06-22")] == 1
+
+
+def test_nol_dedupes_cross_listed_towns_by_ad_id():
+    """Every n-online town sub-domain serves its neighbours' offers under its
+    own hostname, so one ad arrives as gliwice.…/123.html AND katowice.…/123.html.
+    Keying `seen` on the URL made every page look fresh: 58 613 rows collapsing
+    to 11 172 properties in the 2026-08-08 run, the `dup_pages` exit never
+    firing, and 75 of the run's 123 scrape minutes spent to gain 83 listings.
+    """
+    ids = [26859971, 26684311, 26850845]
+
+    class _Sess:
+        def __init__(self):
+            self.calls = 0
+
+        def get(self, url, **kw):
+            self.calls += 1
+            town = url.split("//")[1].split(".")[0]
+            # every town serves the same three ads, under its own hostname
+            offers = [{"url": f"https://{town}.nieruchomosci-online.pl/x/{i}.html",
+                       "price": "500000", "itemOffered": {"floorSize": {"value": 50}}}
+                      for i in ids]
+
+            class R:
+                status_code = 200
+                text = json.dumps(offers)
+
+                @staticmethod
+                def raise_for_status():
+                    pass
+            return R()
+
+    monkey = nol.extract_offers
+    nol.extract_offers = json.loads
+    try:
+        s = _Sess()
+        out = nol.scrape(max_pages=50, delay=0, session=s, log=lambda *a: None,
+                         types=("flat",),
+                         towns={"gliwice": "Gliwice", "katowice": "Katowice",
+                                "zabrze": "Zabrze"})
+    finally:
+        nol.extract_offers = monkey
+
+    # one property per ad id, not one per (town, ad) pair
+    assert len(out) == len(ids)
+    assert {l["source_id"] for l in out} == {str(i) for i in ids}
+    # and the duplicate-page guard now fires, so towns 2 and 3 stop early
+    # instead of walking to the cap
+    assert s.calls <= 3 * 3, f"walked {s.calls} pages for 3 towns of duplicates"

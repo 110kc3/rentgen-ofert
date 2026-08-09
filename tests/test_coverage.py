@@ -136,6 +136,7 @@ class WalledSession:
 
 def test_gratka_404_wall_is_reported_as_a_portal_cap():
     gratka.scrape(max_pages=500, delay=0, log=lambda *a: None, types=("flat",),
+                  banded=False,
                   session=WalledSession(wall=200, stated_html=GRATKA_META))
     row = gratka.scrape.last_coverage[0]
     assert row["pages"] == 200
@@ -148,6 +149,7 @@ def test_gratka_real_end_stays_clean():
     """The same 404, but the portal's count agrees we got everything."""
     meta = '<meta content="Domy na sprzedaż. 350 ogłoszeń." name="description">'
     gratka.scrape(max_pages=500, delay=0, log=lambda *a: None, types=("flat",),
+                  banded=False,
                   session=WalledSession(wall=10, stated_html=meta))
     row = gratka.scrape.last_coverage[0]
     assert row["listings"] == 350 and row["stopped"] == coverage.OK
@@ -156,6 +158,7 @@ def test_gratka_real_end_stays_clean():
 
 def test_morizon_lower_bound_total_still_catches_the_wall():
     morizon.scrape(max_pages=500, delay=0, log=lambda *a: None, types=("flat",),
+                   banded=False,
                    session=WalledSession(wall=200, stated_html=MORIZON_META))
     row = morizon.scrape.last_coverage[0]
     assert row["portal_total"] == 9000 and row["total_is_min"] is True
@@ -208,7 +211,7 @@ def test_olx_records_portal_cap_and_subdivides():
     s = FakeSession(total_pages=140)
     towns = {"gliwice": "Gliwice", "katowice": "Katowice"}
     out = olx.scrape(max_pages=200, delay=0, session=s, log=lambda *a: None,
-                     types=("house",), towns=towns)
+                     types=("house",), towns=towns, banded=False)
     cov = olx.scrape.last_coverage
     region = cov[0]
     assert region["stopped"] == coverage.PORTAL_CAP   # 25 < 140 claimed pages
@@ -237,7 +240,7 @@ def test_olx_without_towns_still_reports_the_cap():
     off rather than silently returning a partial region."""
     s = FakeSession(total_pages=140)
     olx.scrape(max_pages=200, delay=0, session=s, log=lambda *a: None,
-               types=("house",), towns=None)
+               types=("house",), towns=None, banded=False)
     assert olx.scrape.last_coverage[0]["stopped"] == coverage.PORTAL_CAP
 
 
@@ -249,7 +252,7 @@ def test_olx_cap_stated_as_a_smaller_total_is_still_a_cap():
     s = FakeSession(total_pages=25, hard_cap=99, visible=5503, servable=1000)
     towns = {"gliwice": "Gliwice"}
     olx.scrape(max_pages=200, delay=0, session=s, log=lambda *a: None,
-               types=("house",), towns=towns)
+               types=("house",), towns=towns, banded=False)
     cov = olx.scrape.last_coverage
     assert cov[0]["pages"] == 25                      # walked all it was offered
     assert cov[0]["portal_total"] == 5503
@@ -265,3 +268,35 @@ def test_olx_complete_search_reports_its_total_without_warning():
     assert row["stopped"] == coverage.OK and row["portal_total"] == 6
     assert len(olx.scrape.last_coverage) == 1
     assert coverage.warnings([row]) == []
+
+
+# --- served vs kept: our own filtering is not missed coverage ----------------
+
+def test_pct_measures_what_the_portal_served_not_what_we_kept():
+    """OLX states `visibleElements` for every ad matching a search, but we drop
+    the ones it syndicates from Otodom (already collected at the source). On a
+    town search that is most of them, so comparing kept-vs-stated declared all
+    ~60 town searches truncated: the 2026-08-08 run printed 126 warnings, nearly
+    all false, which is a very effective way to stop anyone reading them."""
+    row = coverage.row("olx", "house", "katowice", 2, 3, coverage.OK,
+                       portal_total=63, served=63)
+    assert coverage.seen_by(row) == 63
+    assert coverage.warnings([row]) == []          # saw everything, kept 3
+    s = coverage.summarise([row])["by_source"]["olx"]
+    assert s["listings"] == 3 and s["seen"] == 63 and s["pct"] == 100.0
+
+
+def test_a_genuinely_truncated_search_still_warns_loudly():
+    """The suppression must key on what was SERVED, not merely on `served`
+    being present — otherwise it would hide the real thing."""
+    row = coverage.row("olx", "house", "katowice", 25, 3, coverage.OK,
+                       portal_total=1733, served=500)
+    w = coverage.warnings([row])
+    assert len(w) == 1 and "1733" in w[0] and "kept 3" in w[0]
+
+
+def test_served_is_omitted_when_nothing_was_filtered():
+    row = coverage.row("gratka", "flat", "slaskie", 10, 350, coverage.OK,
+                       portal_total=350, served=350)
+    assert "served" not in row
+    assert "seen" not in coverage.summarise([row])["by_source"]["gratka"]

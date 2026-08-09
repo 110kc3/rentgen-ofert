@@ -1,14 +1,141 @@
 # TODO — rentgen-ofert
 
 > Keep this file and `README.md` updated after each change.
-> Last updated: 2026-08-08
+> Last updated: 2026-08-09
+
+## Done (2026-08-09) — rollout steps 2, 3 and 4a, plus three defects found on the way
+
+**Where to pick up: "Rollout order" in the whole-Poland plan below, at Step 4**
+(the remaining affordability items — the photo budget needs re-timing before any
+decision), then Step 5. Steps 0–3 are done. Every number here was measured
+against the real CI run or the real published data.
+
+### What run 31281062431 proved (the acceptance test for steps 0+1)
+4 h 16 m, success. Both steps confirmed, and the dataset roughly doubled:
+**18 385 → 34 137 properties**.
+
+| portal | before | after | portal states | pct |
+|---|---|---|---|---|
+| otodom | 1 482 | **11 199** | 23 002 | 48.7% |
+| gratka | 1 750 | **9 505** | 12 369 | 76.8% |
+| morizon | 1 750 | **9 505** | ≥11 000 | 86.4% |
+| olx | ~470 | **1 519** | 13 567 | 11.2% |
+| n-online | 11 089 | 11 172 | — | — |
+
+Phases: scrape 123 min (otodom 12, olx 18, gratka 9, morizon 10, **n-online 75**),
+photo 96 min (**15 350 skipped, budget exhausted**), history 20, delist 8, RCN 8.
+`cache/phash_slaskie.json` reached **62.86 MB**, and the log carried **126 `!!`
+warnings**, nearly all false.
+
+Those numbers reordered the plan. Three defects were sitting under Step 2 that it
+would have multiplied, so they shipped in the same batch.
+
+- [x] **Step 2 — price-band subdivision (`scraper/bands.py`).** One helper, four
+      portals. The unbanded search runs first and is kept (priceless ads live
+      only there); while a search's stated total exceeds its portal's reachable
+      window — otodom 7 200, gratka/morizon 7 000, olx 1 000, all named
+      constants in `bands.WINDOW` — the price range is bisected and the halves
+      walked, merging by URL. Bands are half-open `[lo, hi)` so a boundary price
+      lands in exactly one band. `check_totals` asserts the seed bands sum to at
+      least the unbanded total, which is how a portal's price filter silently
+      dropping ads gets caught. Additive throughout: a bad band costs one
+      request and can never lose a listing already held. `RENTGEN_BANDS=0`
+      disables it. otodom also gained **`&limit=72`** (515 → 258 pages).
+      gratka's and morizon's parameters were **re-probed live 2026-08-09** and
+      answer exactly as recorded; otodom's are the 2026-08-08 measurements, as
+      its edge now 403s this IP after a probe burst.
+- [x] **A real bug the band work surfaced.** gratka/morizon broke their page loop
+      on an empty *batch* (nothing new on this page) rather than an empty *page*.
+      A band re-sorts the results, so its first pages are usually ads the
+      unbanded pass already took — every band would have quit at page 1 and
+      silently lost everything behind it. olx/otodom already broke on the raw
+      page and were fine. Pinned by
+      `test_a_band_whose_first_page_is_all_duplicates_keeps_going`.
+- [x] **An errored search no longer triggers subdivision.** A request that failed
+      fails the same way with a price filter on it; treating it as overflow made
+      one broken search recurse into dozens. Caught by the existing OLX tests
+      the moment bands were switched on.
+- [x] **Step 3 — the gratka↔morizon duplicate: worse than estimated, and now free.**
+      In the published data morizon appeared in **zero** merged source-pairs —
+      9 501 of its 9 505 cards were singletons and **not one carried a photo
+      hash**. Confirmed live: galleries moved to `img1.staticmorizon.com.pl`,
+      which `photomatch._morizon` never matched.
+      - **The merge key needs no fetching at all.** Both portals serve
+        `<host>/thumb/<base64>/<rendition>/<slug>.jpg`, and the base64 decodes to
+        the same `d-gr.cdngr.pl/kadry/…/<gratka ad id>_<photo>.jpg` origin — which
+        a morizon *card thumbnail on the search page* already carries. They are
+        one database behind two frontends. Measured on the published data:
+        **7 089 of 9 501 morizon cards — 100% of the `gr-ogl` flavour — resolve
+        to a gratka ad we already hold**, and re-running `normalize._link_twins`
+        over the real records links exactly those 7 089. That is **20.8% of
+        everything published**. The other 2 383 are `gr-col`, a different id
+        space, and still go through photos — which now work.
+      - Two traps a plain regex fix walks into, both now pinned by fixtures
+        trimmed from the live pages: **blog teasers ride the same `/thumb/` path
+        and their slug also ends `.jpg`**, so a host-only pattern hashes stock
+        article art; and the first five gallery URLs are the xs/s/m/l/og
+        renditions of **one** photo, so `MAX_IMAGES = 5` was hashing a single
+        photo five times on *both* portals. Hashing is now per distinct origin.
+      - The old `test_morizon_has_photo_extractor` asserted against two invented
+        URLs, which is exactly why it stayed green while morizon returned nothing
+        for months. It reads a real page now.
+- [x] **n-online was burning 75 of the 123 scrape minutes to gain 83 listings.**
+      Its `seen` set keyed on the URL, but every town sub-domain serves its
+      neighbours' offers under its own hostname — one ad arrives as
+      `gliwice.…/26859971.html` *and* `katowice.…/26859971.html`. Every page
+      therefore looked fresh: **58 613 rows collapsed to 11 172 properties** and
+      the `dup_pages` early exit could never fire, so every town ran to the cap.
+      Keyed on the ad id (already extracted as `source_id`) it dedupes and stops
+      early. This also more than halves the photo phase's input — of the 90 341
+      listings hashed last run, 47 441 were n-online duplicates.
+- [x] **Step 4a — phash cache: gzip + base64-packed hashes.** v1 wrote each
+      256-bit hash as a ~78-character decimal string in plain JSON. Verified on
+      the real production file: **65.92 MB → 12.35 MB (5.3×)**, round-trip clean
+      on all 72 090 entries, v1 read transparently and deleted on save so it
+      stops being pushed. Clear of the 50 MB warning and of the 100 MB hard limit
+      that would fail the push outright.
+- [x] **Negative photo caching.** `put()` no-op'd on empty results, so all 9 505
+      morizon detail pages were re-fetched every single run, always returned
+      nothing, and were charged to the photo budget that was starving 15 350
+      other listings. An empty result is now a miss: retried `MISS_RETRIES` (3)
+      times, then believed for `MISS_RECHECK_DAYS` (7) so a portal that starts
+      serving photos again is picked back up. Budget-skipped listings are
+      explicitly **not** recorded as misses — otherwise a few starved runs would
+      teach the cache that half the region has no photos.
+- [x] **The 126 false warnings.** `coverage` now records what a portal *served*
+      alongside what we *kept*, and judges truncation on the former. OLX town
+      searches read "collected 3 of 63" only because we drop Otodom-syndicated
+      ads by design. `pct` now means "how much of the portal did we get to see";
+      the kept count rides alongside as `listings`.
+- [x] Tests: **119 → 156**, still fully offline. New `tests/test_bands.py` (12),
+      `tests/test_photomatch.py` (13), `tests/test_cache.py` (8), plus the
+      coverage and n-online cases. The band tests drive the real scraper page
+      loops through a fake portal that honours the price parameters over **one
+      global ad set**, so "the bands recovered everything the wall hid" is a real
+      assertion — they recover the full stated total rather than listings the
+      fake invented.
+
+**What to check on the next CI run:**
+- `coverage.by_source.*.pct` should jump: otodom 48.7% → high 90s,
+  gratka/morizon 76.8/86.4% → ~100%, and olx should stop reading 11.2% now that
+  it counts served ads rather than kept ones.
+- The published count moves two ways at once — **up** from the bands, **down** by
+  ~7 000 from the morizon merge. Somewhere around 45–60k is the expectation. If
+  morizon still shows ~9 500 singletons, `_link_twins` is not firing.
+- **`('gratka','morizon')` must stop being zero** in the source-pair histogram.
+- Scrape time: n-online should collapse from 75 min while the other four grow;
+  the photo phase's input should drop well below 90 341.
+- `cache/phash_slaskie.json.gz` should appear at ~12 MB and the plain `.json`
+  disappear from the data branch.
+- If the run approaches the 350-min timeout, `RENTGEN_BANDS=0` is the fastest
+  lever, then `RENTGEN_NOL_TOWNS`.
 
 ## Done (2026-08-08, late) — whole-Poland steps 0 + 1: the cap, and the truth
 
-**Where to pick up: "Rollout order" in the whole-Poland plan below, at Step 2
-(price-band subdivision).** Steps 0 and 1 are done and described here; every
-number they rest on was measured and is written down in that plan section, so
-nothing needs re-probing to continue.
+*(Superseded as a pick-up pointer by the 2026-08-09 section above — steps 2 and
+3 have since shipped. Kept for the measurements.)* Steps 0 and 1 are done and
+described here; every number they rest on was measured and is written down in
+the plan section below.
 
 - [x] **Step 0 — CI no longer pins the page cap.** `update.yml` set
       `RENTGEN_MAX_PAGES: "50"` in the scrape step, silently overriding the 200
@@ -50,10 +177,10 @@ nothing needs re-probing to continue.
       the project has had (uncapped pages + OLX subdivision firing for the first
       time + a cold phash cache for everything newly visible).
 
-**What to check on the next CI run** (this is the acceptance test for both
-steps, and the input to Step 2). That run is **Actions run 31281062431**,
-triggered by the commit that shipped these two steps and still in flight when
-this was written — `gh run view 31281062431 --log | grep -E "coverage |!!"`:
+**What to check on the next CI run** (the acceptance test for both steps, and
+the input to Step 2). That was **Actions run 31281062431** — it passed, and its
+numbers are in the 2026-08-09 section at the top of this file. Predictions vs
+what actually happened:
 - `meta.json` → `coverage.by_source.*.pct` — the first real coverage numbers.
 - gratka/morizon should report `portal_cap` at ~7 000 of 9 856 (their 200-page
   wall), otodom `cap` at 200 of 515 pages, olx `portal_cap` **plus 60 town
@@ -543,63 +670,44 @@ gratka/morizon `normalize.stated_total()`, olx `visibleElements` vs
 `portal_cap`, and `meta.json` → `coverage.by_source` carries `portal_total` +
 `pct`. Details and the numbers to expect are in the Done section at the top.
 
-**Step 2 — price-band subdivision (`scraper/bands.py`), the general fix.**
-- [ ] One helper, four portals, params verified above. Contract: run the
-      unbanded search first (so priceless ads and anything the filter drops are
-      still collected), then while a search's stated total exceeds its reachable
-      window, bisect its price range and recurse; merge everything by URL.
-      **Additive, exactly like the OLX town subdivision** — a bad band costs one
-      request and can never lose a listing already held.
-- [ ] Reachable windows (measured, put them in the code as named constants):
-      otodom ~100 pages/band (full depth works but goes thin and erratic past
-      ~150 — do not trust it), gratka/morizon **7 000 ads** (200-page 404 wall),
-      olx **1 000 ads**.
-- [ ] otodom `&limit=72`: free 2× fewer requests on the biggest portal.
-- [ ] Bands are half-open `[min, max)` so a listing priced exactly on a boundary
-      lands in exactly one band; assert the band totals sum to ≥ the unbanded
-      total, and log it when they do not (that is how a portal's filter
-      silently dropping ads gets caught).
-- [ ] Expected cost for genuinely full śląskie coverage: ~2 500–3 000 requests
-      ≈ 35–45 min at `RENTGEN_DELAY=0.7` (today: ~1 200 requests / 60 min, of
-      which n-online is 48). The scrape phase roughly doubles; it is not the
-      bottleneck, the photo phase is.
-- [ ] Re-measure after landing: śląskie should go from 18 385 to somewhere
-      around 30–40k unique properties. If it does not, the bands are wrong.
+**Step 2 — price-band subdivision (`scraper/bands.py`).  ✅ DONE 2026-08-09**
+(see the Done section at the top). One helper, four portals, half-open `[lo, hi)`
+bands, additive, `RENTGEN_BANDS=0` to disable; otodom also gained `&limit=72`.
+The reachable windows live in `bands.WINDOW` as named constants. gratka's and
+morizon's parameters were re-probed live on the day and answer exactly as
+recorded; otodom's are the 2026-08-08 measurements (its edge 403s the Pi after a
+probe burst). `check_totals` asserts the seed bands sum to at least the unbanded
+total, which is how a portal's price filter dropping ads gets caught.
 
-Where it plugs in (the seams already exist — nothing needs restructuring):
-- `gratka.SEARCH` / `morizon.SEARCH` are already `{type: [base_url, …]}` lists
-  precisely so one type can become several searches; the page loop and the
-  coverage row are per base URL already.
-- `olx.search_url(typ, where)` + the additive `seen`/merge in `olx.scrape()`
-  are the working precedent for "re-run a capped search narrower and merge by
-  URL" — bands follow the same contract, and after Step 1 the `portal_cap` that
-  triggers it actually fires.
-- `otodom.SEARCH` is `{type: path}`; add the query string alongside `&limit=72`.
-- `coverage.short_of_total()` / `covered()` are the loop-exit conditions: keep
-  bisecting a band while it is short of its own stated total.
-
-**Step 3 — the dedupe defects, before they get multiplied by 16.**
-- [ ] `photomatch._morizon`: add `img\d*\.staticmorizon\.com\.pl` to the host
-      pattern, with a fixture test pinned to a real page (this regex has now
-      broken twice — the fixture is the point, not the regex).
-- [ ] Dedupe gallery URLs by the **base64 origin payload** in the thumb URL and
-      hash one rendition per distinct origin, so `MAX_IMAGES = 5` means five
-      photos instead of five sizes of one photo. Improves every gratka/morizon
-      merge and shrinks the phash cache at the same time.
-- [ ] Use that decoded origin as a **direct merge key** for gratka↔morizon:
-      identical origin = same ad, no image fetch, no threshold. Cheapest merge
-      in the whole pipeline and it removes ~2 400 duplicate cards in śląskie.
-- [ ] Re-check `('gratka','morizon')` in the source-pair histogram afterwards —
-      it must stop being zero. Same query is the regression test.
+**Step 3 — the dedupe defects.  ✅ DONE 2026-08-09** (see the Done section at
+the top). The gratka↔morizon merge needs no image fetch at all — a morizon
+search-page thumbnail already carries gratka's ad id — and links **7 089** of
+9 501 morizon cards when re-run over the real published records, 20.8% of
+everything published. Gallery hashing is now one URL per distinct photo origin
+on both portals, blog teasers on the same CDN path excluded, fixtures pinned to
+real pages.
+- [ ] **Still to verify on the next run**: `('gratka','morizon')` must stop
+      being zero in the source-pair histogram. That query is the regression
+      test.
 
 **Step 4 — make one region affordable at ~2× the listings.**
-- [ ] **phash cache**: gzip it and pack hashes as base64 rather than 78-char
-      decimal strings (54.3 MB → ~10 MB). Unblocks the 50 MB warning today and
-      the 100 MB hard failure that a bigger region would hit.
-- [ ] **Photo budget**: it is already the binding constraint (80 of 90 min).
-      Step 3 removes the wasted rendition fetches; after that, re-time and
-      decide between a larger budget, more workers, or hashing only listings
-      that actually have a size-collision.
+- [x] **phash cache**: gzipped and base64-packed — **65.92 → 12.35 MB (5.3×)**
+      measured on the real production file, round-trip clean on all 72 090
+      entries, v1 migrated on read and deleted on save. DONE 2026-08-09.
+- [ ] **Photo budget**: still the binding constraint — the last run skipped
+      15 350 listings with it exhausted. Three things just changed underneath
+      it, so re-time before deciding anything: the n-online dedupe roughly
+      halves the input (90 341 listings, 47 441 of them n-online duplicates),
+      empty results are now cached so photo-less ads stop being re-fetched
+      every run, and hashing is per distinct origin instead of five renditions
+      of one photo. THEN choose between a larger budget, more workers, or
+      hashing only listings that actually have a size-collision.
+- [ ] **Don't hash a listing whose twin already identifies it.** A morizon ad
+      linked to a gratka ad by portal id needs no photos at all, but
+      `attach_hashes` runs over `raw` before `dedupe` does the linking. Moving
+      `_link_twins` earlier would drop ~7 000 detail fetches per run.
+      Deliberately left out of the 2026-08-09 batch: it reorders the pipeline,
+      and the budget wins above may already be enough.
 - [ ] **Delist sweep**: 300 checks against 21 639 stale records never converges.
       Prioritise (oldest-first is not the same as most-likely-gone), use HEAD
       where the portal allows it, and scale `RENTGEN_VERIFY_MAX` with the record

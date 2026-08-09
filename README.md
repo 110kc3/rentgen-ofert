@@ -77,12 +77,26 @@ force-pushed fresh each run (the price history lives *inside*
   OLX's `visibleElements` vs the `totalElements` it will actually serve — and a
   search that ends short of it is reported as truncated whatever the stop reason
   said. `coverage.by_source` carries `portal_total` and `pct`, so "did coverage
-  improve" is one number per run. (`pct` is a floor: each scraper filters while
-  parsing, e.g. otodom drops INVESTMENT bundles and OLX drops ads syndicated
-  from Otodom, so a complete search still lands below 100%.) OLX caps itself at
-  1 000 ads per search, so a capped OLX search is re-run per town and merged;
-  subdivision is additive, so a bad town slug costs one request and can never
-  lose a listing already collected.
+  improve" is one number per run. `pct` counts what the portal *served*, not
+  what we kept: each scraper filters while parsing (otodom drops INVESTMENT
+  bundles, OLX drops ads syndicated from Otodom), and comparing kept-against-
+  stated declared all ~60 OLX town searches truncated — 126 warnings in one run,
+  nearly all false. The kept count rides alongside as `listings`.
+- **Price bands — seeing past the window a portal will serve** (`scraper/bands.py`).
+  Every portal hands over far less than it admits to holding: otodom states
+  18 505 śląskie flats but deep pages go thin and erratic past ~150,
+  gratka/morizon 404 past page 200 (7 000 ads, ever), OLX serves 1 000 of a
+  stated 5 503. Their location taxonomies will never agree — otodom nests
+  region/powiat/gmina/city, the others take one slug — but all four filter on
+  price, so that is the axis subdivision uses. The unbanded search runs first
+  and is kept (priceless ads live only there), then while a search's stated
+  total exceeds its portal's window the price range is bisected and the halves
+  are walked, merging by URL. Bands are half-open `[lo, hi)` so a boundary price
+  lands in exactly one band, and the seed bands' totals are asserted to sum to
+  at least the unbanded total — that arithmetic is how a portal's price filter
+  silently dropping ads gets caught. Additive throughout: a bad band costs one
+  request and can never lose a listing already held. `RENTGEN_BANDS=0` disables
+  it. OLX also keeps its per-town subdivision, and bands stack on top of it.
 - **Empty views explain themselves.** When a filter combination returns
   nothing, the dashboard re-runs the filter with each dimension relaxed and
   offers the ones that would bring results back ("Miejscowość: Gliwice — 43"),
@@ -128,6 +142,17 @@ force-pushed fresh each run (the price history lives *inside*
   date and **highlights the cheapest**. (Photo checks fetch each ambiguous
   listing's page, so the scrape does extra requests; set `RENTGEN_PHOTOS=0` to
   skip them and fall back to a size+price heuristic.)
+- **gratka ↔ morizon merge by portal id, for free.** The two portals are one
+  database behind two frontends, and their CDN proves it: a morizon card's
+  thumbnail is a base64-wrapped origin on *gratka's* CDN carrying gratka's own ad
+  id. That id is identity, not resemblance, so the pair merges with no detail
+  fetch, no image fetch and no threshold — off the search page. It matters
+  because morizon had been serving its galleries from a host the extractor
+  didn't match: 0 of its 9 505 listings carried a single hash, so it merged with
+  nothing and shipped ~7 089 duplicate cards (21% of everything published).
+  The same decoding fixes the galleries themselves — the first five URLs are the
+  xs/s/m/l/og renditions of *one* photo, so hashing is now per distinct origin,
+  and blog teasers riding the same CDN path are excluded.
 - Dashboard: filter by **town** (searchable multi-select), type / source / private
   vs agency / price / area / rooms, optional distance-from-Gliwice, full-text search,
   and sort by newest, biggest discount, **price vs RCN transactions**, price, zł/m²
@@ -148,8 +173,11 @@ force-pushed fresh each run (the price history lives *inside*
 
 The **first** voivodeship-wide run is heavy (it fetches photo galleries for every
 look-alike listing to de-duplicate them). After that a committed photo-hash cache
-(`cache/phash_cache.json`) makes repeat runs much faster — each listing's photos are
-hashed once and then reused by URL — and pip downloads are cached in CI too.
+(`cache/phash_<region>.json.gz`) makes repeat runs much faster — each listing's
+photos are hashed once and then reused by URL — and pip downloads are cached in
+CI too. The cache stores its 256-bit hashes base64-packed inside a gzip (v1 wrote
+78-character decimal strings in plain JSON and reached 62.9 MB for one region,
+past GitHub's 50 MB warning; a v1 file is migrated on read).
 
 Dashboard URL: `https://<your-username>.github.io/rentgen-ofert/`.
 
@@ -201,6 +229,7 @@ RENTGEN_MAX_PAGES=3 RENTGEN_DELAY=0.3 python -m scraper.main
 | `RENTGEN_PHOTOS` | 1 | photo-match ambiguous listings; `0` skips the detail fetches |
 | `RENTGEN_PHOTO_BUDGET_MIN` | 90 | max minutes of photo fetching per run (`0` = unlimited); skipped listings retry next run |
 | `RENTGEN_TYPES` | house,flat | which to scrape; e.g. `house` for houses only |
+| `RENTGEN_BANDS` | 1 | price-band subdivision; `0` disables it (see *Price bands*) |
 | `RENTGEN_VERIFY_MAX` | 300 | stale listings URL-verified per run (`0` disables) |
 | `RENTGEN_RCN` | 1 | `0` skips RCN; `force` re-pulls the transaction snapshot now |
 | `RENTGEN_GEO` | 1 | `0` skips geocoding listings for the map view |
@@ -281,6 +310,7 @@ scraper/
   otodom.py  olx.py  gratka.py  morizon.py  nieruchomosci_online.py   per-portal scrapers
   net.py         shared HTTP session with 429 back-off; history.py  property lifecycle store
   coverage.py    per-search truncation reporting (our cap vs the portal's)
+  bands.py       price-band subdivision — see past each portal's serving window
   normalize.py   shared schema, value helpers, cross-portal dedupe
   photomatch.py  perceptual hashing of galleries to confirm same-property merges
   cache.py       photo-hash cache (URL -> hashes + gallery URLs), reused run-to-run
@@ -294,7 +324,7 @@ scraper/
   rcncheck.py    manual RCN lookup / --pin; overrides.py  hand-pinned addresses
   main.py        runs every source, photo-checks look-alikes, writes site/data/*.json
 cache/                 (on the `data` branch, gitignored on main)
-  phash_<region>.json   gallery-hash cache, reused run-to-run (auto-pruned)
+  phash_<region>.json.gz  gallery-hash cache, reused run-to-run (auto-pruned)
   rcn_<region>.json.gz  RCN transaction snapshot (refreshed weekly)
   geo_cache.json        geocode cache, shared across regions (town/street -> lat,lon)
   nol_towns.json        per-region town lists for n-online (slug -> display name)

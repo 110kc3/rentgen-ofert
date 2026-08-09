@@ -17,7 +17,7 @@ import time
 
 import requests
 
-from . import coverage
+from . import bands, coverage
 from .normalize import olx_rooms, to_float, to_int
 
 # Whole-voivodeship search by default; override with RENTGEN_REGION.
@@ -105,16 +105,17 @@ def parse_ads(ads, typ: str):
     return out
 
 
-def _walk(base_url, typ, tag, max_pages, delay, session, log, seen, out):
-    """Page through one search. Returns its coverage row."""
+def _walk(base_url, typ, tag, max_pages, delay, session, log, seen, out, extra=""):
+    """Page through one search (optionally price-banded). Returns its cov row."""
     page = 1
     got = 0
+    served = 0             # ads OLX handed over, before our own filtering
     total_pages = None
     visible = None          # ads OLX says match the search   (5 503 for śląskie flats)
     servable = None         # ads OLX will actually hand over (1 000 — its cap)
     stopped = coverage.OK
     while page <= max_pages:
-        url = f"{base_url}?page={page}"
+        url = f"{base_url}?page={page}" + (f"&{extra}" if extra else "")
         try:
             r = session.get(url, headers=HEADERS, timeout=30)
             r.raise_for_status()
@@ -125,6 +126,7 @@ def _walk(base_url, typ, tag, max_pages, delay, session, log, seen, out):
             stopped = coverage.ERROR
             break
         ads = listing.get("ads", [])
+        served += len(ads)
         batch = [a for a in parse_ads(ads, typ) if a["url"] not in seen]
         for a in batch:
             seen.add(a["url"])
@@ -156,11 +158,12 @@ def _walk(base_url, typ, tag, max_pages, delay, session, log, seen, out):
     if stopped == coverage.OK and visible and servable and visible > servable:
         stopped = coverage.PORTAL_CAP
     return coverage.row("olx", typ, tag, page, got, stopped,
-                        portal_pages=total_pages, portal_total=visible)
+                        portal_pages=total_pages, portal_total=visible,
+                        served=served)
 
 
 def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
-           types=("house", "flat"), towns=None):
+           types=("house", "flat"), towns=None, banded=True):
     """`towns`: {slug: display} used ONLY to subdivide a search that OLX refused
     to paginate. Subdivision is additive — the region results are kept and the
     per-town results merged into them by URL — so a wrong town slug costs one
@@ -174,13 +177,37 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
         seen = set()
         row = _walk(SEARCH[typ], typ, REGION, max_pages, delay, session, log, seen, out)
         cov.append(row)
-        if row["stopped"] != coverage.PORTAL_CAP or not towns:
+        if row["stopped"] != coverage.PORTAL_CAP:
             continue
-        log(f"  olx {typ}: region search capped at page {row['pages']} of "
-            f"{row.get('portal_pages')} — subdividing into {len(towns)} towns")
-        for slug in towns:
-            cov.append(_walk(search_url(typ, slug), typ, slug, max_pages,
-                             delay, session, log, seen, out))
+        # Two independent axes, and OLX needs both: towns cut the region into
+        # ~60 pieces but a big city's own search hits the same 1 000-ad cap, and
+        # price cuts every one of them further. Both are additive into `seen`.
+        if towns:
+            log(f"  olx {typ}: region search capped at page {row['pages']} of "
+                f"{row.get('portal_pages')} — subdividing into {len(towns)} towns")
+        for slug in (towns or {}):
+            town_row = _walk(search_url(typ, slug), typ, slug, max_pages,
+                             delay, session, log, seen, out)
+            cov.append(town_row)
             time.sleep(delay)
+            if banded and bands.overflows(town_row, "olx"):
+                rows, _ = bands.subdivide(
+                    "olx",
+                    lambda lo, hi, btag, s=slug: _walk(
+                        search_url(typ, s), typ, f"{s}/{btag}", max_pages, delay,
+                        session, log, seen, out, bands.qs("olx", lo, hi)),
+                    log=log)
+                cov.extend(rows)
+        if banded:
+            # …and band the region search itself, so a region whose town list is
+            # empty (a brand-new one) still gets past the cap.
+            rows, seeds = bands.subdivide(
+                "olx",
+                lambda lo, hi, btag: _walk(SEARCH[typ], typ, btag, max_pages,
+                                           delay, session, log, seen, out,
+                                           bands.qs("olx", lo, hi)),
+                log=log)
+            cov.extend(rows)
+            bands.check_totals("olx", typ, row.get("portal_total"), seeds, log=log)
     scrape.last_coverage = cov
     return out

@@ -281,6 +281,63 @@ def _photo_clusters(members):
     return list(clusters.values())
 
 
+def _link_twins(listings):
+    """Pair morizon ads with the gratka ad they ARE, by portal id.
+
+    gratka and morizon are one database behind two frontends, and a morizon
+    card's thumbnail is a base64-wrapped origin on gratka's own CDN carrying
+    gratka's ad id (see ``photomatch.gratka_ad_id``). That id is identity, not
+    resemblance, so this needs no photos, no threshold and no extra request —
+    which matters because these two portals contribute equal, fully overlapping
+    piles: 9 505 listings each in the 2026-08-08 run, of which morizon merged
+    with *nothing* and shipped ~7 000 duplicate cards.
+
+    Paired listings inherit gratka's size so they land in the same size group
+    (the areas disagree often enough to matter), and carry a shared ``_twin``
+    that ``dedupe`` unions on regardless of what the photos say.
+    """
+    by_ad = {}
+    for l in listings:
+        if l.get("source") == "gratka" and l.get("source_id"):
+            by_ad[str(l["source_id"])] = l
+    linked = 0
+    for l in listings:
+        if l.get("source") != "morizon" or not l.get("gratka_id"):
+            continue
+        twin = by_ad.get(str(l["gratka_id"]))
+        if twin is None or twin.get("type") != l.get("type"):
+            continue
+        key = f"gratka:{l['gratka_id']}"
+        l["_twin"] = twin["_twin"] = key
+        # One of them donates the size to the other, so the pair shares a
+        # size_key — otherwise a disagreement over usable-vs-total m2 puts them
+        # in different groups. gratka is the origin portal so it goes first, but
+        # either will do; what matters is that they agree.
+        donor = twin if twin.get("area") is not None else l
+        for m in (l, twin):
+            m["area"] = donor.get("area")
+            if m.get("type") == "flat":
+                m["rooms"] = donor.get("rooms")
+        linked += 1
+    return linked
+
+
+def _union_twins(clusters):
+    """Fold clusters that hold two halves of the same ``_twin`` into one."""
+    home, out = {}, []
+    for cluster in clusters:
+        keys = {m["_twin"] for m in cluster if m.get("_twin")}
+        target = next((home[k] for k in keys if k in home), None)
+        if target is None:
+            out.append(cluster)
+            target = cluster
+        else:
+            target.extend(cluster)
+        for k in keys:
+            home[k] = target
+    return out
+
+
 def _cross_size_unify(listings):
     """Same town + same asking price + same gallery = same property, even when
     the declared area differs between portals (agents mix usable m2 with total
@@ -312,6 +369,7 @@ def _cross_size_unify(listings):
 
 
 def dedupe(listings):
+    _link_twins(listings)
     _cross_size_unify(listings)
     groups = defaultdict(list)
     loners = []
@@ -333,9 +391,11 @@ def dedupe(listings):
         return out
 
     properties = []
-    for l in loners:
-        prop = _build([l])
-        if is_development(l):
+    # Size-less ads normally can't be matched to anything — except a twin pair,
+    # whose portal id identifies it without an area at all.
+    for cluster in _union_twins([[l] for l in loners]):
+        prop = _build(cluster)
+        if is_development(cluster[0]):
             prop["development"] = True
         properties.append(prop)
     for members in groups.values():
@@ -346,7 +406,7 @@ def dedupe(listings):
             properties.append(prop)
         elif any(m.get("phashes") for m in members):
             # photos available -> merge only ads whose galleries match
-            for cluster in _photo_clusters(members):
+            for cluster in _union_twins(_photo_clusters(members)):
                 if _cluster_is_development(cluster):
                     properties.extend(_build_dev(cluster))
                 else:
@@ -354,7 +414,7 @@ def dedupe(listings):
         else:
             # no photo data -> fall back to the size + price-spread heuristic
             dev = _cluster_is_development(members)
-            for cluster in _split_by_price(members):
+            for cluster in _union_twins(_split_by_price(members)):
                 if dev:
                     properties.extend(_build_dev(cluster))
                 else:

@@ -12,6 +12,7 @@ ones); everything else never needs a detail fetch.
 """
 from __future__ import annotations
 
+import base64
 import io
 import json
 import re
@@ -71,14 +72,80 @@ def _olx(html):
     return out
 
 
-def _gratka(html):
-    return list(dict.fromkeys(re.findall(r'https://thumbs\.cdngr\.pl/thumb/[^"\s]+?\.jpg', html)))
+# ---- the gratka/morizon CDN ------------------------------------------------
+#
+# gratka and morizon are one database behind two frontends, and their image CDN
+# says so: both serve `<host>/thumb/<base64>/<rendition>/<slug>.jpg`, where the
+# base64 decodes to the SAME origin URL on `d-gr.cdngr.pl` carrying gratka's own
+# ad id. Three consequences, all of them load-bearing:
+#
+#   1. The host moved to `img*.staticmorizon.com.pl` at some point and morizon
+#      matched nothing for however long — 0 of 9 505 morizon cards in the
+#      2026-08-08 run had a single hash, so morizon could never merge with
+#      anything and shipped ~7 000 duplicate cards. Hence the fixtures: this
+#      regex has now broken twice, and a host list is not a spec.
+#   2. The five URLs a gallery shows first are the xs/s/m/l/og renditions of ONE
+#      photo, so a plain first-five slice hashed one photo five times. Dedupe by
+#      origin, then take one rendition each.
+#   3. Blog teasers ride the same `/thumb/` path and their slug ends `.jpg` too,
+#      so a host-only pattern silently hashes stock article art. Only origins
+#      under `d-gr.cdngr.pl/kadry/` are listing photos.
+_CDN_THUMB = re.compile(
+    r'https://(?:thumbs\.cdngr\.pl|img\d*\.staticmorizon\.com\.pl|img\d*\.morizon\.pl)'
+    r'/thumb/([A-Za-z0-9+/=]+)/[^"\s\\)]+')
+# the origin path holds gratka's ad id: .../gr-ogl/1e/0f/48557359_1546700385.jpg
+_ORIGIN_AD = re.compile(r'd-gr\.cdngr\.pl/kadry/[^?"\s]*?/gr-ogl/(?:[^/]+/)*(\d+)_\d+')
+# rendition preference: hash the biggest one available for a given origin
+_RENDITION_RANK = ("og_image", "3x2_l", "3x2_m", "3x2_s", "3x2_xs")
 
 
-def _morizon(html):
-    # morizon shares gratka's frontend/CDN but has served img*.morizon.pl too
-    return list(dict.fromkeys(re.findall(
-        r'https://(?:thumbs\.cdngr\.pl|img\d*\.morizon\.pl)/[^"\s]+?\.(?:jpg|jpeg|webp)', html)))
+def _decode_origin(b64: str):
+    """The origin URL a `/thumb/<base64>/` CDN link wraps, or None."""
+    try:
+        # urlsafe- and padding-tolerant: the CDN pads, but don't rely on it
+        return base64.b64decode(b64 + "=" * (-len(b64) % 4)).decode("utf-8", "replace")
+    except Exception:
+        return None
+
+
+def gratka_ad_id(url: str):
+    """gratka's ad id embedded in a gratka/morizon thumb URL, or None.
+
+    This is the cheapest merge key in the pipeline: a morizon card's *search
+    page* thumbnail already carries it, so a morizon↔gratka pair is provable
+    with no detail fetch and no image fetch at all. Measured on the 2026-08-08
+    published data: 7 089 of the 9 472 decodable morizon thumbs resolved to a
+    gratka ad we already held — every single one of the `gr-ogl` flavour.
+    (The rest are `gr-col`, a different id space, and still need photo hashes.)
+    """
+    m = re.search(r'/thumb/([A-Za-z0-9+/=]+)/', url or "")
+    if not m:
+        return None
+    origin = _decode_origin(m.group(1))
+    hit = _ORIGIN_AD.search(origin) if origin else None
+    return hit.group(1) if hit else None
+
+
+def _cdn_gallery(html):
+    """Listing photos from a gratka/morizon page: one URL per distinct origin."""
+    by_origin = {}
+    for m in _CDN_THUMB.finditer(html):
+        url = m.group(0)
+        origin = _decode_origin(m.group(1))
+        if not origin or "d-gr.cdngr.pl/kadry/" not in origin:
+            continue          # blog teaser / agency logo, not this listing
+        by_origin.setdefault(origin, []).append(url)
+
+    def best(urls):
+        return min(urls, key=lambda u: next(
+            (i for i, r in enumerate(_RENDITION_RANK) if f"/{r}" in u),
+            len(_RENDITION_RANK)))
+
+    return [best(urls) for urls in by_origin.values()]
+
+
+_gratka = _cdn_gallery
+_morizon = _cdn_gallery
 
 
 _NOL_SKIP = re.compile(r'contact|logo|avatar|agent|baner|stopka|ikona|placeholder', re.I)
@@ -126,8 +193,11 @@ def attach_hashes(listings, max_workers: int = 8, session=None, log=print,
     If a ``cache`` dict (see ``scraper.cache``) is given, listings whose URL is
     already cached reuse the stored hashes and skip the detail-page + image
     fetches - the slowest, most rate-limited part of a run. Only successful,
-    non-empty results are written back, so a transient fetch failure is retried
-    next run instead of being cached as "no photos".
+    An empty result is written back as a *miss*, not dropped: after
+    ``cache.MISS_RETRIES`` of them the ad is believed to have no photos we can
+    reach and stops being fetched for a week. Before that it was re-fetched
+    every run forever — 9 505 morizon detail pages per run, all returning
+    nothing, all charged to the photo budget.
 
     ``budget_s`` bounds the wall clock of the FETCHING part: once exceeded,
     remaining un-cached listings are skipped this run (no hashes, not cached —
@@ -144,19 +214,26 @@ def attach_hashes(listings, max_workers: int = 8, session=None, log=print,
         nonlocal skipped
         url = l.get("url")
         if cache is not None and url:
-            cached = cachemod.get(cache, url)
-            if cached:
+            # `[]` is a HIT meaning "known to have no photos for us", None means
+            # "not cached, go fetch" — `if cached:` would conflate them and
+            # re-fetch every photo-less ad forever, which is exactly the bug
+            # that let morizon eat the photo budget.
+            cached = cachemod.get(cache, url, today)
+            if cached is not None:
                 return (l, cached, cachemod.get_urls(cache, url), True)
         if deadline is not None and time.monotonic() > deadline:
             skipped += 1
-            return (l, [], [], False)
+            # None, not [] — an ad we never tried must not be written back as a
+            # photo miss, or a few budget-starved runs would teach the cache
+            # that half the region has no photos
+            return (l, None, [], False)
         hashes, img_urls = listing_hashes(l, session)
         return (l, hashes, img_urls, False)
 
     results = []
     with ThreadPoolExecutor(max_workers=max_workers) as ex:
         for l, hashes, img_urls, was_cached in ex.map(work, listings):
-            l["phashes"] = hashes
+            l["phashes"] = hashes or []
             l["photo_urls"] = img_urls
             results.append((l, hashes, img_urls, was_cached))
 
@@ -164,12 +241,12 @@ def attach_hashes(listings, max_workers: int = 8, session=None, log=print,
     if cache is not None and today:
         for l, hashes, img_urls, was_cached in results:
             url = l.get("url")
-            if not url:
+            if not url or hashes is None:
                 continue
             if was_cached:
                 cachemod.touch(cache, url, today)
             else:
-                cachemod.put(cache, url, hashes, today, image_urls=img_urls)  # no-ops on empty
+                cachemod.put(cache, url, hashes, today, image_urls=img_urls)
     log(f"  photo-hashed {len(results)} ambiguous listings "
         f"({sum(1 for l in listings if l.get('phashes'))} with photos; "
         f"{hits} reused from cache"

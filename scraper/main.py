@@ -10,6 +10,8 @@ Environment overrides (optional):
                         overrode this default on every scheduled run)
     RENTGEN_DELAY       seconds between requests   (default 0.7)
     RENTGEN_TYPES       which to scrape, e.g. "house" (default "house,flat")
+    RENTGEN_BANDS       "0" to disable price-band subdivision (see scraper/bands.py);
+                        the escape hatch if a portal starts rejecting the filters
     RENTGEN_PHOTOS      "0" to skip photo hashing (disables dedupe-by-photo and
                         relist/price history)
     RENTGEN_VERIFY_MAX  max stale listings URL-verified per run (default 300;
@@ -40,7 +42,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 REGION = os.environ.get("RENTGEN_REGION", "slaskie")
 DATA_DIR = ROOT / "site" / "data" / REGION
 CACHE_DIR = ROOT / "cache"
-CACHE_PATH = CACHE_DIR / f"phash_{REGION}.json"
+CACHE_PATH = CACHE_DIR / f"phash_{REGION}.json.gz"
 RCN_CACHE = CACHE_DIR / f"rcn_{REGION}.json.gz"
 GEO_CACHE = CACHE_DIR / "geo_cache.json"
 NOL_TOWNS = CACHE_DIR / "nol_towns.json"   # per-region town lists for n-online
@@ -80,8 +82,12 @@ def run() -> int:
     errors = []
     http = net.session()
     cov_rows = []
+    banded = os.environ.get("RENTGEN_BANDS", "1") != "0"
     for name, mod in SOURCES:
         kwargs = dict(max_pages=max_pages, delay=delay, types=types, session=http)
+        if mod is not nieruchomosci_online:
+            # n-online is subdivided by town already and has no price filter
+            kwargs["banded"] = banded
         if mod is olx:
             # OLX caps its own pagination; a capped search is re-run per town.
             # Towns come from the same resolver n-online uses, but OLX runs
@@ -113,16 +119,18 @@ def run() -> int:
         errors.append(line.strip().lstrip("! "))
 
     # Coverage as a number, so two runs are comparable without diffing stop
-    # reasons. `pct` is a floor: each scraper filters while parsing (otodom
-    # drops INVESTMENT bundles, olx drops Otodom-syndicated ads), so even a
-    # complete search lands below 100%.
+    # reasons. `pct` counts what the portal SERVED, so it answers "how much of
+    # the portal did we get to see"; `kept` is what survived our own filtering
+    # (otodom drops INVESTMENT bundles, olx drops Otodom-syndicated ads), and
+    # the gap between them is deliberate, not missing coverage.
     cov_summary = coverage.summarise(cov_rows)
     for name, s in cov_summary["by_source"].items():
         total = s.get("portal_total")
         against = (f" of {'≥' if s.get('total_is_min') else ''}{total}"
                    f" the portals state ({s['pct']}%)" if total else "")
-        print(f"  coverage {name}: {s['listings']} listings from {s['searches']} "
-              f"search(es), {s['pages']} pages{against}"
+        kept = (f", kept {s['listings']}" if "seen" in s else "")
+        print(f"  coverage {name}: {s.get('seen', s['listings'])} listings from "
+              f"{s['searches']} search(es), {s['pages']} pages{against}{kept}"
               + (f", {s['truncated']} truncated" if s["truncated"] else ""))
 
     if not raw:
@@ -131,7 +139,7 @@ def run() -> int:
 
     # Fingerprint every listing by its gallery photos. Powers photo-based
     # de-duplication, the relist/price history and the photo archive. A
-    # committed cache (cache/phash_cache.json) lets repeat runs reuse hashes
+    # committed cache (cache/phash_<region>.json.gz) lets repeat runs reuse hashes
     # (and gallery URLs) by listing URL and skip the slow detail fetches.
     # Archived ads are hashed too (BEFORE the split below) so observe_archived
     # can still photo-match them when their URL was never seen live.

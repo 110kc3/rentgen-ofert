@@ -233,9 +233,18 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
                 except Exception as exc:  # missing sub-domain etc. -> skip town
                     log(f"  nieruchomosci-online {typ}/{town} page {page} error: {exc}")
                     break
-                fresh = [b for b in batch if b["url"] not in seen]
+                # Key on the AD ID, not the URL. Every town subdomain serves its
+                # neighbours' offers under its own hostname, so the same ad
+                # arrives as gliwice.…/26859971.html and katowice.…/26859971.html
+                # — distinct URLs, one property. Keying on the URL made every
+                # page look fresh, which (a) inflated the count 5x (58 613 rows
+                # collapsing to 11 172 properties in the 2026-08-08 run) and
+                # (b) meant the `dup_pages` exit below could never fire, so
+                # every town was walked to the cap. That was 75 of the run's
+                # 123 scrape minutes, spent to gain 83 listings.
+                fresh = [b for b in batch if b["source_id"] not in seen]
                 for b in fresh:
-                    seen.add(b["url"])
+                    seen.add(b["source_id"])
                 out.extend(fresh)
                 got += len(fresh)
                 if fresh:

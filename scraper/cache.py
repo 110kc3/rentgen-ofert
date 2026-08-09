@@ -5,55 +5,152 @@ images and computes a dHash per image - by far the slowest, most rate-limited
 part of a run. A listing's photos never change, so we key the result by listing
 URL and reuse it on later runs.
 
-The cache lives in ``cache/phash_cache.json`` (committed, so the GitHub Actions
-job reuses it run-to-run) and self-prunes URLs not seen for ``MAX_AGE_DAYS`` so
-it can't grow without bound:
+The cache lives in ``cache/phash_<region>.json.gz`` (committed, so the GitHub
+Actions job reuses it run-to-run) and self-prunes URLs not seen for
+``MAX_AGE_DAYS`` so it can't grow without bound:
 
-    {"version": 1, "entries": {url: {"hashes": ["<int>", ...], "seen": "YYYY-MM-DD",
+    {"version": 2, "entries": {url: {"h": ["<base64>", ...], "seen": "YYYY-MM-DD",
                                      "urls": ["https://...", ...]}}}
 
-dHashes are 256-bit ints; they're stored as decimal strings so the JSON stays
-portable, and parsed back to int on read. "urls" (the gallery image URLs the
-hashes came from) was added later and is optional — old entries lack it.
+**Why gzip + base64.** The v1 file wrote each 256-bit dHash as a ~78-character
+decimal string in plain JSON. At 34 137 listings that reached 62.86 MB, past
+GitHub's 50 MB warning and on course for the 100 MB hard limit that would make
+the run's push simply fail — a ceiling a second region would hit immediately.
+Base64 of the 32 raw bytes is 44 chars, and the file is gzipped like the history
+and RCN snapshots already are.
+
+v1 files are read transparently (decimal strings still parse) and rewritten in
+v2 on the next save, so the migration needs no separate step.
+
+"urls" (the gallery image URLs the hashes came from) is optional — old entries
+lack it.
+
+**Negative entries.** A listing whose gallery yields nothing is recorded as a
+miss rather than skipped, because "no photos" was previously never cached at
+all: morizon served its galleries from a host `photomatch` didn't match, so all
+9 505 morizon detail pages were re-fetched every single run, always returned
+nothing, and competed for the same photo budget that was starving 15 350 other
+listings. A miss is retried ``MISS_RETRIES`` times (a fetch can fail
+transiently) and then believed for ``MISS_RECHECK_DAYS``, so a portal that
+genuinely has no photos for us costs one probe a week instead of one a run,
+and a portal that starts serving them again is picked back up.
 """
 from __future__ import annotations
 
+import base64
 import datetime as dt
+import gzip
 import json
 import os
 import pathlib
 
-VERSION = 1
-MAX_AGE_DAYS = 21  # drop a URL we haven't seen in this many days
+VERSION = 2
+MAX_AGE_DAYS = 21     # drop a URL we haven't seen in this many days
+MISS_RETRIES = 3      # empty results tolerated before "this ad has no photos"
+MISS_RECHECK_DAYS = 7 # ... and how long that verdict stands before re-probing
+
+HASH_BYTES = 32       # dHash is 256-bit (photomatch.dhash at size=16)
+
+
+def pack(h: int) -> str:
+    """256-bit hash -> 44-char base64 (vs ~78 chars as a decimal string)."""
+    return base64.b64encode(int(h).to_bytes(HASH_BYTES, "big")).decode("ascii")
+
+
+def unpack(s) -> int:
+    """Read a hash in either encoding: v2 base64, or a v1 decimal string."""
+    if isinstance(s, int):
+        return s
+    text = str(s)
+    if text.lstrip("-").isdigit():        # v1
+        return int(text)
+    return int.from_bytes(base64.b64decode(text), "big")
+
+
+def _paths(path):
+    """(gzipped path, legacy plain-json path) for a configured cache path."""
+    p = pathlib.Path(path)
+    if p.suffix == ".gz":
+        return p, p.with_suffix("")       # …json.gz -> …json
+    return p.with_name(p.name + ".gz"), p
+
+
+def _to_v2(data: dict) -> dict:
+    """Re-encode v1 decimal-string hashes in place. One pass, then never again."""
+    if data.get("version") == VERSION:
+        return data
+    for entry in data.get("entries", {}).values():
+        old = entry.pop("hashes", None)
+        if old is None:
+            continue
+        try:
+            entry["h"] = [pack(unpack(h)) for h in old]
+        except (TypeError, ValueError):
+            entry["h"] = []
+    data["version"] = VERSION
+    return data
 
 
 def load(path) -> dict:
-    try:
-        data = json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
-        if isinstance(data, dict) and isinstance(data.get("entries"), dict):
-            return data
-    except Exception:
-        pass
+    gz, plain = _paths(path)
+    for p, opener in ((gz, gzip.open), (plain, open)):
+        try:
+            with opener(p, "rt", encoding="utf-8") as fh:
+                data = json.load(fh)
+            if isinstance(data, dict) and isinstance(data.get("entries"), dict):
+                return _to_v2(data)
+        except Exception:
+            continue
     return {"version": VERSION, "entries": {}}
 
 
 def save(path, cache) -> None:
-    p = pathlib.Path(path)
-    p.parent.mkdir(parents=True, exist_ok=True)
-    tmp = p.with_name(p.name + ".tmp")   # atomic: never leave a truncated cache
-    tmp.write_text(json.dumps(cache, ensure_ascii=False, indent=0), encoding="utf-8")
-    os.replace(tmp, p)
+    gz, plain = _paths(path)
+    cache["version"] = VERSION
+    gz.parent.mkdir(parents=True, exist_ok=True)
+    tmp = gz.with_name(gz.name + ".tmp")   # atomic: never leave a truncated cache
+    with gzip.open(tmp, "wt", encoding="utf-8") as fh:
+        json.dump(cache, fh, ensure_ascii=False, separators=(",", ":"))
+    os.replace(tmp, gz)
+    # a v1 file left behind would be stale AND huge — the whole point is to stop
+    # pushing it
+    if plain != gz and plain.exists():
+        plain.unlink()
 
 
-def get(cache, url):
-    """Cached gallery hashes (list[int]) for ``url``, or None if not cached."""
+def _hashes(entry):
+    return entry.get("h", entry.get("hashes")) or []
+
+
+def get(cache, url, today: str = None):
+    """Cached gallery hashes for ``url``.
+
+    Returns a list of ints on a hit, ``[]`` for "we know this ad has no photos
+    for us", and None when it should be fetched. Callers must distinguish []
+    from None — an empty list is a cache HIT (see the module docstring).
+    """
     entry = cache.get("entries", {}).get(url)
     if not entry:
         return None
+    raw = _hashes(entry)
+    if raw:
+        try:
+            return [unpack(h) for h in raw]
+        except (TypeError, ValueError):
+            return None
+    if entry.get("miss", 0) < MISS_RETRIES:
+        return None                        # still inside the retry allowance
+    tried = entry.get("tried") or entry.get("seen")
+    if today and tried and _days_between(tried, today) >= MISS_RECHECK_DAYS:
+        return None                        # verdict has aged out — probe again
+    return []
+
+
+def _days_between(a: str, b: str) -> int:
     try:
-        return [int(h) for h in entry.get("hashes", [])]
-    except (TypeError, ValueError):
-        return None
+        return (dt.date.fromisoformat(b) - dt.date.fromisoformat(a)).days
+    except Exception:
+        return 0
 
 
 def get_urls(cache, url):
@@ -63,13 +160,27 @@ def get_urls(cache, url):
 
 
 def put(cache, url, hashes, today: str, image_urls=None) -> None:
-    """Store (non-empty) gallery hashes for ``url``, stamped as seen ``today``."""
-    if not url or not hashes:
+    """Store a gallery result for ``url``, stamped as seen ``today``.
+
+    An empty result is recorded as a miss (see the module docstring) rather
+    than dropped, so a permanently photo-less ad stops being re-fetched every
+    run. Its retry counter keeps climbing until MISS_RETRIES, at which point
+    ``get`` starts answering [] instead of None.
+    """
+    if not url:
         return
-    entry = {"hashes": [str(int(h)) for h in hashes], "seen": today}
+    entries = cache.setdefault("entries", {})
+    if not hashes:
+        prev = entries.get(url) or {}
+        if _hashes(prev):
+            return          # had photos before; a blank read now is a blip
+        entries[url] = {"h": [], "seen": today, "tried": today,
+                        "miss": (prev.get("miss") or 0) + 1}
+        return
+    entry = {"h": [pack(h) for h in hashes], "seen": today}
     if image_urls:
         entry["urls"] = list(image_urls)
-    cache.setdefault("entries", {})[url] = entry
+    entries[url] = entry
 
 
 def touch(cache, url, today: str) -> None:
