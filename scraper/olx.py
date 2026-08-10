@@ -141,7 +141,15 @@ def _walk(base_url, typ, tag, max_pages, delay, session, log, seen, out, extra="
             # `totalPages` in the hundreds and just stops serving ads. Running
             # out for real means we reached the last page it claimed.
             page -= 1                     # the empty page held nothing
-            if total_pages > page:
+            # ...but an empty FIRST page with nothing matching at all is simply
+            # an empty search — a village with no flats, a price band nothing
+            # falls into. `totalPages` defaults to 1 there, so `1 > 0` used to
+            # call it a refusal, `bands.overflows` read that as overflow, and
+            # every empty half was bisected again to MAX_DEPTH. That was 1 890
+            # of run 31367424054's 1 948 warnings and ~110 of OLX's 144 scrape
+            # minutes, spent asking Kozy for its 1.4M flats. A real refusal
+            # still states `visibleElements`, which is what tells them apart.
+            if total_pages > page and not (page == 0 and not visible):
                 stopped = coverage.PORTAL_CAP
             break
         if page >= min(total_pages, max_pages):

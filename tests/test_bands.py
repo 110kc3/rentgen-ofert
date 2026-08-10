@@ -193,3 +193,25 @@ def test_banded_off_restores_the_old_behaviour():
                   types=("flat",), banded=False)
     assert len(gratka.scrape.last_coverage) == 1
     assert not any("cena-calkowita" in u for u in s.urls)
+
+
+def test_a_bands_stated_total_is_judged_on_what_the_portal_served():
+    """gratka/morizon never passed `served`, so `coverage.seen_by` fell back to
+    the NEW count and every band read as truncated: run 31367424054 logged
+    'gratka flat/slaskie/0-200k: collected 82 of 536 (15.3%) — subdivide it'
+    for a band that had walked all 16 of its pages and seen every one of them.
+    Twenty such lines per run, in a log whose warnings are the whole point."""
+    for portal in (gratka, morizon):
+        s = BandedSession(stock=STOCK, wall=WALL)
+        portal.scrape(max_pages=500, delay=0, session=s, log=lambda *a: None,
+                      types=("flat",))
+        cheap = [r for r in portal.scrape.last_coverage
+                 if (r.get("tag") or "").endswith("0-200k")][0]
+        assert cheap["listings"] == 0        # every ad already held
+        assert cheap["served"] == cheap["portal_total"]   # ...but all of them seen
+        assert coverage.warnings([cheap]) == []
+        # and the source's pct now measures coverage rather than novelty
+        rows = portal.scrape.last_coverage
+        src = coverage.summarise(rows)["by_source"][rows[0]["source"]]
+        novelty = coverage.covered(src["listings"], src["portal_total"])
+        assert src["seen"] > src["listings"] and src["pct"] > novelty

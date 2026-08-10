@@ -136,6 +136,7 @@ def _walk(base, typ, tag, max_pages, delay, session, log, seen, out, extra=""):
     """Page through one search (optionally price-banded). Returns its cov row."""
     page = 1
     got = 0
+    served = 0            # cards the portal handed over, before OUR dedupe
     total = None
     total_min = False
     stopped = coverage.OK
@@ -164,6 +165,7 @@ def _walk(base, typ, tag, max_pages, delay, session, log, seen, out, extra=""):
             seen.add(c["url"])
         out.extend(batch)
         got += len(batch)
+        served += len(cards)
         log(f"  gratka {typ}/{tag} page {page}: +{len(batch)}")
         # Stop on an empty PAGE, not an empty batch. A price band re-sorts the
         # results, so its first pages are often ads the unbanded pass already
@@ -183,13 +185,18 @@ def _walk(base, typ, tag, max_pages, delay, session, log, seen, out, extra=""):
     # running a band legitimately collects fewer ads than it states — the
     # overlap was already taken by the unbanded pass. Judge truncation on the
     # PAGE count against the wall, and fall back to the total only for the
-    # unbanded search that owns the whole `seen` set.
+    # unbanded search that owns the whole `seen` set. `served` — every card the
+    # portal handed over — is recorded alongside so `coverage.seen_by` stops
+    # comparing a band's NEW count against the band's stated total: that read
+    # "collected 82 of 536 (15.3%) — subdivide it" for a band which had in fact
+    # walked all 16 of its pages (run 31367424054).
     if stopped == coverage.OK and page >= PORTAL_PAGE_WALL:
         stopped = coverage.PORTAL_CAP
     elif stopped == coverage.OK and not extra and coverage.short_of_total(got, total):
         stopped = coverage.PORTAL_CAP
     return coverage.row("gratka", typ, tag, max(page, 0), got, stopped,
-                        portal_total=total, total_is_min=total_min)
+                        portal_total=total, total_is_min=total_min,
+                        served=served)
 
 
 def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,

@@ -81,7 +81,11 @@ force-pushed fresh each run (the price history lives *inside*
   what we kept: each scraper filters while parsing (otodom drops INVESTMENT
   bundles, OLX drops ads syndicated from Otodom), and comparing kept-against-
   stated declared all ~60 OLX town searches truncated — 126 warnings in one run,
-  nearly all false. The kept count rides alongside as `listings`.
+  nearly all false. The kept count rides alongside as `listings`. All four
+  paginated portals record it: gratka and morizon were left out of the first
+  cut, and because a price band's *new* count is legitimately a fraction of the
+  band's stated total, every one of their bands read as truncated (20 more false
+  warnings per run) until they reported what they were served too.
 - **Price bands — seeing past the window a portal will serve** (`scraper/bands.py`).
   Every portal hands over far less than it admits to holding: otodom states
   18 505 śląskie flats but deep pages go thin and erratic past ~150,
@@ -96,7 +100,10 @@ force-pushed fresh each run (the price history lives *inside*
   at least the unbanded total — that arithmetic is how a portal's price filter
   silently dropping ads gets caught. Additive throughout: a bad band costs one
   request and can never lose a listing already held. `RENTGEN_BANDS=0` disables
-  it. OLX also keeps its per-town subdivision, and bands stack on top of it.
+  it. OLX also keeps its per-town subdivision, and bands stack on top of it —
+  which is why an *empty* search must never look like a refusal: a village with
+  no flats states no total and serves no ads, and reading that as overflow made
+  every empty band bisect into two more (see the 2026-08-10 entry in `TODO.md`).
 - **Empty views explain themselves.** When a filter combination returns
   nothing, the dashboard re-runs the filter with each dimension relaxed and
   offers the ones that would bring results back ("Miejscowość: Gliwice — 43"),

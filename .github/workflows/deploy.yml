@@ -27,6 +27,14 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # `workflow_run` fires on COMPLETED, whatever the conclusion — so the three
+    # scrapes that hit the 350-min timeout (2026-08-09/10) each triggered a
+    # green deploy that republished the same stale `data` branch. A red pipeline
+    # has to look red: a cancelled or failed scrape has nothing new to publish,
+    # and the previous Pages deployment stays live either way.
+    if: >-
+      github.event_name != 'workflow_run' ||
+      github.event.workflow_run.conclusion == 'success'
     environment:
       name: github-pages
       url: ${{ steps.final.outputs.page_url || steps.try1.outputs.page_url }}

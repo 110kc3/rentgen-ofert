@@ -1,14 +1,109 @@
 # TODO — rentgen-ofert
 
 > Keep this file and `README.md` updated after each change.
-> Last updated: 2026-08-09
+> Last updated: 2026-08-10
+
+## Done (2026-08-10) — the bands batch put CI over the timeout; three fixes
+
+**Where to pick up: watch the run this commit triggers.** If it lands under
+350 min, resume at Step 4 in "Rollout order" below with the corrected photo
+numbers recorded here. Steps 0–3 stay done.
+
+### The pipeline had been red for three runs, and the site did not show it
+
+Every `Update listings` run after the 2026-08-09 bands batch was killed at the
+5h50m timeout, so none of them reached `Push refreshed data`. `origin/data`
+still read `data: slaskie refresh 2026-08-09T11:03Z` — **the last pre-bands
+run** — while `Deploy site` kept going green every few hours.
+
+| run | trigger | otodom | **olx** | gratka | morizon | n-online | scrape | photo input |
+|---|---|---|---|---|---|---|---|---|
+| 31302206296 | push (7d6424e) | 14 | **132** | 18 | 20 | 75 | 259 min | 101 961 |
+| 31329965895 | schedule | 14 | **126** | 18 | 20 | 76 | 254 min | 101 992 |
+| 31367424054 | schedule | 13 | **144** | 20 | 22 | 83 | 283 min | 101 853 |
+
+Identical three times over — reproducible, not a flaky portal. The scrape alone
+took 4–4¾ h of the 5h50 budget and the photo phase never finished.
+
+- [x] **OLX read an empty search as a refusal, then subdivided it.** `_walk`
+      decrements `page` on an empty page and asks `total_pages > page`; on an
+      empty *first* page that is `1 > 0`, so `stopped` became `portal_cap` —
+      which `bands.overflows` treats as overflow. Every empty town was bisected
+      into nine seed bands, each equally empty, each bisected again to
+      `MAX_DEPTH`: `olx flat/kozy/1375k-1437k` is a village of 4 000 being asked
+      for its 1.4M flats. **1 890 of the run's 1 948 `!!` lines were this one
+      bug**, and OLX spent 2 044 searches / 2 404 requests — roughly 110 of its
+      144 minutes — to keep 1 730 listings. A real refusal still states
+      `visibleElements`, which is what now tells the two apart. Pinned from both
+      sides by `test_an_empty_town_is_not_subdivided` and
+      `test_an_empty_page_the_portal_says_has_ads_is_still_a_refusal`.
+- [x] **gratka/morizon never reported what they were served.** The 2026-08-09
+      served-vs-kept fix landed for otodom and OLX only, so `coverage.seen_by`
+      fell back to the *new* count for the other two — and a band's new count is
+      legitimately a fraction of its stated total, because the unbanded pass
+      already took the overlap. Result: `gratka flat/slaskie/0-200k: collected
+      82 of 536 (15.3%) — subdivide it`, for a band that had walked all 16 of
+      its pages and seen every ad in it. 20 false lines per run, and an
+      understated `pct` (gratka read 55.6%). Both now pass `served=`.
+- [x] **A cancelled scrape no longer deploys.** `deploy.yml`'s `workflow_run`
+      trigger fires on `completed` with no conclusion filter, so each of the
+      three timeouts triggered a green deploy that republished the same stale
+      `data` branch — the reason a 30-hour-old dataset looked healthy. The job
+      now runs only when the scrape actually succeeded; push and manual dispatch
+      are unaffected, and a skipped deploy leaves the previous Pages deployment
+      live exactly as before.
+- [x] Tests: **156 → 159**, still fully offline. Each new test was confirmed to
+      fail against the unfixed code before being kept.
+
+### What the failed runs did establish
+
+Worth having even though nothing was published — these are measurements, not
+predictions, and two of them contradict the 2026-08-09 plan.
+
+- **The n-online dedupe did not do what Step 3 assumed.** Keying on the ad id
+  does make most towns exit early (only `flat/katowice` still hits the 200-page
+  cap, and the phase walks 1 696 pages rather than every town to the cap), but
+  the phase went **75 → 83 min** and the listing count did not move: 58 613 →
+  58 845. The cross-town duplication is at *property* level downstream, not at
+  ad-id level. **The photo phase's input therefore went up, 90 341 → 101 853** —
+  the opposite of the halving Step 4's photo-budget item is written around.
+- **otodom improved but not as far as predicted**: 48.7% → 69.9% of its stated
+  total (the note expected the high 90s), with 8 truncated searches left.
+- **gratka and morizon served 12 354 and 12 355** — one database behind two
+  frontends, exactly as Step 3 argued, though `_link_twins` runs after the photo
+  phase so the 7 089 merges still have not actually run in CI.
+- **OLX's cost/benefit is now a real question**: 144 minutes for 1 730 kept
+  listings, because most of what it serves is Otodom-syndicated and dropped by
+  design. Fixing the empty-search bug removes ~110 of those minutes; whether the
+  remainder earns its place is Step 4 work.
+
+Projected budget with the OLX fix in: ~170 scrape + ~100 photo (budget-bounded,
+so it does not scale with input) + 20 history + 8 delist + 8 RCN ≈ **306 min**
+against the 350 cap. It should fit. It has no headroom, which is the whole of
+Step 4's case.
+
+**What to check on the run this commit triggers:**
+- It has to **finish** — `Push refreshed data` running at all is the headline,
+  and `origin/data` should stop reading `2026-08-09T11:03Z`.
+- OLX should drop from ~140 min to ~30 and from 2 044 searches to a few dozen.
+  The `!!` count should fall from 1 948 to something a person reads.
+- `('gratka','morizon')` **must stop being zero** in the source-pair histogram —
+  the Step 3 regression test, still unrun since the merge shipped.
+- Published count somewhere around 45–60k: up from the bands, down ~7 000 from
+  the morizon merge. If morizon still shows ~9 500 singletons, `_link_twins` is
+  not firing.
+- `cache/phash_slaskie.json.gz` at ~12 MB, plain `.json` gone from the branch.
+- Photo phase: how many listings it skipped with the budget exhausted, out of
+  ~101 000. That number is the input to the Step 4 decision.
+- If it still overruns, `RENTGEN_BANDS=0` is the fastest lever, then
+  `RENTGEN_NOL_TOWNS`.
 
 ## Done (2026-08-09) — rollout steps 2, 3 and 4a, plus three defects found on the way
 
-**Where to pick up: "Rollout order" in the whole-Poland plan below, at Step 4**
-(the remaining affordability items — the photo budget needs re-timing before any
-decision), then Step 5. Steps 0–3 are done. Every number here was measured
-against the real CI run or the real published data.
+*(Superseded as a pick-up pointer by the 2026-08-10 section above.)*
+
+Every number here was measured against the real CI run or the real published
+data.
 
 ### What run 31281062431 proved (the acceptance test for steps 0+1)
 4 h 16 m, success. Both steps confirmed, and the dataset roughly doubled:
@@ -694,20 +789,32 @@ real pages.
 - [x] **phash cache**: gzipped and base64-packed — **65.92 → 12.35 MB (5.3×)**
       measured on the real production file, round-trip clean on all 72 090
       entries, v1 migrated on read and deleted on save. DONE 2026-08-09.
-- [ ] **Photo budget**: still the binding constraint — the last run skipped
-      15 350 listings with it exhausted. Three things just changed underneath
-      it, so re-time before deciding anything: the n-online dedupe roughly
-      halves the input (90 341 listings, 47 441 of them n-online duplicates),
-      empty results are now cached so photo-less ads stop being re-fetched
-      every run, and hashing is per distinct origin instead of five renditions
-      of one photo. THEN choose between a larger budget, more workers, or
-      hashing only listings that actually have a size-collision.
+- [ ] **Photo budget**: still the binding constraint, and the premise this
+      item was written on turned out to be wrong. The n-online dedupe did *not*
+      halve the input — measured across all three 2026-08-09/10 runs the photo
+      phase was handed **101 853–101 992 listings, up from 90 341** (see the
+      2026-08-10 section: the cross-town duplication is at property level, not
+      ad-id level). What did change underneath it: empty results are now cached
+      so photo-less ads stop being re-fetched every run, and hashing is per
+      distinct origin instead of five renditions of one photo. Re-time on the
+      first run that completes, THEN choose between a larger budget, more
+      workers, or hashing only listings that actually have a size-collision.
+      The phase is budget-bounded (~96 min, exhausted, 15 350 skipped), so it
+      does not grow with the input — it just starves a larger share of it.
 - [ ] **Don't hash a listing whose twin already identifies it.** A morizon ad
       linked to a gratka ad by portal id needs no photos at all, but
       `attach_hashes` runs over `raw` before `dedupe` does the linking. Moving
       `_link_twins` earlier would drop ~7 000 detail fetches per run.
       Deliberately left out of the 2026-08-09 batch: it reorders the pipeline,
       and the budget wins above may already be enough.
+- [ ] **Is OLX worth its slot?** Even with the empty-search bug fixed it is the
+      second-most expensive portal for the least return: 2 044 searches in the
+      2026-08-10 run to keep **1 730 listings**, because most of what it serves
+      is syndicated from Otodom and dropped by design (that filtering is
+      correct — the ads are collected at the source). Measure the fixed phase,
+      then decide between keeping it, dropping the per-town × per-band product
+      down to towns only, or restricting bands to towns that actually overflow.
+      Whatever the answer, it is 16× on the whole-Poland matrix.
 - [ ] **Delist sweep**: 300 checks against 21 639 stale records never converges.
       Prioritise (oldest-first is not the same as most-likely-gone), use HEAD
       where the portal allows it, and scale `RENTGEN_VERIFY_MAX` with the record

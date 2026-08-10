@@ -300,3 +300,64 @@ def test_served_is_omitted_when_nothing_was_filtered():
                        portal_total=350, served=350)
     assert "served" not in row
     assert "seen" not in coverage.summarise([row])["by_source"]["gratka"]
+
+
+# --- an empty search is not a refusal (regression, run 31367424054) ----------
+#
+# `_walk` decremented `page` to 0 on an empty first page and then read
+# `totalPages (1) > 0` as "the portal refused to serve", which `bands.overflows`
+# treats as overflow. Every empty town was therefore bisected into nine seed
+# bands, each of them equally empty, each bisected again to MAX_DEPTH — 1 890 of
+# that run's 1 948 warnings and ~110 of OLX's 144 scrape minutes, spent asking a
+# village for its 1.4M flats. A genuine refusal still states `visibleElements`.
+
+class TownSession(FakeSession):
+    """Like FakeSession, but the towns in `empty` hand over nothing at all.
+
+    `empty_visible` is what those towns state as matching the search: None is a
+    village with no flats, a number is OLX refusing to serve ads it admits to
+    holding.
+    """
+    def __init__(self, *a, empty=(), empty_visible=None, **kw):
+        super().__init__(*a, **kw)
+        self.empty, self.empty_visible = set(empty), empty_visible
+
+    def get(self, url, **kw):
+        where = url.split("/sprzedaz/")[1].split("/")[0]
+        if where in self.empty:
+            self.urls.append(url)
+            return FakeResp([], 1, self.empty_visible, self.empty_visible)
+        # the band parameters ride behind `page=`, so read it up to the '&'
+        page = int(url.rsplit("page=", 1)[1].split("&")[0])
+        return super().get(url.split("?")[0] + f"?page={page}")
+
+
+def _band_urls(session, town):
+    return [u for u in session.urls
+            if f"/sprzedaz/{town}/" in u and "filter_float_price" in u]
+
+
+def test_an_empty_town_is_not_subdivided():
+    s = TownSession(total_pages=140, empty=("kozy",))
+    towns = {"gliwice": "Gliwice", "kozy": "Kozy"}
+    olx.scrape(max_pages=200, delay=0, session=s, log=lambda *a: None,
+               types=("house",), towns=towns, banded=True)
+    kozy = [r for r in olx.scrape.last_coverage if r.get("tag") == "kozy"]
+    assert len(kozy) == 1, "the empty town was subdivided into price bands"
+    assert kozy[0]["stopped"] == coverage.OK
+    assert kozy[0]["pages"] == 0 and kozy[0]["listings"] == 0
+    assert _band_urls(s, "kozy") == []
+    assert coverage.warnings(kozy) == []
+    # one request answered the question; the old code spent dozens
+    assert len([u for u in s.urls if "/sprzedaz/kozy/" in u]) == 1
+
+
+def test_an_empty_page_the_portal_says_has_ads_is_still_a_refusal():
+    """The other half: OLX serving nothing while stating `visibleElements` IS
+    the refusal bands exist to work around, and must still subdivide."""
+    s = TownSession(total_pages=140, empty=("kozy",), empty_visible=500)
+    olx.scrape(max_pages=200, delay=0, session=s, log=lambda *a: None,
+               types=("house",), towns={"kozy": "Kozy"}, banded=True)
+    kozy = [r for r in olx.scrape.last_coverage if r.get("tag") == "kozy"]
+    assert kozy[0]["stopped"] == coverage.PORTAL_CAP
+    assert _band_urls(s, "kozy"), "a stated-but-unserved total must subdivide"

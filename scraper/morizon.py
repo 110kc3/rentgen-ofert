@@ -124,6 +124,7 @@ def _walk(base, typ, tag, max_pages, delay, session, log, seen, out, extra=""):
     """Page through one search (optionally price-banded). Returns its cov row."""
     page = 1
     got = 0
+    served = 0            # cards the portal handed over, before OUR dedupe
     total = None
     total_min = False
     stopped = coverage.OK
@@ -152,6 +153,7 @@ def _walk(base, typ, tag, max_pages, delay, session, log, seen, out, extra=""):
             seen.add(c["url"])
         out.extend(batch)
         got += len(batch)
+        served += len(cards)
         log(f"  morizon {typ}/{tag} page {page}: +{len(batch)}")
         # Stop on an empty PAGE, not an empty batch. A price band re-sorts the
         # results, so its first pages are often ads the unbanded pass already
@@ -165,13 +167,15 @@ def _walk(base, typ, tag, max_pages, delay, session, log, seen, out, extra=""):
     # 404 looks like the end of the results. morizon's own count is phrased
     # "ponad 9000" and rounds to whole thousands, so it is a lower bound —
     # which is still enough to prove truncation. See the note in gratka._walk
-    # for why a banded search is judged on pages rather than on that total.
+    # for why a banded search is judged on pages rather than on that total, and
+    # for what `served` is doing on the row.
     if stopped == coverage.OK and page >= PORTAL_PAGE_WALL:
         stopped = coverage.PORTAL_CAP
     elif stopped == coverage.OK and not extra and coverage.short_of_total(got, total):
         stopped = coverage.PORTAL_CAP
     return coverage.row("morizon", typ, tag, max(page, 0), got, stopped,
-                        portal_total=total, total_is_min=total_min)
+                        portal_total=total, total_is_min=total_min,
+                        served=served)
 
 
 def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
