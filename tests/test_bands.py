@@ -129,6 +129,20 @@ class BandedSession:
         return _Resp(ids, 200, META.format(n=len(matching)))
 
 
+class _RefusingSession:
+    """A portal that refuses the first `refusals` requests outright — otodom's
+    405, OLX's page-1 block — and then serves normally."""
+
+    def __init__(self, inner, refusals):
+        self.inner, self.refusals = inner, refusals
+
+    def get(self, url, **kw):
+        if self.refusals > 0:
+            self.refusals -= 1
+            raise IOError("405 Client Error: Not Allowed")
+        return self.inner.get(url, **kw)
+
+
 class _Resp:
     def __init__(self, ids, status, head=""):
         self.status_code = status
@@ -276,6 +290,55 @@ def test_a_band_refused_twice_is_left_alone():
     assert [r for r in rows if r["tag"] == "0-200k"][0]["stopped"] == coverage.ERROR
     # and an errored band is still not treated as overflow, so it is not bisected
     assert len(rows) == len(bands.seed_bands())
+
+
+def test_a_refused_first_search_does_not_lose_the_whole_portal():
+    """`overflows` will not subdivide an error row — rightly, a filtered search
+    fails the same way — so a refusal on page 1 of the UNBANDED search leaves
+    nothing to fall back on and the portal contributes zero. That is exactly
+    what OLX did on both types in run 31422141701."""
+    s = _RefusingSession(BandedSession(stock=STOCK, wall=WALL), refusals=1)
+    out = gratka.scrape(max_pages=500, delay=0, session=s, log=lambda *a: None,
+                        types=("flat",))
+    rows = gratka.scrape.last_coverage
+    assert rows[0]["stopped"] != coverage.ERROR, "the retry served the search"
+    assert len(out) == STOCK, "and the bands behind it ran, as on a clean run"
+
+
+def test_the_wait_is_budgeted_per_portal_not_per_search():
+    """A portal refusing everything refuses the retries too. OLX walks ~120
+    towns; one 28 s cooldown each would be an hour of sleeping against a
+    350-min cap with no headroom."""
+    refused = lambda: coverage.row("olx", "flat", "x", 1, 0, coverage.ERROR)
+    calls, slept, said = [], [], []
+
+    def walk():
+        calls.append(1)
+        return refused()
+
+    pacer = bands.Pacer("olx", delay=0.7, log=said.append, sleep=slept.append,
+                        max_cooldowns=2)
+    for i in range(4):
+        pacer.attempt(f"town{i}", walk)
+    assert len(calls) == 6, "two searches asked twice, the other two once"
+    assert slept.count(0.7 * bands.ERROR_COOLDOWN) == 2
+    assert any("no retry budget left" in m for m in said)
+    # and the shipped budget is minutes, not hours
+    assert bands.MAX_COOLDOWNS * bands.ERROR_COOLDOWN * 0.7 < 10 * 60
+
+
+def test_one_budget_covers_a_portals_bands_and_its_own_searches():
+    """The unbanded search, the towns and the bands share one pacer, so the
+    budget is spent across a portal's whole run rather than per subdivision."""
+    refused = lambda *a: coverage.row("otodom", "flat", "x", 1, 0, coverage.ERROR)
+    calls, said = [], []
+    pacer = bands.Pacer("otodom", delay=0, log=said.append, sleep=lambda _: None,
+                        max_cooldowns=1)
+    pacer.attempt("flat", lambda: (calls.append("unbanded"), refused())[1])
+    bands.subdivide("otodom", lambda lo, hi, tag: (calls.append(tag), refused())[1],
+                    log=said.append, pacer=pacer)
+    assert calls.count("unbanded") == 2, "the first search spent the budget"
+    assert calls.count("0-200k") == 1, "so the first band got no retry"
 
 
 def test_a_healthy_subdivision_never_waits_out_an_error():

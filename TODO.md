@@ -27,6 +27,17 @@ against the next. Both halves fixed:
   same band — the retry's row *replaces* the failed one, so a recovered band
   can never be counted twice by `check_totals`. One retry, never a loop: a
   band still refused after the wait keeps its error row and the queue moves on.
+- **`bands.Pacer` owns both, one per portal per run**, and the *unbanded*
+  search goes through it too. That hole was worth closing on its own:
+  `overflows` will not subdivide an error row — rightly, a filtered search
+  fails the same way — so a refusal on page 1 of the first search leaves no
+  bands to fall back on and the portal contributes nothing. That is precisely
+  how run 31422141701 lost OLX on both types. Towns go through it as well.
+- **The waiting is budgeted, not per search.** A portal refusing everything
+  refuses the retries too, and otodom walks ~25 bands × 2 types while OLX walks
+  ~120 towns — one unbudgeted 28 s cooldown each is an hour of sleeping against
+  a cap with no headroom. `MAX_COOLDOWNS = 10` per portal caps it at ~5 min
+  each, ~19 min across the four banded portals, and only when they are refusing.
 - **OLX's town loop is paced the same way** — a town is a search, not a page.
 - `delay=0` (tests, dev) disables all of it, so the offline suite stays instant.
 
@@ -37,9 +48,11 @@ band: +28 s and one extra walk each, bounded and self-limiting.
 
 **What it should recover:** the seven dead bands (`400k-500k` … `1500k-3M`),
 and with them otodom's 70.3% and the `price bands account for 6 821 ads but
-the unbanded search states 18 314` warning, which was a consequence of them.
+the unbanded search states 18 314` warning, which was a consequence of them —
+plus any portal that would otherwise have been lost whole to a page-1 refusal.
 **What proves it:** those bands' coverage rows present in the next run, that
-warning gone, and otodom's `pct` up.
+warning gone, otodom's `pct` up, and — if a portal refuses anything — the
+`was refused — waiting Ns and asking once more` lines and what followed them.
 
 ### Item 2 — make the OLX failure legible
 
@@ -52,7 +65,7 @@ cannot re-probe OLX (it 403s us). The HTTP error path is now separate from the
 parse path, so a transport failure and a 200-that-isn't-results no longer read
 the same.
 
-Tests: **166**, up from 159, still fully offline. Each new one was confirmed to
+Tests: **169**, up from 159, still fully offline. Each new one was confirmed to
 fail against the unfixed code before being kept.
 
 ### What to do next (in this order)

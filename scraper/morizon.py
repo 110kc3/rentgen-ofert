@@ -183,13 +183,19 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
     session = session or requests.Session()
     out = []
     cov = []
+    # One retry budget for the whole portal — see bands.Pacer.
+    pacer = bands.Pacer("morizon", delay=delay, log=log)
     for typ, bases in SEARCH.items():
         if typ not in types:
             continue
         seen = set()
         for base in bases:
             tag = base.rstrip("/").split("/")[-1]
-            row = _walk(base, typ, tag, max_pages, delay, session, log, seen, out)
+            pacer.pause()
+            # a refused first search leaves nothing to subdivide, so it gets
+            # the same one bounded retry a band does
+            row = pacer.attempt(tag, lambda: _walk(base, typ, tag, max_pages,
+                                                   delay, session, log, seen, out))
             cov.append(row)
             if not banded or not bands.overflows(row, "morizon"):
                 continue
@@ -200,7 +206,7 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
                 lambda lo, hi, btag: _walk(base, typ, f"{tag}/{btag}", max_pages,
                                            delay, session, log, seen, out,
                                            bands.qs("morizon", lo, hi)),
-                log=log, delay=delay)
+                log=log, pacer=pacer)
             cov.extend(rows)
             bands.check_totals("morizon", typ, row.get("portal_total"), seeds, log=log)
     scrape.last_coverage = cov

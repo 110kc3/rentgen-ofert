@@ -252,8 +252,10 @@ RENTGEN_MAX_PAGES=3 RENTGEN_DELAY=0.3 python -m scraper.main
 **Rate limiting (HTTP 429/405):** the scraper backs off and retries automatically —
 Otodom phrases its refusals as `405 Not Allowed`, so that counts as one too.
 `RENTGEN_DELAY` paces more than the pages inside a search: searches are spaced
-`4 x` that delay apart, and a price band the portal refuses outright is walked once
-more after `40 x` it (`bands.SEARCH_PAUSE` / `bands.ERROR_COOLDOWN`). If a portal
+`4 x` that delay apart, and a search the portal refuses outright — a price band, a
+town, or the portal's own first search — is walked once more after `40 x` it, at
+most 10 times per portal per run (`bands.SEARCH_PAUSE` / `bands.ERROR_COOLDOWN` /
+`bands.MAX_COOLDOWNS`, all on `bands.Pacer`). If a portal
 still rate-limits you (nieruchomości-online is strict, especially on repeat runs),
 slow down with `RENTGEN_DELAY=2`, scrape less with `RENTGEN_TYPES=house`, skip the
 heavy photo step with `RENTGEN_PHOTOS=0`, and avoid back-to-back runs.

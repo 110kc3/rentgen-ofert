@@ -81,6 +81,56 @@ MAX_DEPTH = 3          # 9 seed bands -> at most 8 extra cuts each
 SEARCH_PAUSE = 4       # x delay -> 2.8 s between searches
 ERROR_COOLDOWN = 40    # x delay -> 28 s after a search the portal refused
 
+# ...and a refused search is waited out at most this many times per portal per
+# run. A portal that is refusing everything refuses the retries too, and one
+# cooldown per refusal would turn an outage into an hour of sleeping: otodom
+# walks ~25 bands x 2 types and OLX ~120 towns, against a 350-min CI cap that
+# already has no headroom. 10 x 28 s caps it at ~5 min per portal.
+MAX_COOLDOWNS = 10
+
+
+class Pacer:
+    """Between-search pacing, and a bounded "wait it out and ask once more".
+
+    One per portal per run, shared by that portal's unbanded search, its town
+    searches and every subdivision — so the waiting is budgeted across all of
+    them rather than per subdivision, which is what keeps a portal-wide outage
+    from spending the run's slack on sleep.
+    """
+
+    def __init__(self, source, delay=0.0, log=print, sleep=time.sleep,
+                 max_cooldowns=MAX_COOLDOWNS):
+        self.source = source
+        self.delay = delay
+        self.log = log
+        self.sleep = sleep
+        self.left = max_cooldowns
+
+    def pause(self):
+        """The gap between two searches — wider than the gap between pages."""
+        self.sleep(self.delay * SEARCH_PAUSE)
+
+    def attempt(self, tag, walk):
+        """Walk one search; if the portal refused it outright, ask once more.
+
+        The retry's row REPLACES the failed one, so a recovered search is never
+        counted twice by `check_totals`, and a search still refused after the
+        wait keeps its error row. Never a loop, never unbudgeted.
+        """
+        row = walk()
+        if row.get("stopped") != coverage.ERROR:
+            return row
+        if self.left <= 0:
+            self.log(f"  {self.source} {tag} was refused — no retry budget left "
+                     f"this run, moving on")
+            return row
+        self.left -= 1
+        wait = self.delay * ERROR_COOLDOWN
+        self.log(f"  {self.source} {tag} was refused — waiting {wait:.0f}s and "
+                 f"asking once more ({self.left} more waits left this run)")
+        self.sleep(wait)
+        return walk()
+
 
 def params(source, lo, hi) -> dict:
     """Query parameters selecting the half-open band ``[lo, hi)``."""
@@ -158,33 +208,27 @@ def overflows(row, source) -> bool:
 
 
 def subdivide(source, walk, log=print, edges=SEED_EDGES, max_depth=MAX_DEPTH,
-              delay=0.0, sleep=time.sleep):
+              delay=0.0, sleep=time.sleep, pacer=None):
     """Walk `source` in price bands until nothing overflows. Returns the rows.
 
     ``walk(lo, hi, tag)`` runs one full paginated search over the half-open
     band and returns its coverage row; the caller owns merging (by URL, into
     whatever `seen` set it already used for the unbanded search).
 
-    Searches are paced apart (SEARCH_PAUSE), and a band the portal refused
-    outright is walked once more after a cooldown (ERROR_COOLDOWN) — the
-    refusals seen in production were transient, and the retry's row REPLACES
-    the failed one so a recovered band is never counted twice by
-    `check_totals`. One retry, never a loop: a band that is still refused
-    after the wait keeps its error row and the walk moves on.
+    Pacing and retries go through `Pacer` (see there): searches are spaced
+    apart, and a band the portal refused outright is walked once more after a
+    cooldown. Pass the portal's own `pacer` so its unbanded search, its towns
+    and its bands share one retry budget; without one, a private Pacer is built
+    from `delay`.
     """
+    pacer = pacer or Pacer(source, delay=delay, log=log, sleep=sleep)
     rows, seeds = [], []
     queue = deque((lo, hi, 0) for lo, hi in seed_bands(edges))
     while queue:
         lo, hi, depth = queue.popleft()
         tag = label(lo, hi)
-        sleep(delay * SEARCH_PAUSE)
-        row = walk(lo, hi, tag)
-        if row.get("stopped") == coverage.ERROR:
-            wait = delay * ERROR_COOLDOWN
-            log(f"  {source} band {tag} was refused — waiting {wait:.0f}s and "
-                f"asking once more")
-            sleep(wait)
-            row = walk(lo, hi, tag)
+        pacer.pause()
+        row = pacer.attempt(f"band {tag}", lambda: walk(lo, hi, tag))
         rows.append(row)
         if depth == 0:
             seeds.append(row)

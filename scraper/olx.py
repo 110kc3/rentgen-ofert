@@ -222,11 +222,21 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
     session = session or requests.Session()
     out = []
     cov = []
+    # One retry budget for the whole portal — see bands.Pacer. It matters most
+    # here: OLX has ~120 town searches, so a per-search cooldown with no budget
+    # would be an hour of sleeping the run cannot afford.
+    pacer = bands.Pacer("olx", delay=delay, log=log)
     for typ in PATHS:
         if typ not in types:
             continue
         seen = set()
-        row = _walk(SEARCH[typ], typ, REGION, max_pages, delay, session, log, seen, out)
+        pacer.pause()
+        # Run 31422141701 lost this portal entirely to a page-1 refusal on both
+        # types: an error row is never subdivided, so nothing else ran. One
+        # bounded retry is the difference between "OLX contributed 0" and a
+        # transient block that cost 28 seconds.
+        row = pacer.attempt(typ, lambda: _walk(SEARCH[typ], typ, REGION, max_pages,
+                                               delay, session, log, seen, out))
         cov.append(row)
         if row["stopped"] != coverage.PORTAL_CAP:
             continue
@@ -237,17 +247,18 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
             log(f"  olx {typ}: region search capped at page {row['pages']} of "
                 f"{row.get('portal_pages')} — subdividing into {len(towns)} towns")
         for slug in (towns or {}):
-            town_row = _walk(search_url(typ, slug), typ, slug, max_pages,
-                             delay, session, log, seen, out)
+            pacer.pause()                  # a town is a search, not a page
+            town_row = pacer.attempt(slug, lambda s=slug: _walk(
+                search_url(typ, s), typ, s, max_pages, delay, session, log,
+                seen, out))
             cov.append(town_row)
-            time.sleep(delay * bands.SEARCH_PAUSE)   # a town is a search, not a page
             if banded and bands.overflows(town_row, "olx"):
                 rows, _ = bands.subdivide(
                     "olx",
                     lambda lo, hi, btag, s=slug: _walk(
                         search_url(typ, s), typ, f"{s}/{btag}", max_pages, delay,
                         session, log, seen, out, bands.qs("olx", lo, hi)),
-                    log=log, delay=delay)
+                    log=log, pacer=pacer)
                 cov.extend(rows)
         if banded:
             # …and band the region search itself, so a region whose town list is
@@ -257,7 +268,7 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
                 lambda lo, hi, btag: _walk(SEARCH[typ], typ, btag, max_pages,
                                            delay, session, log, seen, out,
                                            bands.qs("olx", lo, hi)),
-                log=log, delay=delay)
+                log=log, pacer=pacer)
             cov.extend(rows)
             bands.check_totals("olx", typ, row.get("portal_total"), seeds, log=log)
     scrape.last_coverage = cov

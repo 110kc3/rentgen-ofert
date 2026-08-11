@@ -140,11 +140,20 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
     session = session or requests.Session()
     out = []
     cov = []
+    # One pacer for the whole portal: the unbanded searches and every band
+    # share its retry budget, so a refusing Otodom costs minutes, not an hour.
+    pacer = bands.Pacer("otodom", delay=delay, log=log)
     for typ, path in SEARCH.items():
         if typ not in types:
             continue
         seen = set()
-        row = _walk(path, typ, REGION, max_pages, delay, session, log, seen, out)
+        pacer.pause()
+        # A refused FIRST search loses the whole type — `overflows` will not
+        # subdivide an error row (rightly: a filtered search fails the same
+        # way), so there are no bands to fall back on. It gets the same one
+        # bounded retry a band does.
+        row = pacer.attempt(typ, lambda: _walk(path, typ, REGION, max_pages,
+                                               delay, session, log, seen, out))
         cov.append(row)
         if not banded or not bands.overflows(row, "otodom"):
             continue
@@ -157,7 +166,7 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
             "otodom",
             lambda lo, hi, tag: _walk(path, typ, tag, max_pages, delay, session,
                                       log, seen, out, bands.qs("otodom", lo, hi)),
-            log=log, delay=delay)
+            log=log, pacer=pacer)
         cov.extend(rows)
         bands.check_totals("otodom", typ, row.get("portal_total"), seeds, log=log)
     scrape.last_coverage = cov
