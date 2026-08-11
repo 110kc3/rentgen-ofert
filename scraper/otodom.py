@@ -157,7 +157,7 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
             "otodom",
             lambda lo, hi, tag: _walk(path, typ, tag, max_pages, delay, session,
                                       log, seen, out, bands.qs("otodom", lo, hi)),
-            log=log)
+            log=log, delay=delay)
         cov.extend(rows)
         bands.check_totals("otodom", typ, row.get("portal_total"), seeds, log=log)
     scrape.last_coverage = cov

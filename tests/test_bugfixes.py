@@ -241,6 +241,64 @@ def test_retry_after_is_capped():
     assert r.get_retry_after(SimpleNamespace(headers={})) is None
 
 
+def test_a_transient_405_is_retried_not_fatal():
+    """Otodom refuses with 405, not 429: band `300k-400k` died at page 5 and
+    the next seven died on page 1 before the eighth was served normally (runs
+    31408840562, 31422141701). Not in `status_forcelist`, the refusal was
+    fatal on first contact with no back-off at all."""
+    from scraper import net
+    s = net.session()
+    forced = s.adapters["https://"].max_retries.status_forcelist
+    assert 405 in forced and 429 in forced
+    assert 404 not in forced, "a missing page is an answer, not a refusal"
+
+
+# ---- olx: a refusal and a re-skin are different bugs -----------------------------
+
+def test_a_missing_state_blob_is_fingerprinted_not_guessed_at():
+    """`__PRERENDERED_STATE__ not found (layout changed?)` was a guess, and on
+    2026-08-11 the wrong one twice: OLX served that on page 1 of both searches
+    50 s after the previous run walked 518 of its pages. Blocked vs re-skinned
+    need opposite fixes, and the run log is all CI keeps."""
+    class _Resp:
+        status_code = 200
+        text = ('<html><head><title>Access denied | olx.pl</title></head>'
+                '<body>Please complete the captcha. datadome</body></html>')
+    fp = olx.fingerprint(_Resp())
+    assert "HTTP 200" in fp and "Access denied | olx.pl" in fp
+    assert "captcha" in fp and "datadome" in fp
+    assert "olx.pl" in fp.split("olx-markers=")[1]     # it IS an OLX page
+
+    class _Reskin:
+        status_code = 200
+        text = ('<html><head><title>Mieszkania na sprzedaż</title></head>'
+                '<body><script id="__NEXT_DATA__">{}</script></body></html>')
+    fp = olx.fingerprint(_Reskin())
+    assert "challenge=none" in fp, "no bot wall here — this one really is a re-skin"
+    assert "__NEXT_DATA__" in fp
+
+
+def test_the_walk_logs_what_the_page_was():
+    class _Blocked:
+        status_code = 200
+        text = "<html><title>Just a moment...</title>cf-chl</html>"
+
+        def raise_for_status(self):
+            pass
+
+    class _Session:
+        def get(self, url, **kw):
+            return _Blocked()
+
+    said = []
+    out = olx.scrape(max_pages=2, delay=0, session=_Session(),
+                     log=said.append, types=("flat",), banded=False)
+    assert out == []
+    line = [m for m in said if "error" in m][0]
+    assert "Just a moment..." in line and "cf-chl" in line and "HTTP 200" in line
+    assert olx.scrape.last_coverage[0]["stopped"] == "error"
+
+
 def test_photo_budget_skips_uncached(monkeypatch):
     from scraper import photomatch
     fetched = []

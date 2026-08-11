@@ -57,8 +57,44 @@ _STATE = re.compile(r'__PRERENDERED_STATE__\s*=\s*"((?:[^"\\]|\\.)*)";', re.S)
 def extract_state(html: str) -> dict:
     m = _STATE.search(html)
     if not m:
-        raise ValueError("OLX: __PRERENDERED_STATE__ not found (layout changed?)")
+        raise ValueError("OLX: __PRERENDERED_STATE__ not found")
     return json.loads(json.loads('"' + m.group(1) + '"'))
+
+
+_TITLE = re.compile(r"<title[^>]*>(.*?)</title>", re.S | re.I)
+# Words a bot wall puts on the page it serves instead of the results. Lowercase
+# substrings, matched against the whole body — the challenge vendors change
+# their markup far more often than they change these.
+# ("cloudflare" itself is NOT one: plenty of ordinary pages load a CF asset,
+# and a false "you were blocked" is exactly the wrong answer to hand item 3.)
+CHALLENGE_MARKERS = ("captcha", "datadome", "cf-chl", "just a moment",
+                     "attention required", "access denied", "are you a human",
+                     "verify you are human", "unusual traffic", "zablokowan")
+# Something only a real OLX page carries. Present + no state blob = OLX really
+# did re-skin; absent = we were served something that is not OLX's search page.
+OLX_MARKERS = ("olx.pl", "olxcdn", "__NEXT_DATA__", "prerendered")
+
+
+def fingerprint(resp) -> str:
+    """What we were actually served, for a page with no state blob in it.
+
+    A missing `__PRERENDERED_STATE__` used to be logged as "layout changed?",
+    which is a guess — and on 2026-08-11 it was the wrong one twice: OLX
+    answered page 1 of both searches that way 50 seconds after the previous run
+    had walked 518 of its pages, which is a block wearing a layout-change
+    error message. The two need different fixes (slow down vs. rewrite the
+    parser), so the run log has to be able to tell them apart on its own: this
+    Pi cannot re-probe OLX (it 403s us) and CI keeps nothing but the log.
+    """
+    html = resp.text or ""
+    low = html.lower()
+    m = _TITLE.search(html)
+    title = " ".join(m.group(1).split())[:80] if m else None
+    challenge = [w for w in CHALLENGE_MARKERS if w in low]
+    olx = [w for w in OLX_MARKERS if w.lower() in low]
+    return (f"HTTP {getattr(resp, 'status_code', '?')}, {len(html)} B, "
+            f"title={title!r}, challenge={challenge or 'none'}, "
+            f"olx-markers={olx or 'none'}")
 
 
 def _params(ad) -> dict:
@@ -119,10 +155,17 @@ def _walk(base_url, typ, tag, max_pages, delay, session, log, seen, out, extra="
         try:
             r = session.get(url, headers=HEADERS, timeout=30)
             r.raise_for_status()
-            state = extract_state(r.text)
-            listing = state["listing"]["listing"]
         except Exception as exc:  # keep what we have, stop this search
             log(f"  olx {typ}/{tag} page {page} error: {exc}")
+            stopped = coverage.ERROR
+            break
+        try:
+            state = extract_state(r.text)
+            listing = state["listing"]["listing"]
+        except Exception as exc:
+            # 200 OK with no results in it: say what the page WAS, so a block
+            # and a re-skin are distinguishable from the log alone.
+            log(f"  olx {typ}/{tag} page {page} error: {exc} — {fingerprint(r)}")
             stopped = coverage.ERROR
             break
         ads = listing.get("ads", [])
@@ -197,14 +240,14 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
             town_row = _walk(search_url(typ, slug), typ, slug, max_pages,
                              delay, session, log, seen, out)
             cov.append(town_row)
-            time.sleep(delay)
+            time.sleep(delay * bands.SEARCH_PAUSE)   # a town is a search, not a page
             if banded and bands.overflows(town_row, "olx"):
                 rows, _ = bands.subdivide(
                     "olx",
                     lambda lo, hi, btag, s=slug: _walk(
                         search_url(typ, s), typ, f"{s}/{btag}", max_pages, delay,
                         session, log, seen, out, bands.qs("olx", lo, hi)),
-                    log=log)
+                    log=log, delay=delay)
                 cov.extend(rows)
         if banded:
             # …and band the region search itself, so a region whose town list is
@@ -214,7 +257,7 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
                 lambda lo, hi, btag: _walk(SEARCH[typ], typ, btag, max_pages,
                                            delay, session, log, seen, out,
                                            bands.qs("olx", lo, hi)),
-                log=log)
+                log=log, delay=delay)
             cov.extend(rows)
             bands.check_totals("olx", typ, row.get("portal_total"), seeds, log=log)
     scrape.last_coverage = cov

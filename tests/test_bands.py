@@ -215,3 +215,72 @@ def test_a_bands_stated_total_is_judged_on_what_the_portal_served():
         src = coverage.summarise(rows)["by_source"][rows[0]["source"]]
         novelty = coverage.covered(src["listings"], src["portal_total"])
         assert src["seen"] > src["listings"] and src["pct"] > novelty
+
+
+# ---- waiting a portal out ----------------------------------------------------
+
+def _walker(script, calls):
+    """A `walk` for subdivide: `script` maps a band tag to the rows it returns
+    in order, so a band can fail once and succeed on the retry."""
+    def walk(lo, hi, tag):
+        calls.append(tag)
+        queued = script.get(tag)
+        if queued:
+            return queued.pop(0)
+        return coverage.row("otodom", "flat", tag, 1, 10, coverage.OK,
+                            portal_total=10)
+    return walk
+
+
+def test_searches_are_paced_apart_not_only_pages():
+    """`time.sleep(delay)` in the page loops paces pages within one search;
+    nothing paced one search against the next, so a subdivision fired its
+    whole band queue at the portal back to back."""
+    slept, calls = [], []
+    bands.subdivide("otodom", _walker({}, calls), log=lambda *a: None,
+                    delay=0.7, sleep=slept.append)
+    assert len(calls) == len(bands.seed_bands())
+    assert slept == [0.7 * bands.SEARCH_PAUSE] * len(calls)
+    assert 0.7 * bands.SEARCH_PAUSE > 0.7, "a search needs a wider gap than a page"
+
+
+def test_a_refused_band_is_walked_again_after_a_cooldown():
+    """Otodom 405'd band `300k-400k` at page 5 and refused the seven bands
+    after it on page 1, then served the eighth (runs 31408840562/31422141701):
+    the refusal is transient and nothing in the stack waited it out."""
+    refused = coverage.row("otodom", "flat", "300k-400k", 5, 300, coverage.ERROR,
+                           portal_total=3348)
+    recovered = coverage.row("otodom", "flat", "300k-400k", 47, 3300,
+                             coverage.OK, portal_total=3348)
+    calls, slept, said = [], [], []
+    rows, _ = bands.subdivide(
+        "otodom", _walker({"300k-400k": [refused, recovered]}, calls),
+        log=said.append, delay=0.7, sleep=slept.append)
+    assert calls.count("300k-400k") == 2                    # asked once more
+    assert 0.7 * bands.ERROR_COOLDOWN in slept              # ...after a wait
+    assert any("refused" in m for m in said)
+    band = [r for r in rows if r["tag"] == "300k-400k"]
+    assert len(band) == 1 and band[0]["listings"] == 3300, \
+        "the retry replaces the failed row — a recovered band is not two rows"
+
+
+def test_a_band_refused_twice_is_left_alone():
+    """One retry, never a loop: a portal that is still refusing after the
+    cooldown must cost one extra request, not a queue that never drains."""
+    refused = lambda: coverage.row("otodom", "flat", "0-200k", 1, 0, coverage.ERROR)
+    calls = []
+    rows, seeds = bands.subdivide(
+        "otodom", _walker({"0-200k": [refused(), refused()]}, calls),
+        log=lambda *a: None, delay=0, sleep=lambda _: None)
+    assert calls.count("0-200k") == 2
+    assert [r for r in rows if r["tag"] == "0-200k"][0]["stopped"] == coverage.ERROR
+    # and an errored band is still not treated as overflow, so it is not bisected
+    assert len(rows) == len(bands.seed_bands())
+
+
+def test_a_healthy_subdivision_never_waits_out_an_error():
+    """Pacing is per search; the cooldown must cost nothing when nothing failed."""
+    slept = []
+    bands.subdivide("gratka", _walker({}, []), log=lambda *a: None,
+                    delay=0.5, sleep=slept.append)
+    assert set(slept) == {0.5 * bands.SEARCH_PAUSE}

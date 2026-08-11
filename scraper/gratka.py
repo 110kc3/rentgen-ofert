@@ -223,7 +223,7 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
                 lambda lo, hi, btag: _walk(base, typ, f"{tag}/{btag}", max_pages,
                                            delay, session, log, seen, out,
                                            bands.qs("gratka", lo, hi)),
-                log=log)
+                log=log, delay=delay)
             cov.extend(rows)
             bands.check_totals("gratka", typ, row.get("portal_total"), seeds, log=log)
     scrape.last_coverage = cov

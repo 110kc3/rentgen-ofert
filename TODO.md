@@ -1,13 +1,85 @@
 # TODO — rentgen-ofert
 
 > Keep this file and `README.md` updated after each change.
-> Last updated: 2026-08-11
+> Last updated: 2026-08-11 (later)
 
-## Next (2026-08-11) — two green runs; the fixes worked, three new things did not
+## Next (2026-08-11, later) — the stack now waits for otodom, and says what OLX served
 
-**Where to pick up: "What to do next" at the end of this section.** Rollout
-steps 0–3 are done *and now verified in production*. Step 4 is the live work,
-and its open items finally have measurements instead of predictions under them.
+**Where to pick up: "What to do next" at the end of this section.** Items 1 and
+2 of the previous list shipped in this commit. Nothing has run in CI since, so
+both are code, not results — the measurements they are meant to move are in the
+section below, which stays as the evidence.
+
+### Item 1 — teach the stack to wait for otodom
+
+The 405s were fatal on first contact and nothing anywhere paced one search
+against the next. Both halves fixed:
+
+- **`net.py` retries `405`** alongside 429/5xx (`RETRY_STATUSES`). Otodom
+  phrases its refusal as `405 Not Allowed`, not 429; the scraper only ever
+  GETs URLs that answer GET, so a 405 here means "not you, not now". A refusal
+  now costs up to ~30 s of capped back-off inside the request instead of
+  killing the search.
+- **`bands.subdivide` paces searches**: `SEARCH_PAUSE` = 4× the between-page
+  delay (2.8 s at the CI default of 0.7), because a search is a burst of
+  requests and only its pages were ever spaced apart. After a band the portal
+  refused outright, `ERROR_COOLDOWN` = 40× (28 s) and **one** more walk of the
+  same band — the retry's row *replaces* the failed one, so a recovered band
+  can never be counted twice by `check_totals`. One retry, never a loop: a
+  band still refused after the wait keeps its error row and the queue moves on.
+- **OLX's town loop is paced the same way** — a town is a search, not a page.
+- `delay=0` (tests, dev) disables all of it, so the offline suite stays instant.
+
+Cost when nothing is refused: one 2.8 s pause per search — against the ~146
+OLX searches and few dozen band searches of the green runs, roughly **+8 min**
+on a 283–306 min run under a 350 cap. Worst case, a portal refusing every
+band: +28 s and one extra walk each, bounded and self-limiting.
+
+**What it should recover:** the seven dead bands (`400k-500k` … `1500k-3M`),
+and with them otodom's 70.3% and the `price bands account for 6 821 ads but
+the unbanded search states 18 314` warning, which was a consequence of them.
+**What proves it:** those bands' coverage rows present in the next run, that
+warning gone, and otodom's `pct` up.
+
+### Item 2 — make the OLX failure legible
+
+`olx.fingerprint(resp)` now goes into the log line whenever the state blob is
+missing: HTTP status, body length, `<title>`, any challenge marker
+(captcha / datadome / cf-chl / "just a moment" / …), and whether the body is
+an OLX page at all. The old message guessed `(layout changed?)`; blocked and
+re-skinned need opposite fixes, CI keeps nothing but the log, and this Pi
+cannot re-probe OLX (it 403s us). The HTTP error path is now separate from the
+parse path, so a transport failure and a 200-that-isn't-results no longer read
+the same.
+
+Tests: **166**, up from 159, still fully offline. Each new one was confirmed to
+fail against the unfixed code before being kept.
+
+### What to do next (in this order)
+
+0. **Verify items 1 and 2 in the next run** — the three checks above, plus
+   whichever fingerprint OLX logs if it refuses again. Everything below is
+   still śląskie-only work, which is the ordering rule.
+1. **Settle OLX's slot.** 31 min for 1 751 kept on the run where it worked,
+   nothing at all on the run where it did not. Keep it, drop the per-town ×
+   per-band product down to towns only, or drop the portal. Item 2's
+   fingerprint is what makes the "nothing at all" case answerable. Whatever the
+   answer, it is 16× on the whole-Poland matrix.
+2. **Move `_link_twins` ahead of the photo phase.** The 8 712 twins are no
+   longer an estimate, and a twinned morizon ad needs no photos at all — that
+   is ~8 700 listings out of a 100 338 input where 12 857 got starved. It
+   converts a confirmed win into budget.
+3. **Chase the history phase's 6 → 44 min swing.** The largest unexplained
+   variance in the run, and not input-driven. Until it is understood, no budget
+   projection is worth writing down — including the +8 min this commit spends.
+4. **Step 5: split `data` per region.** At ~306 min/region the CI matrix — one
+   350-min job per region — is the only shape that fits, and the branch split
+   has to land before region #2 exists.
+
+## Superseded (2026-08-11) — two green runs; the fixes worked, three new things did not
+
+*(Its items 1 and 2 shipped in the section above; items 3–6 carried over. The
+measurements below are what the next run is judged against.)*
 
 ### The pipeline is green and the data is live
 
@@ -89,35 +161,11 @@ Per-phase, both runs, in minutes:
 | 31408840562 | 12 | 31 | 19 | 21 | 81 | 100 | 6 | 9 | 4 |
 | 31422141701 | 13 | **0** | 20 | 22 | 89 | 109 | **44** | 8 | 1 |
 
-### What to do next (in this order)
+### Where its list went
 
-Items 1–5 are still śląskie-only work, which is the ordering rule: fix what is
-wrong *per region* before copying it 16 times.
-
-1. **Teach the stack to wait for otodom.** Add `405` to `net.py`'s
-   `status_forcelist` and pace *between* searches, not only between pages.
-   Recovers seven dead bands and the coverage they were meant to buy; the
-   largest win available, cheap, self-contained, and every region will hit this
-   the moment the matrix exists.
-2. **Make the OLX failure legible.** When the state blob is missing, log the
-   HTTP status and a fingerprint of the body (length, `<title>`, any challenge
-   marker) instead of guessing `layout changed?`. "Blocked" vs "genuinely
-   re-skinned" has to be answerable from the run log, and item 3 cannot be
-   decided honestly until it is.
-3. **Settle OLX's slot** (the Step 4 item, now measurable). 31 min for 1 751
-   kept on the run where it worked, nothing at all on the run where it did not.
-   Keep it, drop the per-town × per-band product down to towns only, or drop the
-   portal. Whatever the answer, it is 16× on the whole-Poland matrix.
-4. **Move `_link_twins` ahead of the photo phase** (the Step 4 item). The 8 712
-   twins are no longer an estimate, and a twinned morizon ad needs no photos at
-   all — that is ~8 700 listings out of a 100 338 input where 12 857 got
-   starved. It converts a confirmed win into budget.
-5. **Chase the history phase's 6 → 44 min swing.** It is the largest
-   unexplained variance in the run and it is not input-driven. Until it is
-   understood, no budget projection is worth writing down.
-6. **Step 5: split `data` per region.** At ~306 min/region the CI matrix — one
-   350-min job per region — is the only shape that fits, and the branch split
-   has to land before region #2 exists.
+Items 1 and 2 (`405` + between-search pacing; the OLX fingerprint) shipped —
+see the section at the top of this file. Items 3–6 carried over unchanged and
+are now that section's 1–4.
 
 ## Done (2026-08-10) — the bands batch put CI over the timeout; three fixes
 

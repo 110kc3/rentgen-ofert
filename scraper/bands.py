@@ -34,6 +34,7 @@ portal's price filter silently dropping ads gets caught.
 """
 from __future__ import annotations
 
+import time
 from collections import deque
 
 from . import coverage
@@ -67,6 +68,18 @@ SEED_EDGES = (200_000, 300_000, 400_000, 500_000, 650_000,
 
 MIN_BAND = 10_000      # stop bisecting: below this a band is one price point
 MAX_DEPTH = 3          # 9 seed bands -> at most 8 extra cuts each
+
+# Pacing between searches, as multiples of the caller's between-page delay
+# (0.7 s in CI). `time.sleep(delay)` inside every portal's page loop paces the
+# pages *within* one search and nothing at all paces one search against the
+# next — so a subdivision fires its whole queue of bands at a portal back to
+# back, which is precisely when a portal stops answering. Otodom 405'd at band
+# `300k-400k` page 5 and refused the next seven bands on page 1 before serving
+# the eighth (runs 31408840562, 31422141701); a search is a burst of requests,
+# so the gap after one has to be wider than the gap between two pages, and the
+# gap after a refusal wider still. `delay=0` (tests, dev) disables both.
+SEARCH_PAUSE = 4       # x delay -> 2.8 s between searches
+ERROR_COOLDOWN = 40    # x delay -> 28 s after a search the portal refused
 
 
 def params(source, lo, hi) -> dict:
@@ -144,18 +157,34 @@ def overflows(row, source) -> bool:
     return row.get("stopped") in CAPPED
 
 
-def subdivide(source, walk, log=print, edges=SEED_EDGES, max_depth=MAX_DEPTH):
+def subdivide(source, walk, log=print, edges=SEED_EDGES, max_depth=MAX_DEPTH,
+              delay=0.0, sleep=time.sleep):
     """Walk `source` in price bands until nothing overflows. Returns the rows.
 
     ``walk(lo, hi, tag)`` runs one full paginated search over the half-open
     band and returns its coverage row; the caller owns merging (by URL, into
     whatever `seen` set it already used for the unbanded search).
+
+    Searches are paced apart (SEARCH_PAUSE), and a band the portal refused
+    outright is walked once more after a cooldown (ERROR_COOLDOWN) — the
+    refusals seen in production were transient, and the retry's row REPLACES
+    the failed one so a recovered band is never counted twice by
+    `check_totals`. One retry, never a loop: a band that is still refused
+    after the wait keeps its error row and the walk moves on.
     """
     rows, seeds = [], []
     queue = deque((lo, hi, 0) for lo, hi in seed_bands(edges))
     while queue:
         lo, hi, depth = queue.popleft()
-        row = walk(lo, hi, label(lo, hi))
+        tag = label(lo, hi)
+        sleep(delay * SEARCH_PAUSE)
+        row = walk(lo, hi, tag)
+        if row.get("stopped") == coverage.ERROR:
+            wait = delay * ERROR_COOLDOWN
+            log(f"  {source} band {tag} was refused — waiting {wait:.0f}s and "
+                f"asking once more")
+            sleep(wait)
+            row = walk(lo, hi, tag)
         rows.append(row)
         if depth == 0:
             seeds.append(row)
