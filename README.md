@@ -104,6 +104,10 @@ force-pushed fresh each run (the price history lives *inside*
   which is why an *empty* search must never look like a refusal: a village with
   no flats states no total and serves no ads, and reading that as overflow made
   every empty band bisect into two more (see the 2026-08-10 entry in `TODO.md`).
+  A portal can also simply refuse the bands: otodom answers `405` partway
+  through the sequence and, because a 405 is not retried, seven of its nine
+  bands die on their first page — the sum-check then reports a shortfall that
+  reads like a price filter and is really the refusal (2026-08-11 entry).
 - **Empty views explain themselves.** When a filter combination returns
   nothing, the dashboard re-runs the filter with each dimension relaxed and
   offers the ones that would bring results back ("Miejscowość: Gliwice — 43"),
@@ -157,6 +161,8 @@ force-pushed fresh each run (the price history lives *inside*
   because morizon had been serving its galleries from a host the extractor
   didn't match: 0 of its 9 505 listings carried a single hash, so it merged with
   nothing and shipped ~7 089 duplicate cards (21% of everything published).
+  Confirmed in production on 2026-08-11: **8 712** published properties now
+  carry both sources, and morizon-only is down from ~9 500 to 1 344.
   The same decoding fixes the galleries themselves — the first five URLs are the
   xs/s/m/l/og renditions of *one* photo, so hashing is now per distinct origin,
   and blog teasers riding the same CDN path are excluded.

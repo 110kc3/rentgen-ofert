@@ -1,13 +1,129 @@
 # TODO — rentgen-ofert
 
 > Keep this file and `README.md` updated after each change.
-> Last updated: 2026-08-10
+> Last updated: 2026-08-11
+
+## Next (2026-08-11) — two green runs; the fixes worked, three new things did not
+
+**Where to pick up: "What to do next" at the end of this section.** Rollout
+steps 0–3 are done *and now verified in production*. Step 4 is the live work,
+and its open items finally have measurements instead of predictions under them.
+
+### The pipeline is green and the data is live
+
+| run | trigger | scrape | `!!` | published |
+|---|---|---|---|---|
+| 31408840562 | push (`f203ace`) | **283 min** | 17 | 32 962 properties from 54 517 raw |
+| 31422141701 | schedule | **306 min** | 15 | 29 825 properties from 52 612 raw |
+
+`origin/data` reads `16c829d data: slaskie refresh 2026-08-11T02:16Z` — the
+first write in 30 hours. The three fixes, scored:
+
+| | before | after |
+|---|---|---|
+| OLX searches / phase time | 2 044 / 126–144 min | **146 / 31 min** |
+| gratka `pct` (counts served, not new) | 55.6% | **87.3%** |
+| false "short of total" lines | 20 | **0** |
+| total `!!` | 1 948 | **15** |
+
+The rest of the 2026-08-10 checklist, closed: `cache/phash_slaskie.json.gz` is
+**15.2 MB** with the plain `.json` gone from the branch — it grew into the 5.3×
+win rather than banking it (98 559 urls now) — and the `data` branch totals
+151 MB.
+
+**The deploy gate is in place but untested.** Nothing has failed since it
+shipped, so it has never actually had to skip a deploy. It stays unproven until
+a scrape fails.
+
+### Step 3 verified: the gratka↔morizon merge works in production
+
+`('gratka','morizon')` is no longer zero. Source combinations across the
+published 29 825 properties:
+
+| combination | properties |
+|---|---|
+| `gratka+morizon` | 4 648 |
+| `gratka+morizon+nieruchomosci-online` | 2 131 |
+| `gratka+morizon+nieruchomosci-online+otodom` | 1 350 |
+| `gratka+morizon+otodom` | 583 |
+| **total twin-merged** | **8 712** |
+
+Against an estimate of 7 089. morizon-only is down to **1 344** and gratka-only
+to 811, from ~9 500 morizon singletons that merged with nothing. The base64
+thumbnail key is identity, and it holds at scale.
+
+### Three things the green runs exposed
+
+- **otodom 405s, and nothing in the stack makes it wait.** Band `300k-400k`
+  dies at page 5 with `405 Client Error: Not Allowed`, and then every one of the
+  seven bands after it fails on page 1 — `400k-500k` through `1500k-3M`, all of
+  them, in both runs. `net.py`'s retry `status_forcelist` is
+  `(429, 500, 502, 503, 504)`: **405 is not in it**, so the refusal is fatal on
+  first contact with no backoff, and `time.sleep(delay)` only paces *pages
+  within* a search, never one search against the next. The very next search
+  (`3M+`) succeeded, so whatever trips it is transient — the code simply has no
+  mechanism to wait it out. The `!! otodom flat: price bands account for 6 821
+  ads but the unbanded search states 18 314` warning is a *consequence* of this,
+  not a second bug: seven dead bands have nothing to contribute to the sum. Net
+  effect: otodom is the largest portal and sits at **70.3%**, its main search
+  still truncated at our 200-page cap (12 509 of 18 314) — the exact hole
+  Step 2's bands were built to close.
+- **OLX served nothing on the second run.** `OLX: __PRERENDERED_STATE__ not
+  found (layout changed?)` on page 1 of *both* searches, 50 seconds after run 1
+  finished walking 518 OLX pages — so almost certainly a block wearing a
+  layout-change error message. The code cannot tell those two apart, and this Pi
+  cannot settle it (OLX 403s this IP; see the portal-probing note). Run 1 is
+  therefore the only honest measurement of the fixed phase: **31 min for 1 751
+  kept listings**.
+- **The budget has no headroom and does not behave.** 283 and 306 min against
+  the 350 cap — and run 2 was 23 min *slower* while OLX contributed literally
+  nothing, because the history phase went **6 → 44 min** on comparable input
+  (6 100/47 828 vs 6 484/47 726 archived ads ingested). Whatever governs that
+  phase's cost, it is not the input size, and it swallowed half the spare budget
+  on its own.
+
+Per-phase, both runs, in minutes:
+
+| run | otodom | olx | gratka | morizon | n-online | photo | history | delist | RCN |
+|---|---|---|---|---|---|---|---|---|---|
+| 31408840562 | 12 | 31 | 19 | 21 | 81 | 100 | 6 | 9 | 4 |
+| 31422141701 | 13 | **0** | 20 | 22 | 89 | 109 | **44** | 8 | 1 |
+
+### What to do next (in this order)
+
+Items 1–5 are still śląskie-only work, which is the ordering rule: fix what is
+wrong *per region* before copying it 16 times.
+
+1. **Teach the stack to wait for otodom.** Add `405` to `net.py`'s
+   `status_forcelist` and pace *between* searches, not only between pages.
+   Recovers seven dead bands and the coverage they were meant to buy; the
+   largest win available, cheap, self-contained, and every region will hit this
+   the moment the matrix exists.
+2. **Make the OLX failure legible.** When the state blob is missing, log the
+   HTTP status and a fingerprint of the body (length, `<title>`, any challenge
+   marker) instead of guessing `layout changed?`. "Blocked" vs "genuinely
+   re-skinned" has to be answerable from the run log, and item 3 cannot be
+   decided honestly until it is.
+3. **Settle OLX's slot** (the Step 4 item, now measurable). 31 min for 1 751
+   kept on the run where it worked, nothing at all on the run where it did not.
+   Keep it, drop the per-town × per-band product down to towns only, or drop the
+   portal. Whatever the answer, it is 16× on the whole-Poland matrix.
+4. **Move `_link_twins` ahead of the photo phase** (the Step 4 item). The 8 712
+   twins are no longer an estimate, and a twinned morizon ad needs no photos at
+   all — that is ~8 700 listings out of a 100 338 input where 12 857 got
+   starved. It converts a confirmed win into budget.
+5. **Chase the history phase's 6 → 44 min swing.** It is the largest
+   unexplained variance in the run and it is not input-driven. Until it is
+   understood, no budget projection is worth writing down.
+6. **Step 5: split `data` per region.** At ~306 min/region the CI matrix — one
+   350-min job per region — is the only shape that fits, and the branch split
+   has to land before region #2 exists.
 
 ## Done (2026-08-10) — the bands batch put CI over the timeout; three fixes
 
-**Where to pick up: watch the run this commit triggers.** If it lands under
-350 min, resume at Step 4 in "Rollout order" below with the corrected photo
-numbers recorded here. Steps 0–3 stay done.
+*(Superseded as a pick-up pointer by the 2026-08-11 section above. The run
+this commit triggered landed at 283 min and published; everything below was
+confirmed.)*
 
 ### The pipeline had been red for three runs, and the site did not show it
 
@@ -82,7 +198,8 @@ so it does not scale with input) + 20 history + 8 delist + 8 RCN ≈ **306 min**
 against the 350 cap. It should fit. It has no headroom, which is the whole of
 Step 4's case.
 
-**What to check on the run this commit triggers:**
+**What to check on the run this commit triggers** — every line answered in
+the 2026-08-11 section above:
 - It has to **finish** — `Push refreshed data` running at all is the headline,
   and `origin/data` should stop reading `2026-08-09T11:03Z`.
 - OLX should drop from ~140 min to ~30 and from 2 044 searches to a few dozen.
@@ -773,6 +890,10 @@ morizon's parameters were re-probed live on the day and answer exactly as
 recorded; otodom's are the 2026-08-08 measurements (its edge 403s the Pi after a
 probe burst). `check_totals` asserts the seed bands sum to at least the unbanded
 total, which is how a portal's price filter dropping ads gets caught.
+**Caveat found 2026-08-11**: on otodom the bands largely do not run at all — the
+portal 405s partway through and seven of nine bands die on page 1, so
+`check_totals` fires on a shortfall that looks like a price filter and is really
+the refusal. Item 1 of the 2026-08-11 pick list.
 
 **Step 3 — the dedupe defects.  ✅ DONE 2026-08-09** (see the Done section at
 the top). The gratka↔morizon merge needs no image fetch at all — a morizon
@@ -781,9 +902,10 @@ search-page thumbnail already carries gratka's ad id — and links **7 089** of
 everything published. Gallery hashing is now one URL per distinct photo origin
 on both portals, blog teasers on the same CDN path excluded, fixtures pinned to
 real pages.
-- [ ] **Still to verify on the next run**: `('gratka','morizon')` must stop
-      being zero in the source-pair histogram. That query is the regression
-      test.
+- [x] **Verified on run 31422141701 (2026-08-11)**: `('gratka','morizon')` is
+      not zero — **8 712** published properties carry both, against the 7 089
+      estimate, with morizon-only down to 1 344 and gratka-only to 811. The
+      regression test passed on the merge's first completed CI run.
 
 **Step 4 — make one region affordable at ~2× the listings.**
 - [x] **phash cache**: gzipped and base64-packed — **65.92 → 12.35 MB (5.3×)**
@@ -796,32 +918,45 @@ real pages.
       2026-08-10 section: the cross-town duplication is at property level, not
       ad-id level). What did change underneath it: empty results are now cached
       so photo-less ads stop being re-fetched every run, and hashing is per
-      distinct origin instead of five renditions of one photo. Re-time on the
-      first run that completes, THEN choose between a larger budget, more
-      workers, or hashing only listings that actually have a size-collision.
-      The phase is budget-bounded (~96 min, exhausted, 15 350 skipped), so it
-      does not grow with the input — it just starves a larger share of it.
+      distinct origin instead of five renditions of one photo. **Re-timed on the two
+      green runs (2026-08-11): 100 and 109 min, on inputs of 102 345 and
+      100 338, starving 18 296 and 12 857 listings.** The phase is
+      budget-bounded, so it does not grow with the input — it just starves a
+      larger share of it. Choose between a larger budget, more workers, or
+      hashing only listings that actually have a size-collision; the next item
+      down (twins need no photos) is the cheapest of the three, and is now
+      proven rather than estimated.
 - [ ] **Don't hash a listing whose twin already identifies it.** A morizon ad
       linked to a gratka ad by portal id needs no photos at all, but
       `attach_hashes` runs over `raw` before `dedupe` does the linking. Moving
-      `_link_twins` earlier would drop ~7 000 detail fetches per run.
-      Deliberately left out of the 2026-08-09 batch: it reorders the pipeline,
-      and the budget wins above may already be enough.
+      `_link_twins` earlier would drop **~8 700** detail fetches per run — the
+      merge is measured now, not estimated (8 712 twins on 2026-08-11). Held
+      back from the 2026-08-09 batch because it reorders the pipeline; the
+      budget wins above turned out not to be enough, so it is item 4 of the
+      2026-08-11 pick list.
 - [ ] **Is OLX worth its slot?** Even with the empty-search bug fixed it is the
       second-most expensive portal for the least return: 2 044 searches in the
       2026-08-10 run to keep **1 730 listings**, because most of what it serves
       is syndicated from Otodom and dropped by design (that filtering is
-      correct — the ads are collected at the source). Measure the fixed phase,
-      then decide between keeping it, dropping the per-town × per-band product
-      down to towns only, or restricting bands to towns that actually overflow.
-      Whatever the answer, it is 16× on the whole-Poland matrix.
-- [ ] **Delist sweep**: 300 checks against 21 639 stale records never converges.
-      Prioritise (oldest-first is not the same as most-likely-gone), use HEAD
+      correct — the ads are collected at the source). **The fixed phase is now
+      measured (2026-08-11): 146 searches, 31 min, 1 751 kept — and on the very
+      next run OLX served nothing at all** (`__PRERENDERED_STATE__ not found`,
+      probably a block). Decide between keeping it, dropping the per-town ×
+      per-band product down to towns only, or restricting bands to towns that
+      actually overflow. Whatever the answer, it is 16× on the whole-Poland
+      matrix — and item 2 of the 2026-08-11 pick list has to land first, so the
+      log can say whether OLX is blocked or re-skinned.
+- [ ] **Delist sweep**: 300 checks against 13 449 stale records never
+      converges — and the 2026-08-11 run confirmed exactly **1** ad gone out of
+      the 300 it checked, against 16 the run before. Prioritise (oldest-first is
+      not the same as most-likely-gone), use HEAD
       where the portal allows it, and scale `RENTGEN_VERIFY_MAX` with the record
       count instead of pinning it at 300.
-- [ ] **Geo**: 500 lookups/run at 84.9% located — fine for one region, hopeless
-      for 16. Scale the budget per region and let a region converge before the
-      next one starts.
+- [ ] **Geo**: measured **94.3–94.6% located** on the 2026-08-11 runs, and
+      run 31422141701 needed only 183 of its 500 lookups — śląskie has
+      essentially converged, so this is no longer a per-run cost here. Still
+      hopeless for 16 regions from cold: scale the budget per region and let a
+      region converge before the next one starts.
 
 **Step 5 — region infrastructure (Krok 2, unchanged in substance).**
 - [ ] Split the `data` branch per region (`data-<region>`) so a job fetches its
