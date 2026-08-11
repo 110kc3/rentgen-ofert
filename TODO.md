@@ -6,9 +6,10 @@
 ## Next (2026-08-11, later) — the stack now waits for otodom, and says what OLX served
 
 **Where to pick up: "What to do next" at the end of this section.** Items 1 and
-2 of the previous list shipped in this commit. Nothing has run in CI since, so
-both are code, not results — the measurements they are meant to move are in the
-section below, which stays as the evidence.
+2 of the previous list shipped in commits `7bd622b` and `28f8cb5`, pushed —
+**run `31502042693` is the one that judges them**. Until it lands they are
+code, not results; the measurements they are meant to move are in the
+superseded section below, which stays as the evidence.
 
 ### Item 1 — teach the stack to wait for otodom
 
@@ -68,6 +69,58 @@ the same.
 Tests: **169**, up from 159, still fully offline. Each new one was confirmed to
 fail against the unfixed code before being kept.
 
+### A third run landed while this was being written
+
+`31468177600` (schedule, 07:14–12:31, **316 min**, published 30 005 properties
+from 54 327 raw). Two things it settles:
+
+- **otodom's 405 reproduces a third time, in the same shape.** `flat/300k-400k`
+  died at page 7, then `400k-500k`, `500k-650k`, `650k-800k`, `800k-1M`,
+  `1M-1500k` and `1500k-3M` each died on page 1 — seven bands, `3M+` served
+  normally right after. Three runs, one pattern: this is the bug the push above
+  targets, not a portal having a bad night. otodom finished at 70.7% with its
+  unbanded flat search capped at our 200 pages (12 499 of 18 319).
+- **OLX served normally** — 146 searches, 518 pages, 1 748 kept — so run
+  31422141701's zero was a *transient* refusal, not a layout change. It also
+  logged `olx house/bytom: failed after 1 page(s)`: a single refused town,
+  which is now covered by the town-level retry.
+
+### The 6 → 44 min swing is the delist sweep, not the history phase
+
+Corrected against all three run logs — the phase table above mislabels it. Time
+between the `archived ads ingested` line and the `delist sweep` line, which
+brackets `delist.sweep` and nothing else:
+
+| run | delist sweep | checked | confirmed gone |
+|---|---|---|---|
+| 31408840562 | **6 min** | 300 | 16 |
+| 31422141701 | **44 min** | 300 | 1 |
+| 31468177600 | **42 min** | 300 | 0 |
+
+Same 300 checks every time. `sweep` walks them **sequentially**, each a
+`session.get(..., timeout=20)` on the shared retry session: a URL that is
+really gone answers at once (404, or a redirect onto an index page), while one
+that is live, slow, or being throttled costs the full timeout and then the
+retry ladder on top. The confirmed-gone counts (16 / 1 / 0) track exactly that
+split — the phase's cost is response-time-driven, which is why it looked
+"not input-driven". It is 12% of the budget for 300 HTTP HEAD-ish questions.
+
+Three fixes, any of which would do, in order of preference: **parallelise it**
+the way `photomatch` already does (8 workers ≈ 5 min); give it **its own lean
+session** — a liveness probe wants no 429/405 retry ladder at all, "could not
+tell" is a perfectly good answer and the record comes round again next run;
+and/or a **wall-clock budget** like the photo phase's.
+
+Related, and worth watching in the run just pushed: adding 405 to the retry
+list makes a refusing portal more expensive *here* too. The 405s have only ever
+appeared on search URLs, never on the `/pl/oferta/...` detail pages that this
+sweep and the photo phase fetch, so this should cost nothing — but the delist
+phase's wall time is the place it would show up.
+
+Also from run 3: the photo phase took 93 min and **skipped 11 096** listings
+with the budget exhausted (18 296 in run 1, 12 857 in run 2). Item 2 below is
+about handing those listings the ~8 700 fetches the twins do not need.
+
 ### What to do next (in this order)
 
 0. **Verify items 1 and 2 in the next run** — the three checks above, plus
@@ -82,9 +135,11 @@ fail against the unfixed code before being kept.
    longer an estimate, and a twinned morizon ad needs no photos at all — that
    is ~8 700 listings out of a 100 338 input where 12 857 got starved. It
    converts a confirmed win into budget.
-3. **Chase the history phase's 6 → 44 min swing.** The largest unexplained
-   variance in the run, and not input-driven. Until it is understood, no budget
-   projection is worth writing down — including the +8 min this commit spends.
+3. **Cut the delist sweep** — diagnosed above, no longer a mystery: 42–44 min
+   of the budget in two runs out of three, for 300 sequential URL checks that
+   mostly answer "still live, slowly". Parallelise it, give it a lean session,
+   or budget it; it is the single largest recoverable block of time in the run
+   and the +8 min this batch spends comes straight back out of it.
 4. **Step 5: split `data` per region.** At ~306 min/region the CI matrix — one
    350-min job per region — is the only shape that fits, and the branch split
    has to land before region #2 exists.
@@ -100,6 +155,7 @@ measurements below are what the next run is judged against.)*
 |---|---|---|---|---|
 | 31408840562 | push (`f203ace`) | **283 min** | 17 | 32 962 properties from 54 517 raw |
 | 31422141701 | schedule | **306 min** | 15 | 29 825 properties from 52 612 raw |
+| 31468177600 | schedule | **316 min** | 18 | 30 005 properties from 54 327 raw |
 
 `origin/data` reads `16c829d data: slaskie refresh 2026-08-11T02:16Z` — the
 first write in 30 hours. The three fixes, scored:
