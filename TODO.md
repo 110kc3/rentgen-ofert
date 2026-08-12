@@ -1,15 +1,151 @@
 # TODO — rentgen-ofert
 
 > Keep this file and `README.md` updated after each change.
-> Last updated: 2026-08-11 (later)
+> Last updated: 2026-08-12
 
-## Next (2026-08-11, later) — the stack now waits for otodom, and says what OLX served
+## Next (2026-08-12) — the page budget, the sweep, the twins, and one branch per region
 
-**Where to pick up: "What to do next" at the end of this section.** Items 1 and
-2 of the previous list shipped in commits `7bd622b` and `28f8cb5`, pushed —
-**run `31502042693` is the one that judges them**. Until it lands they are
-code, not results; the measurements they are meant to move are in the
-superseded section below, which stays as the evidence.
+**Where to pick up: "What to do next" at the end of this section.** Picks 1, 2,
+4, 5 and 6 of the previous list shipped here; pick 3 (OLX's slot) is still open
+and is now the only unanswered question of that batch. **The run this commit
+triggers is what judges all of it** — until it lands these are code, not
+results, and the measurements they have to move are in the superseded section
+below.
+
+### What the two runs before this commit established
+
+`31502042693` (push, 291 min) and `31526243162` (schedule, 294 min), both green,
+both published. They judged the previous batch and it came out two for three:
+
+| | expected | measured |
+|---|---|---|
+| item 1 — otodom waits out its 405 | seven bands recovered | **nothing recovered**, and otodom went 12–13 → 30–33 min |
+| item 2 — the OLX failure is legible | a fingerprint on the refusal | **`403 Forbidden` on request #1**, both runs — a block, not a layout change |
+
+- **OLX is blocking the runners, and escalating.** Worked 2026-08-10 16:25 →
+  challenge body 21:09 → worked 2026-08-11 07:14 → `403` 14:32 → `403` 19:24.
+  The 28 s cooldown cannot touch it. Item 2 did its job: the HTTP error path is
+  separate from the parse path now, so this is a fact rather than a guess.
+- **otodom's `pct` rose 70.3 → 77.9% and that is an artifact.** Seven dead bands
+  contribute nothing to the *denominator* either, so losing them harder made the
+  fraction look better. Kept listings: 16 622 / 16 635 / 16 697 / 16 629 — flat
+  across every run ever measured, bands or no bands.
+
+### The 405 is a page budget, which is why waiting could not fix it
+
+The first 405 arrives after **322 successful otodom pages**, and it arrives
+inside `300k-400k` between its pages 5 and 11 in all four runs. **200 of those
+322 are the unbanded flat walk** — which collects 12 518 of 18 334, i.e. exactly
+the ads the bands are then sent to fetch. The band yields say it outright:
+`200k-300k page 1/35: +4`, `page 2: +0`, `page 3: +2`.
+
+- [x] **The unbanded otodom search is a scout now** (`otodom.SCOUT_PAGES = 12`).
+      It walks far enough to state the total, seed the dedupe and pick up the
+      priceless ads that no price filter can return, then stands aside. The cap
+      only bites once the portal has stated a total past its serving window —
+      the same question `bands.overflows` asks, asked one page in — so the house
+      search, which needs no bands, still walks to `max_pages`. A scout row is
+      excluded from `coverage.warnings`: "raise RENTGEN_MAX_PAGES or subdivide
+      the search" is precisely what it just did. It stays in the `truncated`
+      count, which is factual.
+- [x] **A failed retry no longer overwrites a better attempt** (`bands.best_of`).
+      The retry restarts at page 1, and its row replaced the first
+      unconditionally — so `300k-400k`, which had walked to page **11**, was
+      recorded as `failed after 1 page(s)`, and `check_totals` lost the total it
+      had read: accounted ads fell **6 821 → 3 529**, reported as otodom's price
+      filter dropping 14 805 ads. The listings were never at risk (the walkers
+      merge into the caller's `seen`/`out` as they go); every number *about* the
+      search was. A recovered walk always wins; between two refusals, the one
+      that got further does.
+
+### The delist sweep, cut
+
+Diagnosed in the 2026-08-11 section, fixed here. Its cost was
+response-time-driven — 300 sequential GETs where a dead ad answers at once and a
+live, slow or throttled one costs the full 20 s timeout **and then the shared
+session's 405/429/5xx ladder on top**.
+
+- [x] **All three fixes, because they are complementary.** The checks run
+      concurrently (`MAX_WORKERS = 8`, as photomatch); on `net.probe_session()`,
+      which does not retry at all — "could not tell" is a perfectly good answer
+      to a yes/no question and the record comes round next run; under
+      `RENTGEN_DELIST_BUDGET_MIN` (default 10), with unasked records left
+      *unasked*, not concluded, keeping their place at the front of the
+      oldest-first queue. `is_gone`'s timeout drops 20 s → 8: that 20 was the
+      scraper's, appropriate for a page we need the contents of and far too
+      patient for a liveness probe.
+
+### Twins cost no photo fetch
+
+- [x] **`link_twins` runs before the photo phase**, not inside `dedupe` after
+      it. A morizon ad carrying gratka's ad id in its thumbnail is already
+      identified; hashing it answers a question nobody is asking. It now carries
+      `_identified_by` and `photomatch.attach_hashes` skips it outright —
+      **~8 700 detail fetches a run** on the published 2026-08-11 numbers,
+      against a phase that was starving 9 177–18 296 listings of a budget it
+      cannot stretch. `_build` unions the gratka half's hashes onto the merged
+      property, so nothing downstream goes without; the skip is recorded as
+      neither a hit nor a photo miss, so the cache learns nothing false.
+
+### One branch per region
+
+- [x] **`data` → `data-<region>`** (rollout Step 5's first item). The shared
+      branch is what region #2 would have broken: śląskie alone is ~150 MB and
+      every region's job would fetch, and force-push over, all of everyone's.
+      A job now pulls `data-$REGION`, and pushes back only `site/data/$REGION`
+      plus the caches that region owns (`phash_`/`rcn_`) and the two that are
+      not region-scoped — named explicitly, so a job seeded from the shared
+      branch does not drag another region's 15 MB phash cache onto its own.
+      `deploy.yml` overlays the pre-split `data` branch first and every
+      `data-*` branch on top, so **the split needs no flag day** and a region
+      that has not re-pushed yet keeps publishing. It looks before it wipes: a
+      branch without its region's directory leaves what the shared branch
+      supplied rather than deleting it and publishing nothing.
+- Concurrency stays **one scrape at a time across regions**, deliberately. The
+  portals see one pool of runner IPs whichever voivodeship we ask about, and
+  two of them are already refusing us. Parallelism belongs in a matrix with
+  `max-parallel` set explicitly, when there is a second region to run.
+
+Tests: **169 → 181**, still fully offline. Each new one was confirmed to fail
+against the unfixed code before being kept.
+
+### What to check on the run this commit triggers
+
+- **otodom.** `flat/slaskie` should walk 12 pages, not 200, and the seven bands
+  `400k-500k` … `1500k-3M` should have coverage rows with pages in them. If the
+  405 still arrives in `300k-400k`, the budget is wall-clock rather than pages
+  and the scout cap bought only time — say so and stop guessing.
+- **otodom's kept count**, which has been 16 6xx in every run ever measured.
+  This is the first change that can move it.
+- **The delist sweep**, 27–34 min → single digits, and how many it left for
+  next run.
+- **The photo phase**: `identified by their twin` in the log, ~8 700 of them,
+  and whether `skipped, photo budget exhausted` finally reaches zero (the trend
+  is 18 296 → 12 857 → 11 096 → 9 886 → 9 177 as the cache warms).
+- **`data-slaskie` exists** and the site still publishes from it. The deploy
+  log should say `overlaid slaskie from data-slaskie`.
+
+### What to do next (in this order)
+
+1. **Settle OLX's slot** — the one pick left from the previous list, and now a
+   decision rather than an investigation. It is a hard `403` on request #1, two
+   runs running, and no amount of waiting reaches it. It was 31 min for 1 751
+   kept (~1.8% of the dataset) on the last run where it worked. Keep the
+   scraper but make a 403 abort the portal immediately instead of burning two
+   28 s waits; drop the per-town × per-band product to towns only; or drop the
+   portal. Whatever the answer, it is 16× on the whole-Poland matrix.
+2. **The rest of Step 5** — the branch split has landed, so what is left is the
+   region matrix (`max-parallel: 1–2`, staggered crons, per-region
+   `RENTGEN_VERIFY_MAX`), the region picker with per-region counts, and
+   per-region meta / OG / sitemap. Then **pilot ONE region end to end** —
+   małopolskie or dolnośląskie.
+3. **Step 6, the hosting ceiling** — decide before region #4, and the payload
+   re-encoding is worth doing whichever way the hosting question goes.
+
+## Superseded (2026-08-11, later) — the stack waits for otodom, and says what OLX served
+
+*(Superseded as a pick-up pointer by the 2026-08-12 section above. Run
+`31502042693` judged these: item 2 worked and item 1 did not — see there.)*
 
 ### Item 1 — teach the stack to wait for otodom
 
@@ -1043,14 +1179,12 @@ real pages.
       hashing only listings that actually have a size-collision; the next item
       down (twins need no photos) is the cheapest of the three, and is now
       proven rather than estimated.
-- [ ] **Don't hash a listing whose twin already identifies it.** A morizon ad
-      linked to a gratka ad by portal id needs no photos at all, but
-      `attach_hashes` runs over `raw` before `dedupe` does the linking. Moving
-      `_link_twins` earlier would drop **~8 700** detail fetches per run — the
-      merge is measured now, not estimated (8 712 twins on 2026-08-11). Held
-      back from the 2026-08-09 batch because it reorders the pipeline; the
-      budget wins above turned out not to be enough, so it is item 4 of the
-      2026-08-11 pick list.
+- [x] **Don't hash a listing whose twin already identifies it. DONE
+      2026-08-12.** `link_twins` runs before the photo phase now; the morizon
+      half carries `_identified_by` and `attach_hashes` skips it outright.
+      ~8 700 detail fetches a run, measured off the published 2026-08-11 data
+      (8 712 twins), not estimated. `_build` unions the gratka half's hashes
+      onto the property so nothing downstream goes without.
 - [ ] **Is OLX worth its slot?** Even with the empty-search bug fixed it is the
       second-most expensive portal for the least return: 2 044 searches in the
       2026-08-10 run to keep **1 730 listings**, because most of what it serves
@@ -1063,12 +1197,16 @@ real pages.
       actually overflow. Whatever the answer, it is 16× on the whole-Poland
       matrix — and item 2 of the 2026-08-11 pick list has to land first, so the
       log can say whether OLX is blocked or re-skinned.
-- [ ] **Delist sweep**: 300 checks against 13 449 stale records never
-      converges — and the 2026-08-11 run confirmed exactly **1** ad gone out of
-      the 300 it checked, against 16 the run before. Prioritise (oldest-first is
-      not the same as most-likely-gone), use HEAD
-      where the portal allows it, and scale `RENTGEN_VERIFY_MAX` with the record
-      count instead of pinning it at 300.
+- [x] **Delist sweep: cut. DONE 2026-08-12.** All three of the fixes it wanted,
+      because they are complementary: concurrent (8 workers), on
+      `net.probe_session()` which does not retry at all, under
+      `RENTGEN_DELIST_BUDGET_MIN`; and `is_gone`'s timeout 20 s → 8. Unasked
+      records stay unasked rather than concluded.
+- [ ] **Delist sweep, still open**: 300 checks against 13 449 stale records
+      still never *converges*, however fast each one is. Prioritise
+      (oldest-first is not the same as most-likely-gone), use HEAD where the
+      portal allows it, and scale `RENTGEN_VERIFY_MAX` with the record count
+      instead of pinning it at 300.
 - [ ] **Geo**: measured **94.3–94.6% located** on the 2026-08-11 runs, and
       run 31422141701 needed only 183 of its 500 lookups — śląskie has
       essentially converged, so this is no longer a per-run cost here. Still
@@ -1076,8 +1214,11 @@ real pages.
       region converge before the next one starts.
 
 **Step 5 — region infrastructure (Krok 2, unchanged in substance).**
-- [ ] Split the `data` branch per region (`data-<region>`) so a job fetches its
-      own ~150 MB, not everyone's 2.3 GB. Do it before region #2 exists.
+- [x] **Split the `data` branch per region (`data-<region>`). DONE
+      2026-08-12** — before region #2 exists, as required. A job pulls
+      `data-$REGION` and pushes back only its own region's data plus the caches
+      it owns; `deploy.yml` overlays the pre-split `data` branch first and every
+      `data-*` branch on top, so the migration needed no flag day.
 - [ ] CI matrix over regions, `max-parallel: 1–2`, staggered crons, 1×/day per
       region, per-region concurrency group and `RENTGEN_VERIFY_MAX`.
 - [ ] Region picker on the root page with per-region counts; per-region meta /

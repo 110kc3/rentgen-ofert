@@ -11,11 +11,22 @@ known URL directly:
 
 At most ``max_checks`` URLs are verified per run (oldest first), so a run's
 extra traffic stays bounded; the rest are retried on later runs.
+
+The checks run CONCURRENTLY, on a session that does not retry, under a
+wall-clock budget. Sequentially and on the shared retry session this phase cost
+27-44 minutes of three separate runs for the same 300 questions (runs
+31422141701, 31468177600, 31502042693) — its cost is response-time-driven, not
+input-driven, because a URL that is really gone answers at once while one that
+is live, slow or throttled costs the full timeout and then the retry ladder.
+The confirmed-gone counts across those runs (16 / 1 / 0 / 51) track exactly
+that split.
 """
 from __future__ import annotations
 
 import datetime as dt
 import re
+import time
+from concurrent.futures import ThreadPoolExecutor
 
 HEADERS = {
     "User-Agent": (
@@ -27,6 +38,12 @@ HEADERS = {
 
 GRACE_DAYS = 7          # unseen for this long -> candidate for verification
 DEFAULT_MAX_CHECKS = 300
+MAX_WORKERS = 8         # as photomatch: the same portals, a tenth of the volume
+# A liveness probe that has not answered in this long has told us what it is
+# going to tell us. The old 20 s was the shared scraper timeout, appropriate
+# for a search page we need the contents of and much too patient for a yes/no.
+TIMEOUT = 8
+BUDGET_S = 600          # backstop; at 8 workers the phase should be ~5 min
 
 # Portal-specific "this ad is dead" markers on pages that still return 200.
 _GONE_MARKERS = re.compile(
@@ -52,10 +69,11 @@ def last_seen(rec) -> str:
                default=rec.get("first_seen") or "")
 
 
-def is_gone(url: str, session) -> bool | None:
+def is_gone(url: str, session, timeout: float = TIMEOUT) -> bool | None:
     """True = confirmed gone, False = still live, None = could not tell."""
     try:
-        r = session.get(url, headers=HEADERS, timeout=20, allow_redirects=True)
+        r = session.get(url, headers=HEADERS, timeout=timeout,
+                        allow_redirects=True)
     except Exception:
         return None
     if r.status_code in (404, 410):
@@ -71,11 +89,18 @@ def is_gone(url: str, session) -> bool | None:
 
 def sweep(records, today: str, session, active_urls=None,
           max_checks: int = DEFAULT_MAX_CHECKS, grace_days: int = GRACE_DAYS,
-          log=print):
+          log=print, max_workers: int = MAX_WORKERS, budget_s=BUDGET_S,
+          probe=is_gone):
     """Mark stale records as delisted (rec['delisted'] = last day it was seen).
 
     A record seen today (or whose URL is in ``active_urls``) gets any stale
     ``delisted`` flag cleared — the flat came back, that's a relist not a sale.
+
+    ``budget_s`` bounds the wall clock the way the photo phase's does: once
+    exceeded the remaining candidates are left unasked (not concluded — they
+    keep their place at the front of the oldest-first queue for next run).
+    Pass ``session=net.probe_session()``; a retrying session makes each "could
+    not tell" cost thirty seconds of nothing.
     """
     active_urls = active_urls or set()
     try:
@@ -104,15 +129,28 @@ def sweep(records, today: str, session, active_urls=None,
             candidates.append((seen, url, rec))
 
     candidates.sort(key=lambda c: (c[0], c[1]))   # oldest unseen first (never compare the rec dicts)
-    checked = confirmed = 0
-    for seen, url, rec in candidates:
-        if checked >= max_checks:
-            break
-        checked += 1
-        gone = is_gone(url, session)
-        if gone:
-            rec["delisted"] = seen
-            confirmed += 1
+    todo = candidates[:max_checks]
+    deadline = time.monotonic() + budget_s if budget_s else None
+
+    def ask(cand):
+        """(answer, was_asked) — the deadline is checked per candidate, so a
+        slow start costs the tail of the queue and not the whole run."""
+        if deadline is not None and time.monotonic() > deadline:
+            return None, False
+        return probe(cand[1], session), True
+
+    checked = confirmed = skipped = 0
+    with ThreadPoolExecutor(max_workers=max_workers) as ex:
+        for (seen, _url, rec), (gone, asked) in zip(todo, ex.map(ask, todo)):
+            if not asked:
+                skipped += 1
+                continue
+            checked += 1
+            if gone:
+                rec["delisted"] = seen
+                confirmed += 1
     log(f"  delist sweep: {len(candidates)} stale, {checked} checked, "
-        f"{confirmed} confirmed gone")
+        f"{confirmed} confirmed gone"
+        + (f"; {skipped} left for next run, sweep budget exhausted"
+           if skipped else ""))
     return confirmed

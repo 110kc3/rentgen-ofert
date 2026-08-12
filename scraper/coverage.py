@@ -59,9 +59,15 @@ COMPLETE_ENOUGH = 0.95
 
 def row(source, typ, tag, pages, listings, stopped,
         portal_pages=None, portal_total=None, total_is_min=False,
-        served=None) -> dict:
+        served=None, scout=False) -> dict:
     out = {"source": source, "type": typ, "pages": pages,
            "listings": listings, "stopped": stopped}
+    if scout:
+        # Stopped on purpose, with price bands queued up behind it to cover the
+        # same ground properly (see otodom.SCOUT_PAGES). Still truncated as a
+        # search — it stays in the `truncated` count, which is factual — but it
+        # is not advice-worthy, so `warnings` keeps quiet about it.
+        out["scout"] = True
     if served is not None and served != listings:
         out["served"] = served
     if tag and tag != typ:
@@ -191,6 +197,11 @@ def warnings(rows) -> list:
             if short_of_total(seen_by(r), r.get("portal_total")):
                 out.append(f"  !! {_where(r)}: search ended cleanly but short of "
                            f"the portal's own count{_of_total(r)} — subdivide it")
+            continue
+        if st == OUR_CAP and r.get("scout"):
+            # "raise RENTGEN_MAX_PAGES or subdivide the search" is exactly what
+            # a scout pass has already done. The bands that follow report their
+            # own coverage, and fall short loudly enough on their own.
             continue
         if st == OUR_CAP:
             extra = ""

@@ -7,13 +7,17 @@ writes a JSON file, and a static dashboard on GitHub Pages displays it.
 
 ```
 GitHub Actions (cron) → python -m scraper.main → site/data/<region>/*.json
-        → force-pushed to the orphan `data` branch → GitHub Pages (main site/ + data overlay)
+        → force-pushed to the orphan `data-<region>` branch → GitHub Pages (main site/ + data overlay)
 ```
 
-Scraped data and caches live on a single-commit **`data` branch**, never in
-main's git history — main stays a few MB of code while the data branch is
-force-pushed fresh each run (the price history lives *inside*
-`history.json.gz`, so old git versions of it carry no information).
+Scraped data and caches live on single-commit **`data-<region>` branches**,
+never in main's git history — main stays a few MB of code while a region's
+branch is force-pushed fresh each run (the price history lives *inside*
+`history.json.gz`, so old git versions of it carry no information). One branch
+per region because a shared one is what a second region would break: śląskie
+alone is ~150 MB, and every job would fetch, and force-push over, all of
+everyone's. A deploy overlays every `data-*` branch (plus the pre-split shared
+`data` branch, still read so the split needed no flag day).
 
 ## What it does
 
@@ -107,7 +111,12 @@ force-pushed fresh each run (the price history lives *inside*
   A portal can also simply refuse the bands: otodom answers `405` partway
   through the sequence and, because a 405 is not retried, seven of its nine
   bands die on their first page — the sum-check then reports a shortfall that
-  reads like a price filter and is really the refusal (2026-08-11 entry).
+  reads like a price filter and is really the refusal (2026-08-11 entry) — and
+  the refusal is a *page budget*, ~320 a run, which is why the unbanded otodom
+  search now runs as a **scout**: it walks `otodom.SCOUT_PAGES`, states the
+  total, seeds the dedupe and picks up the priceless ads, then stands aside so
+  the bands get the pages. Walking it to 200 spent two thirds of the budget on
+  ads the bands were about to be sent for, and left them to 405 on page 1.
 - **Empty views explain themselves.** When a filter combination returns
   nothing, the dashboard re-runs the filter with each dimension relaxed and
   offers the ones that would bring results back ("Miejscowość: Gliwice — 43"),
@@ -136,7 +145,11 @@ force-pushed fresh each run (the price history lives *inside*
   (region searches are pagination-capped) — up to `RENTGEN_VERIFY_MAX` stale
   URLs per run are fetched and only 404s / "ogłoszenie nieaktualne" pages /
   archive redirects mark a property *wycofane*. n-online's own "Ogłoszenie
-  archiwalne" flags are harvested as immediate evidence.
+  archiwalne" flags are harvested as immediate evidence. The checks run
+  concurrently, on a session that does not retry, under
+  `RENTGEN_DELIST_BUDGET_MIN`: a liveness probe's honest answer can be "could
+  not tell" — the record comes round next run — and inheriting the scraper's
+  retry ladder for it cost 27–44 min of three separate runs.
 - **Developer new-builds handled separately.** Ads flagged as *rynek
   pierwotny* (or detected by keywords / many same-gallery ads on one portal)
   get an "inwestycja" badge, one card per asking price instead of a bogus
@@ -165,7 +178,11 @@ force-pushed fresh each run (the price history lives *inside*
   carry both sources, and morizon-only is down from ~9 500 to 1 344.
   The same decoding fixes the galleries themselves — the first five URLs are the
   xs/s/m/l/og renditions of *one* photo, so hashing is now per distinct origin,
-  and blog teasers riding the same CDN path are excluded.
+  and blog teasers riding the same CDN path are excluded. The linking runs
+  *before* the photo phase, so a twinned morizon ad costs no detail fetch at
+  all — its identity is already settled and its twin's hashes carry onto the
+  merged property. ~8 700 fetches a run, handed back to a budget that was
+  starving 9 177–18 296 listings.
 - Dashboard: filter by **town** (searchable multi-select), type / source / private
   vs agency / price / area / rooms, optional distance-from-Gliwice, full-text search,
   and sort by newest, biggest discount, **price vs RCN transactions**, price, zł/m²
@@ -199,20 +216,21 @@ Dashboard URL: `https://<your-username>.github.io/rentgen-ofert/`.
 
 ### B) Scrape locally, let CI only publish (fastest loop)
 
-All scraper output is committed files (on the `data` branch), so a local
+All scraper output is committed files (on the region's data branch), so a local
 scrape IS the cache — CI never needs to repeat it. Pull the current data,
 scrape, push it back as a fresh single commit:
 
 ```bash
-git fetch origin data && git checkout origin/data -- site/data cache && git reset -q
+REGION=slaskie
+git fetch origin data-$REGION && git checkout FETCH_HEAD -- site/data cache && git reset -q
 python -m scraper.main                                   # ~minutes with warm caches
 git checkout --orphan data-local && git rm -r --cached -q . \
-  && git add -f site/data cache && git commit -m "data: local scrape" \
-  && git push --force origin HEAD:data && git checkout -
+  && git add -f site/data/$REGION cache && git commit -m "data: local scrape" \
+  && git push --force origin HEAD:data-$REGION && git checkout -
 ```
 
-Then publish via **Actions tab → "Deploy site" → Run workflow** (pushes to the
-`data` branch can't trigger workflows themselves). The heavy **Update
+Then publish via **Actions tab → "Deploy site" → Run workflow** (pushes to a
+`data-*` branch can't trigger workflows themselves). The heavy **Update
 listings** workflow runs on its cron, on `scraper/**` changes, or manually
 (inputs: `rcn` — set `force` to re-pull the RCN transaction snapshot;
 `region` — voivodeship slug, default `slaskie`).
@@ -244,6 +262,7 @@ RENTGEN_MAX_PAGES=3 RENTGEN_DELAY=0.3 python -m scraper.main
 | `RENTGEN_TYPES` | house,flat | which to scrape; e.g. `house` for houses only |
 | `RENTGEN_BANDS` | 1 | price-band subdivision; `0` disables it (see *Price bands*) |
 | `RENTGEN_VERIFY_MAX` | 300 | stale listings URL-verified per run (`0` disables) |
+| `RENTGEN_DELIST_BUDGET_MIN` | 10 | max minutes the delist sweep may spend (`0` = unlimited); unasked records retry next run |
 | `RENTGEN_RCN` | 1 | `0` skips RCN; `force` re-pulls the transaction snapshot now |
 | `RENTGEN_GEO` | 1 | `0` skips geocoding listings for the map view |
 | `RENTGEN_GEO_MAX` | 500 | max new UUG geocoder lookups per run (cache does the rest) |
@@ -342,10 +361,14 @@ scraper/
   uldk.py        address -> canonical street + cadastral parcel (UUG + ULDK)
   rcncheck.py    manual RCN lookup / --pin; overrides.py  hand-pinned addresses
   main.py        runs every source, photo-checks look-alikes, writes site/data/*.json
-cache/                 (on the `data` branch, gitignored on main)
+cache/                 (on the `data-<region>` branch, gitignored on main)
   phash_<region>.json.gz  gallery-hash cache, reused run-to-run (auto-pruned)
   rcn_<region>.json.gz  RCN transaction snapshot (refreshed weekly)
-  geo_cache.json        geocode cache, shared across regions (town/street -> lat,lon)
+  geo_cache.json        geocode cache (town/street -> lat,lon). One of the two
+                        cache files copied onto every region's branch, so it
+                        forks per region: a town on a border is looked up once
+                        by each neighbour, which is cheaper than sharing state
+                        between jobs that force-push
   nol_towns.json        per-region town lists for n-online (slug -> display name)
 site/
   index.html  app.js  styles.css        listings dashboard + map view (GitHub Pages)
@@ -353,7 +376,7 @@ site/
   data/<region>/  manifest.json (content version) + index.json (slim grid) +
                   d/NN.json (lazy detail shards, see scraper/payload.py),
                   history.json.gz, archive.json, meta.json, rcnstats.json,
-                  stats.json   (generated each run; on the `data` branch —
+                  stats.json   (generated each run; on the `data-<region>` branch —
                   one directory per voivodeship, ?region= to view)
 tests/         parser + dedupe + history + RCN + stats + geo tests, offline fixtures
 .github/workflows/   update.yml (cron scrape) + deploy.yml (Pages publish)

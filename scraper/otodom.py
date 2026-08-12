@@ -35,6 +35,23 @@ HEADERS = {
 # Otodom honours &limit: 72 is the largest it serves and halves the request
 # count on the biggest portal (515 pages -> 258 for śląskie flats, verified).
 PAGE_SIZE = 72
+
+# How far the UNBANDED search walks when price bands are going to cover the
+# same ground properly. Otodom serves roughly 320 pages per run and then
+# refuses with `405 Not Allowed` — measured four times (runs 31408840562,
+# 31422141701, 31468177600, 31502042693), always inside the `300k-400k` band,
+# always between its pages 5 and 11. A 200-page unbanded walk spends two thirds
+# of that budget re-fetching ads the bands are then sent to fetch again, and
+# the bands die on what is left: seven of the nine never got past page 1, and
+# otodom's kept count came out at 16 6xx in every run whether they ran or not.
+# The band yields say it outright — `200k-300k page 1/35: +4`, `page 2: +0`,
+# `page 3: +2` — the unbanded pass had already taken them.
+#
+# So the unbanded pass becomes a SCOUT: deep enough to state the total, seed
+# the dedupe and pick up the priceless ads that no price filter can return,
+# then it stands aside. The bands partition the whole price line, which is what
+# they were built for, and they get the page budget to do it with.
+SCOUT_PAGES = 12
 _NEXT = re.compile(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', re.S)
 
 
@@ -85,14 +102,22 @@ def parse_items(items, typ: str):
     return out
 
 
-def _walk(path, typ, tag, max_pages, delay, session, log, seen, out, extra=""):
-    """Page through one search (optionally price-banded). Returns its cov row."""
+def _walk(path, typ, tag, max_pages, delay, session, log, seen, out, extra="",
+          scout_pages=None):
+    """Page through one search (optionally price-banded). Returns its cov row.
+
+    ``scout_pages`` caps an unbanded search that bands are about to subdivide
+    (see SCOUT_PAGES). It only bites once the portal has stated a total past
+    its serving window — the same question `bands.overflows` asks, asked one
+    page in — so a search that needs no bands still walks to ``max_pages``.
+    """
     page = 1
     got = 0
     served = 0        # ads Otodom handed over, before the INVESTMENT filter
     total_pages = None
     total_ads = None
     stopped = coverage.OK
+    scouted = False
     while page <= max_pages:
         url = f"{BASE}{path}?page={page}&limit={PAGE_SIZE}" + (f"&{extra}" if extra else "")
         try:
@@ -122,6 +147,13 @@ def _walk(path, typ, tag, max_pages, delay, session, log, seen, out, extra=""):
         # nothing but INVESTMENT bundles filters to [] while more pages exist
         if not items:
             break
+        if (scout_pages and page >= scout_pages and total_ads
+                and total_ads > bands.WINDOW["otodom"]):
+            # Past the window, so `overflows` will subdivide this search no
+            # matter how far it walks. Stop and let it: every further page here
+            # is a page the bands will not get.
+            stopped, scouted = coverage.OUR_CAP, True
+            break
         if page >= min(total_pages, max_pages):
             # Otodom states its own totalPages, so we know exactly which
             # limit bit: ours (more pages exist) or the portal's end.
@@ -132,7 +164,7 @@ def _walk(path, typ, tag, max_pages, delay, session, log, seen, out, extra=""):
         time.sleep(delay)
     return coverage.row("otodom", typ, tag, page, got, stopped,
                         portal_pages=total_pages, portal_total=total_ads,
-                        served=served)
+                        served=served, scout=scouted)
 
 
 def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
@@ -153,7 +185,9 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
         # way), so there are no bands to fall back on. It gets the same one
         # bounded retry a band does.
         row = pacer.attempt(typ, lambda: _walk(path, typ, REGION, max_pages,
-                                               delay, session, log, seen, out))
+                                               delay, session, log, seen, out,
+                                               scout_pages=SCOUT_PAGES if banded
+                                               else None))
         cov.append(row)
         if not banded or not bands.overflows(row, "otodom"):
             continue

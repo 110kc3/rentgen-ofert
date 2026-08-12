@@ -14,6 +14,9 @@ Environment overrides (optional):
                         the escape hatch if a portal starts rejecting the filters
     RENTGEN_PHOTOS      "0" to skip photo hashing (disables dedupe-by-photo and
                         relist/price history)
+    RENTGEN_DELIST_BUDGET_MIN
+                        max minutes the delist sweep may spend (default 10,
+                        "0" = unlimited); unasked records retry next run
     RENTGEN_VERIFY_MAX  max stale listings URL-verified per run (default 300;
                         "0" disables the delist sweep)
     RENTGEN_RCN         "0" = skip RCN, "force" = re-pull now; default refreshes
@@ -31,7 +34,7 @@ import sys
 
 from . import cache as phcache
 from . import coverage, delist, geo, gratka, history, marketstats, morizon, net, nieruchomosci_online, olx, otodom, overrides, payload, photomatch, rcn, rcnstats
-from .normalize import dedupe, link_same_size
+from .normalize import dedupe, link_same_size, link_twins
 
 # Region = the unit of everything (data dir, caches, RCN snapshot). Output goes
 # to site/data/<region>/ and per-region cache files so more voivodeships can be
@@ -143,6 +146,18 @@ def run() -> int:
     # (and gallery URLs) by listing URL and skip the slow detail fetches.
     # Archived ads are hashed too (BEFORE the split below) so observe_archived
     # can still photo-match them when their URL was never seen live.
+    # Before hashing, not inside dedupe afterwards: a morizon ad that carries
+    # gratka's ad id in its thumbnail is already identified, and hashing it
+    # answers a question nobody is asking. ~8 700 fetches a run, out of a phase
+    # that was starving 9 177-18 296 listings of a budget it cannot stretch.
+    # Safe to run over the whole of `raw`, before the archived split below:
+    # only n-online flags `archived`, so a gratka/morizon pair is never left
+    # with one half on each side of it. (`dedupe` links again, idempotently —
+    # the pairing must also hold when RENTGEN_PHOTOS=0 skips this entirely.)
+    linked = link_twins(raw)
+    if linked:
+        print(f"  gratka<->morizon twins linked off the search page: {linked}")
+
     if os.environ.get("RENTGEN_PHOTOS", "1") != "0":
         print(f"Photo-hashing {len(raw)} listings (dedupe + history) ...")
         pc = phcache.load(CACHE_PATH)
@@ -175,8 +190,13 @@ def run() -> int:
     if archived_raw:
         print(f"  archived ads ingested into history: {n_arch}/{len(archived_raw)}")
     if verify_max > 0:
-        delist.sweep(records, today, http, active_urls=active_urls,
-                     max_checks=verify_max)
+        # Its OWN session: a liveness probe wants no retry ladder (see
+        # net.probe_session), and inheriting the scraper's turned 300 questions
+        # into 27-44 min of three separate runs.
+        sweep_min = float(os.environ.get("RENTGEN_DELIST_BUDGET_MIN", "10"))
+        delist.sweep(records, today, net.probe_session(),
+                     active_urls=active_urls, max_checks=verify_max,
+                     budget_s=sweep_min * 60 if sweep_min > 0 else None)
 
     history.update(listings, records, today)
     overrides.apply(records, overrides.load())   # hand-pinned addresses win

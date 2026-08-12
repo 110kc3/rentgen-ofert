@@ -1,6 +1,9 @@
 """History lifecycle: url-fallback matching, archived ingestion, delist sweep,
 timeline and archive building. Offline — no network."""
-from scraper import delist, history
+import threading
+import time
+
+from scraper import delist, history, net
 
 
 H1, H2 = 3, 5           # hamming(3,5)=1 -> same photos (threshold 40)
@@ -136,6 +139,74 @@ def test_delist_sweep_respects_grace_and_live_pages():
     # stale but page still live -> not delisted
     assert delist.sweep(records, "2026-06-20", live, log=lambda *a: None) == 0
     assert "delisted" not in records[0]
+
+
+def test_the_delist_sweep_asks_concurrently():
+    """300 sequential liveness GETs cost 27-44 min of three separate runs
+    (31422141701, 31468177600, 31502042693) — response-time-driven, for the
+    same 300 questions every time."""
+    records = []
+    for i in range(24):
+        history.update([_prop(url=f"https://otodom.pl/{i}", area=50.0 + 5 * i,
+                              phashes=[])], records, "2026-06-01")
+    assert len(records) == 24
+    live = set()
+    peak = [0]
+    lock = threading.Lock()
+
+    def slow_probe(url, session, **kw):
+        with lock:
+            live.add(url)
+            peak[0] = max(peak[0], len(live))
+        time.sleep(0.02)
+        with lock:
+            live.discard(url)
+        return False
+
+    delist.sweep(records, "2026-06-20", None, log=lambda *a: None,
+                 probe=slow_probe, max_workers=8)
+    assert peak[0] > 1, "the sweep asked one URL at a time"
+
+
+def test_the_delist_sweep_stops_at_its_budget():
+    """Unasked is not concluded: they keep their place at the front of the
+    oldest-first queue and come round again next run."""
+    records = []
+    for i in range(10):
+        history.update([_prop(url=f"https://otodom.pl/{i}", area=50.0 + 5 * i,
+                              phashes=[])], records, "2026-06-01")
+    assert len(records) == 10
+    asked = []
+    said = []
+
+    def probe(url, session, **kw):
+        asked.append(url)
+        return True                      # everything it manages to ask is gone
+
+    # budget already spent before the first candidate
+    n = delist.sweep(records, "2026-06-20", None, log=said.append,
+                     probe=probe, budget_s=-1)
+    assert asked == [] and n == 0
+    assert not any(r.get("delisted") for r in records)
+    assert "budget exhausted" in said[0]
+    # ...and with a budget they are all asked and all concluded
+    assert delist.sweep(records, "2026-06-20", None, log=lambda *a: None,
+                        probe=probe) == 10
+
+
+def test_a_liveness_probe_does_not_wait_like_a_scraper():
+    """A yes/no question inherits no retry ladder and no 20 s patience."""
+    seen = {}
+
+    class _Recording:
+        def get(self, url, **kw):
+            seen.update(kw)
+            return _FakeResp(status=404)
+
+    assert delist.is_gone("https://otodom.pl/x", _Recording()) is True
+    assert seen["timeout"] == delist.TIMEOUT < 20
+    probe = net.probe_session()
+    assert probe.get_adapter("https://otodom.pl").max_retries.total == 0
 
 
 def test_delist_gone_markers():

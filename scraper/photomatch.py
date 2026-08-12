@@ -203,16 +203,26 @@ def attach_hashes(listings, max_workers: int = 8, session=None, log=print,
     remaining un-cached listings are skipped this run (no hashes, not cached —
     picked up again next run). Cache hits are always served. This keeps a
     rate-limited portal from stretching the run past the CI job timeout.
+
+    A listing carrying ``_identified_by`` is skipped outright and costs
+    nothing: `normalize.link_twins` has already settled what it is, by portal
+    id, off the search page (see there).
     """
     from . import net
     from . import cache as cachemod
     session = session or net.session()
     deadline = time.monotonic() + budget_s if budget_s else None
-    skipped = 0
+    skipped = twinned = 0
 
     def work(l):
-        nonlocal skipped
+        nonlocal skipped, twinned
         url = l.get("url")
+        if l.get("_identified_by"):
+            # Already identified by portal id, so its photos would answer a
+            # question nobody is asking. `_build` unions its twin's hashes onto
+            # the property, so nothing downstream goes without.
+            twinned += 1
+            return (l, None, [], False)
         if cache is not None and url:
             # `[]` is a HIT meaning "known to have no photos for us", None means
             # "not cached, go fetch" — `if cached:` would conflate them and
@@ -250,5 +260,6 @@ def attach_hashes(listings, max_workers: int = 8, session=None, log=print,
     log(f"  photo-hashed {len(results)} ambiguous listings "
         f"({sum(1 for l in listings if l.get('phashes'))} with photos; "
         f"{hits} reused from cache"
+        + (f"; {twinned} identified by their twin" if twinned else "")
         + (f"; {skipped} skipped, photo budget exhausted" if skipped else "")
         + ")")

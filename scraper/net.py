@@ -50,3 +50,25 @@ def session() -> requests.Session:
     s.mount("https://", adapter)
     s.mount("http://", adapter)
     return s
+
+
+def probe_session() -> requests.Session:
+    """A session for liveness probes: asks once, waits for nobody.
+
+    `delist.sweep` asks ~300 "is this ad still there?" questions a run, and
+    "could not tell" is a perfectly good answer to any of them — the record
+    comes round again next run. On the shared session every one of those
+    questions inherits the full 405/429/5xx ladder above, so a live-but-slow or
+    throttled URL costs its timeout *and then* ~30 s of back-off. That is what
+    turned the sweep into 27-44 min of three runs (31422141701, 31468177600,
+    31502042693) for 300 requests — 12% of the CI budget, spent waiting for
+    pages that were mostly just alive.
+
+    Redirects still follow (a portal dumping us on an index page is how it says
+    "gone"); only the retrying is dropped.
+    """
+    s = requests.Session()
+    adapter = HTTPAdapter(max_retries=0)
+    s.mount("https://", adapter)
+    s.mount("http://", adapter)
+    return s

@@ -113,9 +113,9 @@ class Pacer:
     def attempt(self, tag, walk):
         """Walk one search; if the portal refused it outright, ask once more.
 
-        The retry's row REPLACES the failed one, so a recovered search is never
-        counted twice by `check_totals`, and a search still refused after the
-        wait keeps its error row. Never a loop, never unbudgeted.
+        Exactly ONE row comes back, so a recovered search is never counted
+        twice by `check_totals`, and it is the better of the two attempts —
+        see `best_of`. Never a loop, never unbudgeted.
         """
         row = walk()
         if row.get("stopped") != coverage.ERROR:
@@ -129,7 +129,36 @@ class Pacer:
         self.log(f"  {self.source} {tag} was refused — waiting {wait:.0f}s and "
                  f"asking once more ({self.left} more waits left this run)")
         self.sleep(wait)
-        return walk()
+        return best_of(row, walk())
+
+
+def _reach(r) -> tuple:
+    """How far an attempt actually got, most significant first."""
+    return (r.get("pages") or 0, coverage.seen_by(r) or 0,
+            r.get("portal_total") or 0)
+
+
+def best_of(first, retry):
+    """The better record of two attempts at the same search.
+
+    A retry restarts at page 1, so "the last one wins" quietly throws away
+    whatever the first attempt had already learned. Otodom's `300k-400k` walked
+    to page ELEVEN before it was refused; the retry was refused on page 1, and
+    that 1-page row replaced it — so the run reported `failed after 1 page(s)`
+    for a search that walked eleven, and `check_totals` lost the 46-page total
+    the first attempt had read off the portal, dropping the accounted ads from
+    6 821 to 3 529 and blaming otodom's price filter for it (run 31502042693).
+    The listings themselves were never at risk — the walkers merge into the
+    caller's `seen`/`out` as they go — but every number *about* the search was.
+
+    A recovered walk always wins; between two refusals, the one that got
+    further does.
+    """
+    if retry.get("stopped") != coverage.ERROR:
+        return retry
+    if first.get("stopped") != coverage.ERROR:
+        return first
+    return retry if _reach(retry) > _reach(first) else first
 
 
 def params(source, lo, hi) -> dict:

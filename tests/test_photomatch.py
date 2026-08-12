@@ -171,6 +171,52 @@ def test_twins_keep_merging_with_the_other_portals():
     assert props[0]["sources"] == ["otodom", "gratka", "morizon"]
 
 
+def test_a_twin_costs_no_photo_fetch():
+    """A morizon ad carrying gratka's ad id is already identified; hashing it
+    answers a question nobody is asking. ~8 700 fetches a run, out of a phase
+    that starved 9 177-18 296 listings of a budget it cannot stretch."""
+    raw = [_mz(gratka_id="48557359"), _gr()]
+    assert normalize.link_twins(raw) == 1
+    sess, said = _Sess(), []
+    photomatch.attach_hashes(raw, session=sess, log=said.append, max_workers=1)
+    assert sess.calls == 1, "the identified half was still fetched"
+    assert "identified by their twin" in said[0]
+
+
+def test_a_skipped_twin_is_not_recorded_as_a_photo_miss():
+    """Same rule as a budget skip: an ad we deliberately never fetched must not
+    teach the cache it has no photos."""
+    raw = [_mz(gratka_id="48557359"), _gr()]
+    normalize.link_twins(raw)
+    pc = {"version": cache.VERSION, "entries": {}}
+    photomatch.attach_hashes(raw, session=_Sess(), cache=pc, today="2026-08-01",
+                             log=lambda *a: None, max_workers=1)
+    assert raw[0]["url"] not in pc["entries"]
+
+
+def test_linking_twins_early_leaves_the_merge_exactly_as_it_was():
+    """`dedupe` calls `link_twins` again — the linking must also hold when
+    hashing is off entirely — so running it early has to be idempotent."""
+    raw = [_mz(gratka_id="48557359"), _gr()]
+    normalize.link_twins(raw)
+    props = normalize.dedupe(raw)
+    assert len(props) == 1 and props[0]["sources"] == ["gratka", "morizon"]
+
+
+def test_a_twins_photos_come_from_the_half_that_was_fetched():
+    """Skipping the morizon half must not cost the property its photos, or the
+    pair stops merging with otodom and n-online."""
+    raw = [_mz(gratka_id="48557359"), _gr()]
+    pc = {"version": cache.VERSION, "entries": {}}
+    cache.put(pc, raw[1]["url"], [7], "2026-08-01", image_urls=["g1.jpg"])
+    normalize.link_twins(raw)
+    photomatch.attach_hashes(raw, session=_Sess(), cache=pc, today="2026-08-01",
+                             log=lambda *a: None, max_workers=1)
+    assert raw[0]["phashes"] == [] and raw[1]["phashes"] == [7]
+    props = normalize.dedupe(raw)
+    assert props[0]["phashes"] == [7] and props[0]["photo_urls"] == ["g1.jpg"]
+
+
 def test_internal_link_field_never_reaches_the_payload():
     props = normalize.dedupe([_mz(gratka_id="48557359"), _gr()])
     assert "_twin" not in props[0] and "gratka_id" not in props[0]

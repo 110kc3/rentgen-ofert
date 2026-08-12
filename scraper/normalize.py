@@ -281,7 +281,7 @@ def _photo_clusters(members):
     return list(clusters.values())
 
 
-def _link_twins(listings):
+def link_twins(listings):
     """Pair morizon ads with the gratka ad they ARE, by portal id.
 
     gratka and morizon are one database behind two frontends, and a morizon
@@ -295,6 +295,16 @@ def _link_twins(listings):
     Paired listings inherit gratka's size so they land in the same size group
     (the areas disagree often enough to matter), and carry a shared ``_twin``
     that ``dedupe`` unions on regardless of what the photos say.
+
+    The morizon half also gets ``_identified_by``, naming the gratka ad that
+    settles its identity. Nothing needs its photos after that — the pair merges
+    on the id, and `_build` unions the gratka half's hashes onto the property —
+    so `photomatch.attach_hashes` skips it and spends the fetch on a listing
+    that is still ambiguous. That is ~8 700 detail fetches a run (measured on
+    the published 2026-08-11 data), against a photo phase that was starving
+    9 177-18 296 listings of a budget it could not stretch. Run this BEFORE
+    hashing for that to pay; `dedupe` calls it again, idempotently, because the
+    linking must also hold when hashing is off entirely.
     """
     by_ad = {}
     for l in listings:
@@ -309,6 +319,7 @@ def _link_twins(listings):
             continue
         key = f"gratka:{l['gratka_id']}"
         l["_twin"] = twin["_twin"] = key
+        l["_identified_by"] = twin.get("url")
         # One of them donates the size to the other, so the pair shares a
         # size_key — otherwise a disagreement over usable-vs-total m2 puts them
         # in different groups. gratka is the origin portal so it goes first, but
@@ -369,7 +380,7 @@ def _cross_size_unify(listings):
 
 
 def dedupe(listings):
-    _link_twins(listings)
+    link_twins(listings)
     _cross_size_unify(listings)
     groups = defaultdict(list)
     loners = []

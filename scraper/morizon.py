@@ -95,7 +95,7 @@ def parse_cards(html: str, typ: str):
             # base64-wrapped `d-gr.cdngr.pl` origin carrying GRATKA's ad id, so
             # the duplicate is provable here, off the search page, with no
             # detail fetch and no photo hashing (see photomatch.gratka_ad_id and
-            # normalize._link_twins). Absent on the `gr-col` id space, which
+            # normalize.link_twins). Absent on the `gr-col` id space, which
             # still needs photos.
             "gratka_id": photomatch.gratka_ad_id(image),
             "url": url,

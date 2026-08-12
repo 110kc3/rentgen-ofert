@@ -9,7 +9,9 @@ Offline: the scrapers' page loops are driven by a fake session that honours the
 price parameters, so "did the band actually narrow the search" is a real
 assertion and not a mock returning whatever it was told to.
 """
-from scraper import bands, coverage, gratka, morizon
+import json
+
+from scraper import bands, coverage, gratka, morizon, otodom
 
 
 def test_seed_bands_partition_the_whole_price_line():
@@ -278,6 +280,40 @@ def test_a_refused_band_is_walked_again_after_a_cooldown():
         "the retry replaces the failed row — a recovered band is not two rows"
 
 
+def test_a_failed_retry_never_overwrites_a_better_attempt():
+    """The retry restarts at page 1. Otodom's `300k-400k` walked to page 11
+    before it was refused; the retry was refused on page 1, and that 1-page row
+    replaced it — so run 31502042693 reported `failed after 1 page(s)` for a
+    search that walked eleven, and `check_totals` lost the total the first
+    attempt had read, dropping the accounted ads 6 821 -> 3 529 and blaming
+    otodom's price filter for it."""
+    far = coverage.row("otodom", "flat", "300k-400k", 11, 720, coverage.ERROR,
+                       portal_total=3348, served=792)
+    nowhere = coverage.row("otodom", "flat", "300k-400k", 1, 0, coverage.ERROR)
+    calls = []
+    rows, seeds = bands.subdivide(
+        "otodom", _walker({"300k-400k": [far, nowhere]}, calls),
+        log=lambda *a: None, delay=0, sleep=lambda _: None)
+    assert calls.count("300k-400k") == 2          # it still asked once more
+    band = [r for r in rows if r.get("tag") == "300k-400k"]
+    assert len(band) == 1, "still exactly one row per search"
+    assert band[0]["pages"] == 11 and band[0]["portal_total"] == 3348
+    assert coverage.warnings(band) == ["  !! otodom flat/300k-400k: failed "
+                                       "after 11 page(s)"]
+    # and the total it read is back in the arithmetic that judges the bands
+    assert sum(r.get("portal_total") or 0 for r in seeds) >= 3348
+
+
+def test_a_recovered_retry_still_wins_even_from_fewer_pages():
+    """"Better" is not "further": a walk that completed beats a walk that was
+    refused, however far the refused one got."""
+    far = coverage.row("otodom", "flat", "x", 40, 2800, coverage.ERROR,
+                       portal_total=3348)
+    short = coverage.row("otodom", "flat", "x", 3, 90, coverage.OK,
+                         portal_total=3348)
+    assert bands.best_of(far, short) is short
+
+
 def test_a_band_refused_twice_is_left_alone():
     """One retry, never a loop: a portal that is still refusing after the
     cooldown must cost one extra request, not a queue that never drains."""
@@ -347,3 +383,108 @@ def test_a_healthy_subdivision_never_waits_out_an_error():
     bands.subdivide("gratka", _walker({}, []), log=lambda *a: None,
                     delay=0.5, sleep=slept.append)
     assert set(slept) == {0.5 * bands.SEARCH_PAUSE}
+
+
+# --- otodom's scout pass -----------------------------------------------------
+# Otodom serves ~320 pages per run and then 405s. The unbanded search used to
+# spend 200 of them on ads the bands were about to be sent for, and the bands
+# died on the remainder — measured across four runs, otodom's kept count came
+# out at 16 6xx whether they ran or not (see TODO.md, 2026-08-12).
+
+class OtodomSession:
+    """Otodom's shape: `__NEXT_DATA__` with `totalItems` / `totalPages`.
+
+    `stock` ads priced evenly across 0..1M, served `per_page` at a time, and a
+    band returns the same ads the unbanded search would in that range — the
+    same contract as `BandedSession`, so "the bands got more" can never be an
+    artifact of the fake.
+    """
+
+    def __init__(self, stock=18_334, per_page=72):
+        self.stock, self.per_page = stock, per_page
+        self.urls = []
+
+    def price_of(self, i):
+        return i * CEILING // self.stock
+
+    def get(self, url, **kw):
+        self.urls.append(url)
+        qs = url.split("?")[-1]
+        page, lo, hi = 1, 0, CEILING
+        for part in qs.split("&"):
+            k, _, v = part.partition("=")
+            if k == "page":
+                page = int(v)
+            elif k == "priceMin":
+                lo = int(v)
+            elif k == "priceMax":
+                hi = int(v) + 1
+        matching = [i for i in range(self.stock) if lo <= self.price_of(i) < hi]
+        start = (page - 1) * self.per_page
+        items = [{"estate": "FLAT", "slug": f"ad-{i}", "title": f"ad {i}",
+                  "totalPrice": {"value": self.price_of(i)},
+                  "areaInSquareMeters": 50, "roomsNumber": "TWO",
+                  "location": {"address": {"city": {"name": "Katowice"}}},
+                  "images": []}
+                 for i in matching[start:start + self.per_page]]
+        pages = max(1, -(-len(matching) // self.per_page))
+        body = json.dumps({"props": {"pageProps": {"data": {"searchAds": {
+            "items": items,
+            "pagination": {"totalItems": len(matching), "totalPages": pages},
+        }}}}})
+        return _Resp2(f'<script id="__NEXT_DATA__">{body}</script>')
+
+    def unbanded_pages(self):
+        """Pages fetched by the search with no price filter on it at all.
+
+        Both parameters have to be absent: the `0-200k` seed band carries only
+        `priceMax`, because `bands.params` omits a zero lower bound.
+        """
+        return sum(1 for u in self.urls
+                   if "priceMin" not in u and "priceMax" not in u)
+
+
+class _Resp2:
+    def __init__(self, text):
+        self.text, self.status_code = text, 200
+
+    def raise_for_status(self):
+        pass
+
+
+def test_the_unbanded_otodom_search_stands_aside_for_the_bands():
+    sess = OtodomSession()
+    rows = otodom.scrape(max_pages=200, delay=0, session=sess,
+                         log=lambda *a: None, types=("flat",))
+    unbanded = sess.unbanded_pages()
+    assert unbanded == otodom.SCOUT_PAGES, (
+        f"the scout pass walked {unbanded} pages, not {otodom.SCOUT_PAGES}")
+    # ...and the bands, not the scout, are what actually enumerate the portal
+    banded = len(sess.urls) - unbanded
+    assert banded > unbanded * 10
+    assert len(rows) > 18_000, f"only {len(rows)} of 18 334 ads collected"
+
+
+def test_a_scout_capped_search_is_not_advice_worthy():
+    """It stopped on our cap on purpose, with bands queued behind it. Telling
+    the reader to `raise RENTGEN_MAX_PAGES or subdivide` is the one thing the
+    log must not do — that is precisely what it just did."""
+    scout = coverage.row("otodom", "flat", None, 12, 800, coverage.OUR_CAP,
+                         portal_pages=255, portal_total=18_334, scout=True)
+    assert coverage.warnings([scout]) == []
+    # the same row without the marker is still a warning — nothing else changed
+    plain = dict(scout)
+    del plain["scout"]
+    assert len(coverage.warnings([plain])) == 1
+    # and it is still counted as truncated, because it truthfully was
+    assert coverage.summarise([scout])["by_source"]["otodom"]["truncated"] == 1
+
+
+def test_a_search_within_the_window_is_never_scout_capped():
+    """Houses do not overflow, so no bands follow — capping that search at 12
+    pages would simply lose the rest of it."""
+    sess = OtodomSession(stock=3_000)          # under otodom's 7 200 window
+    otodom.scrape(max_pages=200, delay=0, session=sess, log=lambda *a: None,
+                  types=("flat",))
+    assert sess.unbanded_pages() == 42    # 3 000 / 72, walked to the end
+    assert all("priceMin" not in u for u in sess.urls), "should not subdivide"

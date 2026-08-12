@@ -2,11 +2,18 @@
 # run (workflow_run trigger) and publishes, with retries. This keeps exactly
 # one deployment path, so two workflows never race for the Pages queue.
 #
-# STORAGE: scraped data + caches live on the orphan `data` branch, force-pushed
-# as a SINGLE commit each run — never in main's git history (history.json alone
-# is tens of MB; committing it to main twice a day was marching the repo into
-# GitHub's 100 MB file / repo-size limits). The price history lives inside
-# history.json.gz itself, so discarding old git versions loses nothing.
+# STORAGE: scraped data + caches live on an orphan `data-<region>` branch,
+# force-pushed as a SINGLE commit each run — never in main's git history
+# (history.json alone is tens of MB; committing it to main twice a day was
+# marching the repo into GitHub's 100 MB file / repo-size limits). The price
+# history lives inside history.json.gz itself, so discarding old git versions
+# loses nothing.
+#
+# ONE BRANCH PER REGION, because the shared `data` branch is what a second
+# region would break: śląskie alone is ~150 MB, and every region's job would
+# fetch, and force-push over, all of everyone's. Splitting it means a job
+# touches only its own. The pre-split `data` branch is still read as a fallback
+# here and still overlaid by deploy.yml, so this migrates with no flag day.
 name: Update listings
 
 on:
@@ -35,7 +42,13 @@ permissions:
   contents: write             # force-push the refreshed `data` branch
 
 concurrency:
-  group: rentgen-scrape       # one scrape at a time (portals see the same IPs)
+  # One scrape at a time, ACROSS regions — deliberately not per-region. The
+  # portals see one pool of runner IPs whichever voivodeship we are asking
+  # about, and they are already refusing us: otodom 405s after ~320 pages and
+  # OLX has been answering 403 outright since 2026-08-11. Serialising is the
+  # cheapest thing keeping that from getting worse. Parallelism, if it ever
+  # comes, belongs in a matrix with `max-parallel` set explicitly.
+  group: rentgen-scrape
   cancel-in-progress: false
 
 jobs:
@@ -50,14 +63,21 @@ jobs:
     timeout-minutes: 350
     env:
       REGION: ${{ github.event.inputs.region || 'slaskie' }}
+      DATA_BRANCH: data-${{ github.event.inputs.region || 'slaskie' }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Pull current data + caches from the data branch
+      - name: Pull this region's data + caches from its data branch
         run: |
-          if git fetch origin data; then
-            git checkout origin/data -- site/data cache || echo "data branch has no data yet"
+          if git fetch origin "$DATA_BRANCH"; then
+            git checkout FETCH_HEAD -- site/data cache || echo "$DATA_BRANCH has no data yet"
             git reset -q      # keep the files, but untracked on main's checkout
+          elif git fetch origin data; then
+            # Pre-split shared branch: read once, until this region's own
+            # branch exists. The push below writes only this region back.
+            echo "no $DATA_BRANCH yet — seeding from the shared data branch"
+            git checkout FETCH_HEAD -- site/data cache || echo "data branch has no data yet"
+            git reset -q
           else
             echo "no data branch yet — starting fresh"
           fi
@@ -83,12 +103,20 @@ jobs:
           RENTGEN_RCN: ${{ github.event.inputs.rcn || '1' }}
         run: python -u -m scraper.main   # -u: unbuffered logs, visible while running
 
-      - name: Push refreshed data (single-commit data branch)
+      - name: Push refreshed data (single-commit per-region data branch)
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git checkout --orphan refreshed-data
           git rm -r --cached -q . || true   # empty index (nothing tracked) is fine
-          git add -f site/data cache
+          git add -f "site/data/$REGION"
+          # This region's caches, plus the two that are not region-scoped. Named
+          # rather than `git add cache`: a job seeded from the shared branch has
+          # every region's caches in its tree, and a region's branch has no
+          # business carrying another region's 15 MB phash cache around.
+          for f in cache/geo_cache.json cache/nol_towns.json \
+                   "cache/phash_${REGION}.json.gz" "cache/rcn_${REGION}.json.gz"; do
+            if [ -f "$f" ]; then git add -f "$f"; fi
+          done
           git commit -m "data: ${REGION} refresh $(date -u +%Y-%m-%dT%H:%MZ)"
-          git push --force origin HEAD:data
+          git push --force origin "HEAD:${DATA_BRANCH}"
