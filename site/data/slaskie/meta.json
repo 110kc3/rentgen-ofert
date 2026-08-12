@@ -1,0 +1,203 @@
+{
+ "updated": "2026-08-12T12:51:16+00:00",
+ "count": 28574,
+ "raw": 52708,
+ "by_source": {
+  "otodom": 16609,
+  "gratka": 12386,
+  "morizon": 12388,
+  "nieruchomosci-online": 11325
+ },
+ "by_type": {
+  "house": 6702,
+  "flat": 21872
+ },
+ "relisted": 6332,
+ "geocoded": 26918,
+ "archive": 1955,
+ "rcn": {
+  "records": 40939,
+  "no_location_yet": 7071,
+  "no_deed_candidates": 11322,
+  "candidates_rejected": 18970,
+  "matched": 3576
+ },
+ "rcn_stats": {
+  "towns": 69,
+  "gap_pairs": 47
+ },
+ "sold_confirmed": 52,
+ "coverage": {
+  "by_source": {
+   "otodom": {
+    "searches": 12,
+    "pages": 320,
+    "listings": 16589,
+    "seen": 20530,
+    "truncated": 8,
+    "portal_total": 26369,
+    "pct": 77.9
+   },
+   "olx": {
+    "searches": 2,
+    "pages": 2,
+    "listings": 0,
+    "truncated": 2
+   },
+   "gratka": {
+    "searches": 12,
+    "pages": 561,
+    "listings": 12386,
+    "seen": 19455,
+    "truncated": 1,
+    "portal_total": 22262,
+    "pct": 87.4
+   },
+   "morizon": {
+    "searches": 12,
+    "pages": 555,
+    "listings": 12388,
+    "seen": 19211,
+    "truncated": 1,
+    "portal_total": 18827,
+    "total_is_min": true,
+    "pct": 102.0
+   },
+   "nieruchomosci-online": {
+    "searches": 2,
+    "pages": 1706,
+    "listings": 59227,
+    "truncated": 1
+   }
+  },
+  "truncated": [
+   {
+    "source": "otodom",
+    "type": "flat",
+    "pages": 200,
+    "listings": 11773,
+    "stopped": "cap",
+    "served": 12484,
+    "tag": "slaskie",
+    "portal_pages": 255,
+    "portal_total": 18315
+   },
+   {
+    "source": "otodom",
+    "type": "flat",
+    "pages": 1,
+    "listings": 0,
+    "stopped": "error",
+    "tag": "300k-400k"
+   },
+   {
+    "source": "otodom",
+    "type": "flat",
+    "pages": 1,
+    "listings": 0,
+    "stopped": "error",
+    "tag": "400k-500k"
+   },
+   {
+    "source": "otodom",
+    "type": "flat",
+    "pages": 1,
+    "listings": 0,
+    "stopped": "error",
+    "tag": "500k-650k"
+   },
+   {
+    "source": "otodom",
+    "type": "flat",
+    "pages": 1,
+    "listings": 0,
+    "stopped": "error",
+    "tag": "650k-800k"
+   },
+   {
+    "source": "otodom",
+    "type": "flat",
+    "pages": 1,
+    "listings": 0,
+    "stopped": "error",
+    "tag": "800k-1M"
+   },
+   {
+    "source": "otodom",
+    "type": "flat",
+    "pages": 1,
+    "listings": 0,
+    "stopped": "error",
+    "tag": "1M-1500k"
+   },
+   {
+    "source": "otodom",
+    "type": "flat",
+    "pages": 1,
+    "listings": 0,
+    "stopped": "error",
+    "tag": "1500k-3M"
+   },
+   {
+    "source": "olx",
+    "type": "house",
+    "pages": 1,
+    "listings": 0,
+    "stopped": "error",
+    "tag": "slaskie"
+   },
+   {
+    "source": "olx",
+    "type": "flat",
+    "pages": 1,
+    "listings": 0,
+    "stopped": "error",
+    "tag": "slaskie"
+   },
+   {
+    "source": "gratka",
+    "type": "flat",
+    "pages": 200,
+    "listings": 6993,
+    "stopped": "cap",
+    "served": 6994,
+    "tag": "slaskie",
+    "portal_total": 9867
+   },
+   {
+    "source": "morizon",
+    "type": "flat",
+    "pages": 194,
+    "listings": 6748,
+    "stopped": "portal_cap",
+    "served": 6749,
+    "tag": "slaskie",
+    "portal_total": 9000,
+    "total_is_min": true
+   },
+   {
+    "source": "nieruchomosci-online",
+    "type": "flat",
+    "pages": 1413,
+    "listings": 46915,
+    "stopped": "cap",
+    "tag": "60 towns"
+   }
+  ]
+ },
+ "errors": [
+  "otodom flat/slaskie: stopped at our page cap (200 of 255 the portal has) — collected 12484 of 18315 (68.2%), kept 11773 — raise RENTGEN_MAX_PAGES or subdivide the search",
+  "otodom flat/300k-400k: failed after 1 page(s)",
+  "otodom flat/400k-500k: failed after 1 page(s)",
+  "otodom flat/500k-650k: failed after 1 page(s)",
+  "otodom flat/650k-800k: failed after 1 page(s)",
+  "otodom flat/800k-1M: failed after 1 page(s)",
+  "otodom flat/1M-1500k: failed after 1 page(s)",
+  "otodom flat/1500k-3M: failed after 1 page(s)",
+  "olx house/slaskie: failed after 1 page(s)",
+  "olx flat/slaskie: failed after 1 page(s)",
+  "gratka flat/slaskie: stopped at our page cap (200) — collected 6994 of 9867 (70.9%), kept 6993 — raise RENTGEN_MAX_PAGES or subdivide the search",
+  "morizon flat/slaskie: portal refused to serve past page 194 — collected 6749 of ≥9000 (75.0%), kept 6748 — subdivision is the only way to see the rest",
+  "nieruchomosci-online flat/60 towns: stopped at our page cap (1413) — raise RENTGEN_MAX_PAGES or subdivide the search"
+ ]
+}
