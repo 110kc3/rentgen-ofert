@@ -3,7 +3,7 @@ import gzip
 import json
 import pathlib
 
-from scraper import delist, gratka, history, morizon, olx, rcn
+from scraper import coverage, delist, gratka, history, morizon, olx, rcn
 from scraper import nieruchomosci_online as nol
 from scraper.normalize import location_parts
 
@@ -374,3 +374,27 @@ def test_nol_dedupes_cross_listed_towns_by_ad_id():
     # and the duplicate-page guard now fires, so towns 2 and 3 stop early
     # instead of walking to the cap
     assert s.calls <= 3 * 3, f"walked {s.calls} pages for 3 towns of duplicates"
+
+
+def test_nol_refusal_is_blocked_not_a_clean_zero():
+    class _Refused:
+        @staticmethod
+        def get(*args, **kwargs):
+            raise IOError("403 Client Error: Forbidden")
+
+    assert nol.scrape(max_pages=5, delay=0, session=_Refused(),
+                      log=lambda *a: None, types=("flat",),
+                      towns={"gliwice": "Gliwice"}) == []
+    row = nol.scrape.last_coverage[0]
+    assert row["stopped"] == coverage.ERROR and row["http_status"] == 403
+    health = coverage.summarise([row])["by_source"]["nieruchomosci-online"]
+    assert health["status"] == coverage.BLOCKED
+
+
+def test_nol_without_resolved_towns_is_unknown_not_a_clean_zero():
+    nol.scrape(max_pages=5, delay=0, session=object(), log=lambda *a: None,
+               types=("flat",), towns={})
+    row = nol.scrape.last_coverage[0]
+    assert row["unknown"] is True
+    health = coverage.summarise([row])["by_source"]["nieruchomosci-online"]
+    assert health["status"] == coverage.UNKNOWN

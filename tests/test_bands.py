@@ -165,10 +165,14 @@ def test_gratka_bands_recover_everything_the_wall_hid():
     reachable = WALL * s.per_page
     assert cov[0]["stopped"] == coverage.PORTAL_CAP    # the unbanded pass, walled
     assert cov[0]["listings"] == reachable
+    assert cov[0]["role"] == coverage.PARENT and cov[0]["partitioned"] is True
+    assert all(r["role"] == coverage.PARTITION for r in cov[1:])
+    assert all(r["partition"]["axis"] == "price" for r in cov[1:])
     # the whole stated total, not just the reachable window, and no ad twice
     assert len(out) == len({l["url"] for l in out}) == STOCK
     assert len(out) > reachable
     assert any("cena-calkowita:min=" in u for u in s.urls)
+    assert coverage.warnings(cov) == []       # the banded parent is intentional
 
 
 def test_morizon_bands_too_and_the_unbanded_pass_is_kept():
@@ -226,11 +230,13 @@ def test_a_bands_stated_total_is_judged_on_what_the_portal_served():
         assert cheap["listings"] == 0        # every ad already held
         assert cheap["served"] == cheap["portal_total"]   # ...but all of them seen
         assert coverage.warnings([cheap]) == []
-        # and the source's pct now measures coverage rather than novelty
+        # and the source's pct uses the unique union rather than adding the
+        # parent and every overlapping band (the v1 `seen` compatibility field
+        # is absent because this portal did not filter any unique ad).
         rows = portal.scrape.last_coverage
         src = coverage.summarise(rows)["by_source"][rows[0]["source"]]
-        novelty = coverage.covered(src["listings"], src["portal_total"])
-        assert src["seen"] > src["listings"] and src["pct"] > novelty
+        assert src["served_unique"] == src["kept_unique"] == src["listings"]
+        assert src["pct"] == 100.0 and "seen" not in src
 
 
 # ---- waiting a portal out ----------------------------------------------------
@@ -476,8 +482,8 @@ def test_a_scout_capped_search_is_not_advice_worthy():
     plain = dict(scout)
     del plain["scout"]
     assert len(coverage.warnings([plain])) == 1
-    # and it is still counted as truncated, because it truthfully was
-    assert coverage.summarise([scout])["by_source"]["otodom"]["truncated"] == 1
+    # it remains a diagnostic row, but is not an actionable terminal defect
+    assert coverage.summarise([scout])["by_source"]["otodom"]["truncated"] == 0
 
 
 def test_a_search_within_the_window_is_never_scout_capped():

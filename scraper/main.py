@@ -87,6 +87,9 @@ def run() -> int:
     cov_rows = []
     banded = os.environ.get("RENTGEN_BANDS", "1") != "0"
     for name, mod in SOURCES:
+        # Do not inherit a previous in-process invocation's diagnostics when a
+        # scraper raises before publishing its new rows.
+        mod.scrape.last_coverage = []
         kwargs = dict(max_pages=max_pages, delay=delay, types=types, session=http)
         if mod is not nieruchomosci_online:
             # n-online is subdivided by town already and has no price filter
@@ -113,6 +116,11 @@ def run() -> int:
         except Exception as exc:  # one portal failing must not lose the others
             errors.append(f"{name}: {exc}")
             print(f"  !! {name} failed: {exc}", file=sys.stderr)
+            error, http_status = coverage.error_details(exc)
+            mod.scrape.last_coverage = [coverage.row(
+                name, typ, REGION, 0, 0, coverage.ERROR,
+                role=coverage.PARENT, error=error,
+                http_status=http_status) for typ in types]
         cov_rows.extend(getattr(mod.scrape, "last_coverage", None) or [])
 
     # Truncation is silent by nature — a capped search returns a plausible pile
@@ -126,15 +134,20 @@ def run() -> int:
     # the portal did we get to see"; `kept` is what survived our own filtering
     # (otodom drops INVESTMENT bundles, olx drops Otodom-syndicated ads), and
     # the gap between them is deliberate, not missing coverage.
-    cov_summary = coverage.summarise(cov_rows)
+    cov_summary = coverage.summarise(
+        cov_rows, listings=raw, expected_sources=[name for name, _ in SOURCES],
+        expected_types=types)
     for name, s in cov_summary["by_source"].items():
         total = s.get("portal_total")
         against = (f" of {'≥' if s.get('total_is_min') else ''}{total}"
                    f" the portals state ({s['pct']}%)" if total else "")
-        kept = (f", kept {s['listings']}" if "seen" in s else "")
-        print(f"  coverage {name}: {s.get('seen', s['listings'])} listings from "
-              f"{s['searches']} search(es), {s['pages']} pages{against}{kept}"
-              + (f", {s['truncated']} truncated" if s["truncated"] else ""))
+        kept = (f", kept {s['kept_unique']}"
+                if s["served_unique"] != s["kept_unique"] else "")
+        archive = f", archived {s['archived']}" if s["archived"] else ""
+        print(f"  coverage {name} [{s['status']}]: {s['served_unique']} unique "
+              f"served from {s['searches']} search(es), {s['pages']} pages"
+              f"{against}{kept}{archive}"
+              + (f", {s['truncated']} issue(s)" if s["truncated"] else ""))
 
     if not raw:
         print("No listings collected - aborting (keeping previous data).", file=sys.stderr)
@@ -280,6 +293,7 @@ def run() -> int:
                       "gap_pairs": (rcn_stats["gap"].get("all") or {}).get("n", 0)}
                      if rcn_stats else None,
         "sold_confirmed": sum(1 for a in archive if a.get("sold")),
+        "health": cov_summary["status"],
         "coverage": cov_summary,
         "errors": errors,
     }

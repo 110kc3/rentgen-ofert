@@ -1,9 +1,14 @@
 # rentgen-ofert
 
-All **Śląskie voivodeship** house & flat *sale* listings from five portals — **Otodom**,
-**OLX**, **gratka**, **Morizon** and **nieruchomości-online** — de-duplicated into one
-searchable page. No server: a GitHub Actions cron job scrapes the portals,
-writes a JSON file, and a static dashboard on GitHub Pages displays it.
+A Śląskie-first house and flat *sale* listing aggregator, designed to grow to
+all 16 Polish voivodeships. It attempts **Otodom**, **OLX**, **gratka**,
+**Morizon** and **nieruchomości-online**, de-duplicates what the portals serve,
+and presents it on one searchable page. No application server: a GitHub Actions
+job scrapes, writes static JSON, and GitHub Pages displays it.
+
+Portal blocking and serving caps mean “all listings” is a target, not a current
+guarantee. The live 2026-08-12 dataset has four contributing sources because
+OLX returned 403, and Otodom coverage regressed in the latest experiment.
 
 ```
 GitHub Actions (cron) → python -m scraper.main → site/data/<region>/*.json
@@ -14,26 +19,46 @@ Scraped data and caches live on single-commit **`data-<region>` branches**,
 never in main's git history — main stays a few MB of code while a region's
 branch is force-pushed fresh each run (the price history lives *inside*
 `history.json.gz`, so old git versions of it carry no information). One branch
-per region because a shared one is what a second region would break: śląskie
-alone is ~150 MB, and every job would fetch, and force-push over, all of
-everyone's. A deploy overlays every `data-*` branch (plus the pre-split shared
-`data` branch, still read so the split needed no flag day).
+per region because a shared one is what a second region would break: Śląskie
+alone is currently ~159 MB including caches and pipeline-only history, and
+every job would fetch, and force-push over, all of everyone's. A deploy overlays
+every `data-*` branch (plus the pre-split shared `data` branch, still read so
+the split needed no flag day).
+
+## Poland rollout status
+
+As of 2026-08-13, **1 of 16 voivodeships is published**. Region-scoped output,
+all 16 RCN/TERYT mappings and per-region data branches are implemented; the
+`data-slaskie` branch has been created, refreshed and deployed successfully.
+
+The next step is not a 16-region CI matrix. The latest two warm Śląskie jobs
+took 250 and 263 minutes, Otodom fell from a stable ~16.6k listings to ~8.5k,
+OLX contributed zero, and the served region payload is already ~102 MB. The
+P0.1 coverage/health redesign is implemented locally and passes all 189 offline
+tests, but has not yet been published; restoring and re-measuring Otodom is the
+current P0.2 slice. The audited status, evidence, decisions, acceptance gates
+and P0–P5 task order are
+in [`POLAND_ROLLOUT.md`](POLAND_ROLLOUT.md). `TODO.md` remains the detailed
+development diary.
 
 ## What it does
 
-- Pulls **domy** and **mieszkania** *na sprzedaż* across the **whole Śląskie
-  voivodeship** (Katowice, Gliwice, Częstochowa, Bielsko-Biała, Rybnik, …) from all
-  five portals — a region-level search on Otodom/OLX/gratka/Morizon and per-city
-  sub-domains on nieruchomości-online. Set `RENTGEN_REGION` to scrape a different
-  voivodeship. Every listing keeps its **town (locality)**, and the dashboard has a
-  searchable **town multi-select** filter.
+- Searches **domy** and **mieszkania** *na sprzedaż* across the **whole Śląskie
+  voivodeship** (Katowice, Gliwice, Częstochowa, Bielsko-Biała, Rybnik, …) on up
+  to five portals — a region-level search on Otodom/OLX/gratka/Morizon and
+  per-city sub-domains on nieruchomości-online. Set `RENTGEN_REGION` to target a
+  different voivodeship, but no second region is production-validated yet.
+  Every listing keeps its **town (locality)**, and the dashboard has a searchable
+  **town multi-select** filter.
 - Keeps archived / sold listings (e.g. nieruchomości-online *Ogłoszenie archiwalne*)
   out of the dashboard, but harvests them as history evidence (see below).
-- **Relist & price history.** Each run fingerprints every property by its photos and
-  records price/date in `site/data/history.json`. When an agent re-posts the same flat
-  under a new URL, the card is flagged "↻ wystawiane ponownie" with the earlier price,
-  and shows "na rynku od …" plus a price trail. History builds forward from the first
-  run (needs photos on; can't see listings deleted before the tool started).
+- **Relist & price history.** Each run reuses known photo fingerprints and
+  attempts new galleries within a time budget, recording price/date in
+  `site/data/<region>/history.json.gz`. When an agent re-posts the same flat
+  under a new URL, the card is flagged "↻ wystawiane ponownie" with the earlier
+  price, and shows "na rynku od …" plus a price trail. History builds forward
+  from the first run; budget-deferred fingerprints are retried later, and the
+  tool cannot see listings deleted before it started.
 - **Per-property lifetime timeline ("rentgen").** Every card has an expandable
   *Historia nieruchomości*: when it was listed on which portal and for how much,
   every price change and re-post, links to the archived gallery photos, when the
@@ -42,13 +67,13 @@ everyone's. A deploy overlays every `data-*` branch (plus the pre-split shared
   the nationwide Rejestr Cen Nieruchomości for free (WFS at
   `mapy.geoportal.gov.pl/wss/service/rcn`). `scraper/rcn.py` pulls all flat +
   residential-building transactions for the voivodeship into
-  `cache/rcn_snapshot.json.gz` (refreshed weekly) and matches them to tracked
+  `cache/rcn_<region>.json.gz` (refreshed weekly) and matches them to tracked
   properties by town + area ± street / rooms / floor. A deed *before* a listing
   shows as "🔑 poprzednio sprzedane … za …"; a deed *after* a listing vanished
   confirms "✓ sprzedane wg RCN". Matches are conservative and carry a
   confidence label (wysoka = street-anchored, średnia = attribute-anchored).
 - **Cena vs transakcje RCN (negotiation leverage).** `scraper/rcnstats.py`
-  aggregates the RCN snapshot into `site/data/rcnstats.json` (~21 KB): median /
+  aggregates the RCN snapshot into `site/data/<region>/rcnstats.json`: median /
   p25 / p75 deed zł/m² per town + flat-size bucket + market (last 24 months,
   ≥ 5 deeds). Every flat card with a benchmark shows **"vs transakcje RCN:
   +18 %"** and an expandable **"💬 Argumenty do negocjacji"** block — what
@@ -68,8 +93,9 @@ everyone's. A deploy overlays every `data-*` branch (plus the pre-split shared
   the benchmark is older than it looks, the Statystyki note names the worst
   offenders (or explains why the selected town's RCN line just stops), and the
   empty *Sprzedane wg RCN* view says so outright instead of looking broken.
-- **Coverage — knowing when a search was truncated, and by how much.** A capped
-  search returns a plausible pile of listings and no hint that more exist. Each
+- **Coverage and source health — knowing when a search was truncated, and by
+  how much.** A capped search returns a plausible pile of listings and no hint
+  that more exist. Each
   scraper records why each search ended — the portal ran out (`end`), we cut it
   off (`cap`), the portal refused to serve the rest (`portal_cap`) — into
   `meta.json`'s `coverage` block, with a warning per truncated search in the run
@@ -80,16 +106,31 @@ everyone's. A deploy overlays every `data-*` branch (plus the pre-split shared
   ogłoszeń", morizon's "ponad 9000" (a lower bound — it rounds to thousands),
   OLX's `visibleElements` vs the `totalElements` it will actually serve — and a
   search that ends short of it is reported as truncated whatever the stop reason
-  said. `coverage.by_source` carries `portal_total` and `pct`, so "did coverage
-  improve" is one number per run. `pct` counts what the portal *served*, not
-  what we kept: each scraper filters while parsing (otodom drops INVESTMENT
+  said. Coverage **schema v2** assigns every search a role: the region parent
+  owns `portal_total` once, disjoint price partitions replace an overflowing
+  parent, and overlapping supplements (OLX town searches) never create another
+  denominator. Type-scoped portal IDs are unioned across parents, bands, towns
+  and retries, producing `served_unique`, `kept_unique`, `current` and
+  `archived`; the internal ID sets are stripped before `meta.json` is written.
+  Failed/capped/missing partitions remain explicit, `pct` is bounded to 0–100,
+  and losing a band cannot improve it. Intentional scout/parent/intermediate
+  rows no longer emit “raise the cap” warnings—the terminal leaf does.
+  `coverage.status`, each source, and each source/type report `healthy`,
+  `partial`, `blocked` or `unknown`, independently of process success. The
+  dashboard therefore keeps a source that returned no listings visible and
+  distinguishes a clean `0` from `blokada` or `brak danych`. The currently
+  published 2026-08-12 dataset predates schema v2; its first live validation is
+  still pending. The served/kept split remains important: each scraper filters
+  while parsing (otodom drops INVESTMENT
   bundles, OLX drops ads syndicated from Otodom), and comparing kept-against-
   stated declared all ~60 OLX town searches truncated — 126 warnings in one run,
-  nearly all false. The kept count rides alongside as `listings`. All four
-  paginated portals record it: gratka and morizon were left out of the first
-  cut, and because a price band's *new* count is legitimately a fraction of the
-  band's stated total, every one of their bands read as truncated (20 more false
-  warnings per run) until they reported what they were served too.
+  nearly all false. Schema v2 reports that distinction directly as
+  `served_unique` and `kept_unique`, with `listings` retained as the current
+  kept-count compatibility field. All four paginated portals record it: gratka
+  and morizon were left out of the first cut, and because a price band's *new*
+  count is legitimately a fraction of the band's stated total, every one of
+  their bands read as truncated (20 more false warnings per run) until they
+  reported what they were served too.
 - **Price bands — seeing past the window a portal will serve** (`scraper/bands.py`).
   Every portal hands over far less than it admits to holding: otodom states
   18 505 śląskie flats but deep pages go thin and erratic past ~150,
@@ -108,15 +149,13 @@ everyone's. A deploy overlays every `data-*` branch (plus the pre-split shared
   which is why an *empty* search must never look like a refusal: a village with
   no flats states no total and serves no ads, and reading that as overflow made
   every empty band bisect into two more (see the 2026-08-10 entry in `TODO.md`).
-  A portal can also simply refuse the bands: otodom answers `405` partway
-  through the sequence and, because a 405 is not retried, seven of its nine
-  bands die on their first page — the sum-check then reports a shortfall that
-  reads like a price filter and is really the refusal (2026-08-11 entry) — and
-  the refusal is a *page budget*, ~320 a run, which is why the unbanded otodom
-  search now runs as a **scout**: it walks `otodom.SCOUT_PAGES`, states the
-  total, seeds the dedupe and picks up the priceless ads, then stands aside so
-  the bands get the pages. Walking it to 200 spent two thirds of the budget on
-  ads the bands were about to be sent for, and left them to 405 on page 1.
+  A portal can also simply refuse the bands. Otodom currently retries a 405
+  once after a bounded cooldown, and its unbanded flat search runs as a
+  12-page **scout** so the bands receive most requests. The latest two
+  production runs disproved the original “~320-page budget” explanation: the
+  first 405 arrived after only ~5–6 minutes and Otodom's kept count fell from
+  ~16.6k to ~8.5k. Restoring the coverage floor is a rollout blocker; see P0.2
+  in `POLAND_ROLLOUT.md`.
 - **Empty views explain themselves.** When a filter combination returns
   nothing, the dashboard re-runs the filter with each dimension relaxed and
   offers the ones that would bring results back ("Miejscowość: Gliwice — 43"),
@@ -157,7 +196,7 @@ everyone's. A deploy overlays every `data-*` branch (plus the pre-split shared
   hide them entirely with *Rynek: Wtórny* when hunting resale flats.
 - **Archiwum view.** The dashboard's "Archiwum / sprzedane" filter shows
   properties that left the market, with their last asking price, the RCN sale
-  price when matched, and the full timeline (`site/data/archive.json`).
+  price when matched, and the full timeline (`site/data/<region>/archive.json`).
 - **De-duplicates the same property across portals, including at different prices.**
   Candidates must share an exact size (type + area, + rooms for flats); then a
   perceptual hash (dHash) of each listing's **photo gallery** confirms they are
@@ -225,7 +264,9 @@ REGION=slaskie
 git fetch origin data-$REGION && git checkout FETCH_HEAD -- site/data cache && git reset -q
 python -m scraper.main                                   # ~minutes with warm caches
 git checkout --orphan data-local && git rm -r --cached -q . \
-  && git add -f site/data/$REGION cache && git commit -m "data: local scrape" \
+  && git add -f site/data/$REGION cache/geo_cache.json cache/nol_towns.json \
+       cache/phash_$REGION.json.gz cache/rcn_$REGION.json.gz \
+  && git commit -m "data: local scrape" \
   && git push --force origin HEAD:data-$REGION && git checkout -
 ```
 
@@ -239,7 +280,7 @@ listings** workflow runs on its cron, on `scraper/**` changes, or manually
 
 ```bash
 pip install -r scraper/requirements.txt   # requests + beautifulsoup4 + Pillow
-python -m scraper.main                     # scrape -> site/data/slaskie/listings.json
+python -m scraper.main                     # scrape -> site/data/slaskie/{manifest,index,d/*,...}.json
 python -m http.server 8000 -d site         # then open http://localhost:8000
 ```
 
@@ -332,10 +373,10 @@ python -m pytest -q          # parser + dedupe unit tests (offline, use fixtures
   and caches it in `cache/nol_towns.json`. For the dashboard, add an entry to
   `REGION_CONFIG` in `site/app.js` — the label and the optional
   distance-from-anchor filter; a region without an anchor city simply hides that
-  control. **Read the whole-Poland plan in `TODO.md` first**: every portal's
-  pagination cap already truncates śląskie, so a second region would add a
-  second partially-scraped dataset until that is fixed. For rentals or other
-  scopes, edit the `SEARCH` URLs in each `scraper/<portal>.py`.
+  control. **Read [`POLAND_ROLLOUT.md`](POLAND_ROLLOUT.md) first**: source
+  coverage, runtime, regional URLs/navigation and hosting all have gates before
+  a second region is scheduled. For rentals or other scopes, edit the `SEARCH`
+  URLs in each `scraper/<portal>.py`.
 - **Add a portal** — write a module exposing `scrape(max_pages, delay, ...)`
   that returns the shared listing dict (see the docstring in
   `scraper/normalize.py`) and add it to `SOURCES` in `scraper/main.py`.
@@ -347,7 +388,7 @@ python -m pytest -q          # parser + dedupe unit tests (offline, use fixtures
 scraper/
   otodom.py  olx.py  gratka.py  morizon.py  nieruchomosci_online.py   per-portal scrapers
   net.py         shared HTTP session with 429/405 back-off; history.py  property lifecycle store
-  coverage.py    per-search truncation reporting (our cap vs the portal's)
+  coverage.py    non-overlapping completeness accounting + source/region health
   bands.py       price-band subdivision — see past each portal's serving window
   normalize.py   shared schema, value helpers, cross-portal dedupe
   photomatch.py  perceptual hashing of galleries to confirm same-property merges
@@ -380,7 +421,8 @@ site/
                   one directory per voivodeship, ?region= to view)
 tests/         parser + dedupe + history + RCN + stats + geo tests, offline fixtures
 .github/workflows/   update.yml (cron scrape) + deploy.yml (Pages publish)
-TODO.md        roadmap / pending work (kept in sync with this README)
+POLAND_ROLLOUT.md  current nationwide status, gates and ordered task plan
+TODO.md        detailed development diary + other pending work
 ```
 
 ## Notes on etiquette & law

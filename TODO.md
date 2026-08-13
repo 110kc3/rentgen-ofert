@@ -1,16 +1,71 @@
 # TODO — rentgen-ofert
 
 > Keep this file and `README.md` updated after each change.
-> Last updated: 2026-08-12
+> Last updated: 2026-08-13
 
-## Next (2026-08-12) — the page budget, the sweep, the twins, and one branch per region
+## Next (2026-08-13) — stop before region two and repair the template
 
-**Where to pick up: "What to do next" at the end of this section.** Picks 1, 2,
-4, 5 and 6 of the previous list shipped here; pick 3 (OLX's slot) is still open
-and is now the only unanswered question of that batch. **The run this commit
-triggers is what judges all of it** — until it lands these are code, not
-results, and the measurements they have to move are in the superseded section
-below.
+**Current source of truth:** [`POLAND_ROLLOUT.md`](POLAND_ROLLOUT.md). That
+document contains the evidence, decisions, acceptance gates and full P0–P5
+plan. The long sections below are the development diary and preserve the
+measurements that led here.
+
+The two validation runs that the previous section was waiting for have landed:
+`31576707243` (250 min) and `31631007171` (263 min), both green and published.
+They proved the per-region branch and delist changes, but they also make a
+16-region matrix the wrong next move:
+
+- `data-slaskie` was created, refreshed and deployed successfully;
+- the delist sweep fell to 37–42 seconds;
+- Otodom fell from the stable 16.6k baseline to **8,461 / 8,541** kept, with
+  405s beginning after only ~5–6 minutes despite the 12-page scout;
+- OLX returned 403 on both types in both runs and contributed zero;
+- n-online took 71–76 minutes and its flat crawl hit a per-town cap;
+- photo hashing still took 94–98 minutes and left 5,872 / 4,420 records behind;
+- a warm region now costs 250–263 minutes, so 16 regions at
+  `max-parallel: 2` need ~34 hours, not one day;
+- the live Śląskie payload is already ~102 MB excluding pipeline-only history.
+
+**Do next, in this order:**
+
+1. [x] Fix coverage semantics and add explicit per-source/region health
+       (`healthy`, `partial`, `blocked`, `unknown`). Schema v2 is implemented
+       locally; its first published run remains to be inspected.
+2. [ ] Restore the Otodom coverage floor and re-measure two scheduled runs.
+3. [ ] Make an OLX page-one 403 fail fast and report the source as blocked.
+4. [ ] Bound n-online/archive work and split photo correctness work from the
+       history-only backlog.
+5. [ ] Add the offline-test/schema gate before any scrape requests.
+6. [ ] Meet the P0 exit gate in `POLAND_ROLLOUT.md`; only then build regional
+       navigation and manually pilot `malopolskie`.
+
+### Done in this slice — truthful coverage and health (P0.1)
+
+- Parent region searches now own each source/type inventory total exactly once;
+  price leaves never inflate the denominator. Internal type-scoped listing IDs
+  union parent, band, retry and overlapping town results into unique served and
+  kept counts, and private ID sets are stripped before JSON publication.
+- Coverage schema v2 names direct/parent/partition/supplement roles, reports
+  exact or lower-bound totals, bounds percentages to 0–100, and lists failed,
+  capped, missing and unaccounted partitions. Intentional parent/scout and
+  recursively replaced band rows no longer generate operator warnings.
+- Health is explicit per type, source and region: `healthy`, `partial`,
+  `blocked`, or `unknown`. Whole-scraper exceptions become coverage rows instead
+  of disappearing; n-online distinguishes an all-town refusal from a clean zero
+  and separates current from archived observations.
+- The dashboard retains every expected source in its filter even when it
+  contributed zero. A clean zero is shown as `0`; blocked and unknown sources
+  are visibly labelled, and partial sources carry a warning marker.
+- Verification: `python -m compileall -q scraper`, `node --check site/app.js`,
+  `git diff --check`, and **189/189** offline tests pass. The code has not yet
+  produced a live schema-v2 dataset, so P0.2 plus live inspection is next.
+
+## Superseded (2026-08-12) — the page budget, the sweep, the twins, and one branch per region
+
+**Historical pick-up pointer only:** this section originally pointed to “What
+to do next” at its end. Its validation runs have now landed; use the 2026-08-13
+section and `POLAND_ROLLOUT.md` instead. Picks 1, 2, 4, 5 and 6 of the previous
+list shipped here; pick 3 (OLX's slot) remained open at this snapshot.
 
 ### What the two runs before this commit established
 
@@ -46,8 +101,9 @@ the ads the bands are then sent to fetch. The band yields say it outright:
       the same question `bands.overflows` asks, asked one page in — so the house
       search, which needs no bands, still walks to `max_pages`. A scout row is
       excluded from `coverage.warnings`: "raise RENTGEN_MAX_PAGES or subdivide
-      the search" is precisely what it just did. It stays in the `truncated`
-      count, which is factual.
+      the search" is precisely what it just did. At this historical snapshot it
+      stayed in the `truncated` count; schema v2 (2026-08-13) later reclassified
+      it as a non-actionable diagnostic row.
 - [x] **A failed retry no longer overwrites a better attempt** (`bands.best_of`).
       The retry restarts at page 1, and its row replaced the first
       unconditionally — so `300k-400k`, which had walked to page **11**, was
@@ -934,18 +990,21 @@ shards + hashed filenames. Do it before adding a second region.
       expanded; same hash implemented in app.js, parity-tested). Offers list
       became a collapsible section. Verified in a real browser: first paint
       from the index alone, 1 shard fetch on first expand, 0 before.
-- [ ] **Multi-voivodeship / whole Poland — NEXT.** Krok 1 + Krok 3 shipped
-      2026-07-11, Krok 0 (de-Gliwice) 2026-08-08. Measurement on 2026-08-08
-      evening put hard numbers on the blocker: it is **coverage and dedupe, not
-      storage** — otodom alone lists 18 505 śląskie flats against our 1 482,
-      CI still pins the page cap at 50, and ~2 400 morizon cards are unmerged
-      duplicates of gratka cards. Steps 0–3 of the rollout order below are all
-      single-region work; the region count only goes up after them ↓.
+- [ ] **Multi-voivodeship / whole Poland — NEXT.** The regional data layout,
+      all 16 RCN mappings and `data-<region>` branches are implemented, but only
+      Śląskie is live. The 2026-08-13 production audit found that coverage,
+      runtime, regional navigation and hosting must be gated before region two.
+      Current status and ordered work: [`POLAND_ROLLOUT.md`](POLAND_ROLLOUT.md).
 - [ ] **Licytacje komornicze — "deweloperuch dla licytacji"** (nationwide
       bailiff auctions + RCN gap per auction). Feasibility verified
       2026-07-14; full plan in its own section below ↓.
 
-## Plan: scraping whole Poland (notes 2026-07-07, re-audited 2026-08-08)
+## Historical plan: scraping whole Poland (notes 2026-07-07, re-audited 2026-08-08)
+
+> Superseded as the active plan on 2026-08-13 by
+> [`POLAND_ROLLOUT.md`](POLAND_ROLLOUT.md). Keep this section as the measurement
+> and design history; its unchecked boxes and scheduling arithmetic are not the
+> current pick-up list.
 
 Region (voivodeship) stays the unit of everything: one scrape job, one data
 dir, one dashboard, one RCN snapshot per region. "Poland" = 16 regions, not
@@ -1465,14 +1524,15 @@ one polite cron covers the country. Feasibility probed live from the Pi
 
 ## Pending — deploy
 - [x] Deployed to GitHub Pages.
-- [ ] Re-run "Update listings" once so the first **voivodeship-wide** scrape +
-      cache land (the first run is heavy; later runs reuse the cache and are fast).
+- [x] First voivodeship-wide data and caches landed; `data-slaskie` was created,
+      refreshed and deployed successfully on 2026-08-12.
 
 ## Pending — coverage / completeness
-- [ ] **Literal "every listing".** Region search is capped by each portal's
-      pagination (~`RENTGEN_MAX_PAGES` × ~36/page), so a single region query returns
-      the newest N, not all. For exhaustive coverage, iterate per **powiat** (or raise
-      `RENTGEN_MAX_PAGES`) on Otodom/OLX/gratka/Morizon — bigger + slower, but complete.
+- [ ] **Literal "every listing".** Price bands recover much more than a single
+      region query, but the live 2026-08-12 run is still partial: Otodom's upper
+      bands were refused, OLX returned 403, Gratka/Morizon retain parent-cap
+      warnings and n-online hit a town cap. Treat P0.1–P0.4 in
+      `POLAND_ROLLOUT.md` as the current coverage plan.
 - [ ] **Precise distances.** Listings now carry `ll` (UUG-geocoded, town/street
       precision) — the distance filter could compute from it for *every* town
       instead of the ~90 hard-coded `TOWN_COORDS` in `app.js`. Portal-shipped
@@ -1486,9 +1546,9 @@ one polite cron covers the country. Feasibility probed live from the Pi
 - [ ] Optional rentals (wynajem) toggle
 
 ## Known issues / notes
-- Region URLs (`…/slaskie`) reuse each portal's proven path pattern but couldn't be
-  live-verified from the dev sandbox (portal fetches are blocked there). They're a
-  one-line change via `RENTGEN_REGION`; validate with the first CI run.
+- Śląskie region URLs are repeatedly production-validated. No non-Śląskie
+  portal URL has completed an end-to-end run yet; validate all of them in the
+  one-region pilot before adding a matrix.
 - Locality `city = last breadcrumb segment` assumes gratka/Morizon order their
   breadcrumb specific→general (street, district, city). True on all observed samples.
 - Scrapers depend on each portal's page structure; a redesign may need a parser tweak.

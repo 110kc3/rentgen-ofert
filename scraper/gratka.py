@@ -137,9 +137,13 @@ def _walk(base, typ, tag, max_pages, delay, session, log, seen, out, extra=""):
     page = 1
     got = 0
     served = 0            # cards the portal handed over, before OUR dedupe
+    served_keys = set()
+    kept_keys = set()
     total = None
     total_min = False
     stopped = coverage.OK
+    error = None
+    http_status = None
     while True:
         if page > max_pages:
             stopped = coverage.OUR_CAP
@@ -160,7 +164,12 @@ def _walk(base, typ, tag, max_pages, delay, session, log, seen, out, extra=""):
         except Exception as exc:  # keep what we have, move on
             log(f"  gratka {typ}/{tag} page {page} error: {exc}")
             stopped = coverage.ERROR
+            error, http_status = coverage.error_details(exc)
             break
+        served_keys.update(coverage.listing_key(
+            typ, c.get("source_id") or c.get("url")) for c in cards)
+        kept_keys.update(coverage.listing_key(
+            typ, c.get("source_id") or c.get("url")) for c in cards)
         for c in batch:
             seen.add(c["url"])
         out.extend(batch)
@@ -196,7 +205,9 @@ def _walk(base, typ, tag, max_pages, delay, session, log, seen, out, extra=""):
         stopped = coverage.PORTAL_CAP
     return coverage.row("gratka", typ, tag, max(page, 0), got, stopped,
                         portal_total=total, total_is_min=total_min,
-                        served=served)
+                        served=served, served_keys=served_keys,
+                        kept_keys=kept_keys, error=error,
+                        http_status=http_status)
 
 
 def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
@@ -217,6 +228,7 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
             # the same one bounded retry a band does
             row = pacer.attempt(tag, lambda: _walk(base, typ, tag, max_pages,
                                                    delay, session, log, seen, out))
+            row["role"] = coverage.PARENT
             cov.append(row)
             if not banded or not bands.overflows(row, "gratka"):
                 continue
@@ -231,6 +243,8 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
                                            bands.qs("gratka", lo, hi)),
                 log=log, pacer=pacer)
             cov.extend(rows)
-            bands.check_totals("gratka", typ, row.get("portal_total"), seeds, log=log)
+            totals_ok = bands.check_totals(
+                "gratka", typ, row.get("portal_total"), seeds, log=log)
+            bands.record_partition(row, seeds, totals_ok)
     scrape.last_coverage = cov
     return out

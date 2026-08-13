@@ -13,7 +13,7 @@ portal's own stated total tells those apart.
 """
 import json
 
-from scraper import coverage, gratka, morizon, olx
+from scraper import bands, coverage, gratka, morizon, olx
 from scraper.normalize import stated_total
 
 
@@ -35,8 +35,13 @@ def test_summarise_and_warnings():
                      portal_pages=140),
     ]
     s = coverage.summarise(rows)
-    assert s["by_source"]["gratka"] == {"searches": 2, "pages": 272,
-                                        "listings": 9509, "truncated": 1}
+    gratka_health = s["by_source"]["gratka"]
+    assert {k: gratka_health[k] for k in
+            ("status", "searches", "pages", "listings", "truncated")} == {
+                "status": coverage.PARTIAL, "searches": 2, "pages": 272,
+                "listings": 9509, "truncated": 1,
+            }
+    assert s["schema"] == 2 and s["status"] == coverage.PARTIAL
     assert [r["source"] for r in s["truncated"]] == ["gratka", "olx"]
     w = coverage.warnings(rows)
     assert len(w) == 2
@@ -73,6 +78,7 @@ def test_short_of_total_needs_a_total():
     assert coverage.short_of_total(7000, None) is False
     assert coverage.covered(7000, 9856) == 71.0
     assert coverage.covered(7000, None) is None
+    assert coverage.covered(2500, 2000) == 100.0
 
 
 def test_warns_when_a_clean_stop_falls_short_of_the_portals_count():
@@ -103,6 +109,120 @@ def test_summarise_carries_the_totals():
     assert s["portal_total"] == 12369 and s["listings"] == 9509
     assert s["pct"] == 76.9
     assert "total_is_min" not in s
+
+
+def _keys(typ, start, stop):
+    return {coverage.listing_key(typ, i) for i in range(start, stop)}
+
+
+def test_partition_uses_one_parent_denominator_and_unique_numerator():
+    """Parent + price rows overlap by design; neither side may be added."""
+    parent = coverage.row(
+        "otodom", "flat", "region", 12, 60, coverage.OUR_CAP,
+        portal_total=100, role=coverage.PARENT,
+        served_keys=_keys("flat", 0, 60), kept_keys=_keys("flat", 0, 60))
+    cheap = coverage.row(
+        "otodom", "flat", "cheap", 2, 50, coverage.OK,
+        portal_total=50, role=coverage.PARTITION,
+        served_keys=_keys("flat", 0, 50), kept_keys=_keys("flat", 0, 50))
+    dear = coverage.row(
+        "otodom", "flat", "dear", 2, 50, coverage.OK,
+        portal_total=50, role=coverage.PARTITION,
+        served_keys=_keys("flat", 50, 100), kept_keys=_keys("flat", 50, 100))
+    bands.record_partition(parent, [cheap, dear], True)
+
+    summary = coverage.summarise([parent, cheap, dear])
+    source = summary["by_source"]["otodom"]
+    assert source["portal_total"] == 100             # not parent + children
+    assert source["served_unique"] == 100            # overlap unioned once
+    assert source["pct"] == 100.0
+    assert source["status"] == coverage.HEALTHY
+    assert source["truncated"] == 0
+    assert coverage.warnings([parent, cheap, dear]) == []
+    json.dumps(summary)                               # private sets never leak
+
+
+def test_failed_partition_keeps_the_denominator_and_lowers_coverage():
+    parent = coverage.row(
+        "otodom", "flat", "region", 12, 20, coverage.OUR_CAP,
+        portal_total=100, role=coverage.PARENT,
+        served_keys=_keys("flat", 0, 20), kept_keys=_keys("flat", 0, 20))
+    good = coverage.row(
+        "otodom", "flat", "0-500k", 2, 50, coverage.OK,
+        portal_total=50, role=coverage.PARTITION,
+        served_keys=_keys("flat", 0, 50), kept_keys=_keys("flat", 0, 50))
+    failed = coverage.row(
+        "otodom", "flat", "500k+", 0, 0, coverage.ERROR,
+        role=coverage.PARTITION, error="HTTP 403", http_status=403,
+        served_keys=set(), kept_keys=set())
+    bands.record_partition(parent, [good, failed], False)
+
+    source = coverage.summarise([parent, good, failed])["by_source"]["otodom"]
+    typ = source["types"]["flat"]
+    assert source["portal_total"] == 100             # failed leaf did not vanish
+    assert source["served_unique"] == 50
+    assert source["pct"] == 50.0                     # failure cannot improve pct
+    assert source["status"] == coverage.PARTIAL
+    assert source["http_statuses"] == [403]
+    assert typ["partitions"]["missing"] == ["500k+"]
+    assert typ["partitions"]["unaccounted"] == 50
+    assert len(coverage.warnings([parent, good, failed])) == 1
+
+
+def test_source_health_distinguishes_blocked_clean_zero_and_missing():
+    rows = [
+        coverage.row("gratka", "flat", "region", 0, 0, coverage.OK,
+                     role=coverage.PARENT, served_keys=set(), kept_keys=set()),
+        coverage.row("olx", "flat", "region", 0, 0, coverage.ERROR,
+                     role=coverage.PARENT, error="403 Client Error",
+                     http_status=403, served_keys=set(), kept_keys=set()),
+    ]
+    summary = coverage.summarise(
+        rows, expected_sources=("gratka", "olx", "morizon"))
+    assert summary["by_source"]["gratka"]["status"] == coverage.HEALTHY
+    assert summary["by_source"]["olx"]["status"] == coverage.BLOCKED
+    assert summary["by_source"]["olx"]["http_statuses"] == [403]
+    assert summary["by_source"]["morizon"]["status"] == coverage.UNKNOWN
+    assert summary["status"] == coverage.PARTIAL
+    json.dumps(summary)
+
+
+def test_missing_expected_type_cannot_make_a_source_look_healthy():
+    row = coverage.row(
+        "gratka", "house", "region", 1, 0, coverage.OK,
+        role=coverage.PARENT, served_keys=set(), kept_keys=set())
+    source = coverage.summarise(
+        [row], expected_sources=("gratka",),
+        expected_types=("house", "flat"))["by_source"]["gratka"]
+    assert source["types"]["house"]["status"] == coverage.HEALTHY
+    assert source["types"]["flat"]["status"] == coverage.UNKNOWN
+    assert source["status"] == coverage.UNKNOWN
+
+
+def test_current_and_archived_are_reported_separately():
+    keys = _keys("flat", 1, 4)
+    row = coverage.row(
+        "nieruchomosci-online", "flat", "3 towns", 3, 3, coverage.OK,
+        served_keys=keys, kept_keys=keys, current=2, archived=1)
+    source = coverage.summarise([row])["by_source"]["nieruchomosci-online"]
+    assert source["kept_unique"] == 3
+    assert source["current"] == source["listings"] == 2
+    assert source["archived"] == 1
+
+
+def test_resolved_partial_root_is_partial_but_no_partitions_is_unknown():
+    partial = coverage.row(
+        "nieruchomosci-online", "flat", "3 towns", 1, 0, coverage.ERROR,
+        error="HTTP 503", http_status=503, served_keys=set(), kept_keys=set())
+    partial["partial_success"] = True
+    unknown = coverage.row(
+        "nieruchomosci-online", "house", "0 towns", 0, 0, coverage.OK,
+        served_keys=set(), kept_keys=set())
+    unknown["unknown"] = True
+    source = coverage.summarise([partial, unknown])["by_source"]["nieruchomosci-online"]
+    assert source["types"]["flat"]["status"] == coverage.PARTIAL
+    assert source["types"]["house"]["status"] == coverage.UNKNOWN
+    assert source["status"] == coverage.PARTIAL
 
 
 # --- gratka / morizon: the 200-page wall ------------------------------------

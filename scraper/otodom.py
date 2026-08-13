@@ -114,10 +114,14 @@ def _walk(path, typ, tag, max_pages, delay, session, log, seen, out, extra="",
     page = 1
     got = 0
     served = 0        # ads Otodom handed over, before the INVESTMENT filter
+    served_keys = set()
+    kept_keys = set()
     total_pages = None
     total_ads = None
     stopped = coverage.OK
     scouted = False
+    error = None
+    http_status = None
     while page <= max_pages:
         url = f"{BASE}{path}?page={page}&limit={PAGE_SIZE}" + (f"&{extra}" if extra else "")
         try:
@@ -127,10 +131,16 @@ def _walk(path, typ, tag, max_pages, delay, session, log, seen, out, extra="",
         except Exception as exc:  # keep what we have, stop this category
             log(f"  otodom {typ}/{tag} page {page} error: {exc}")
             stopped = coverage.ERROR
+            error, http_status = coverage.error_details(exc)
             break
         items = sa.get("items") or []
         served += len(items)
-        batch = [a for a in parse_items(items, typ) if a["url"] not in seen]
+        served_keys.update(coverage.listing_key(
+            typ, it.get("id") or it.get("slug")) for it in items)
+        parsed = parse_items(items, typ)
+        kept_keys.update(coverage.listing_key(
+            typ, a.get("source_id") or a.get("url")) for a in parsed)
+        batch = [a for a in parsed if a["url"] not in seen]
         for a in batch:
             seen.add(a["url"])
         out.extend(batch)
@@ -164,7 +174,9 @@ def _walk(path, typ, tag, max_pages, delay, session, log, seen, out, extra="",
         time.sleep(delay)
     return coverage.row("otodom", typ, tag, page, got, stopped,
                         portal_pages=total_pages, portal_total=total_ads,
-                        served=served, scout=scouted)
+                        served=served, scout=scouted,
+                        served_keys=served_keys, kept_keys=kept_keys,
+                        error=error, http_status=http_status)
 
 
 def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
@@ -188,6 +200,7 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
                                                delay, session, log, seen, out,
                                                scout_pages=SCOUT_PAGES if banded
                                                else None))
+        row["role"] = coverage.PARENT
         cov.append(row)
         if not banded or not bands.overflows(row, "otodom"):
             continue
@@ -202,6 +215,8 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
                                       log, seen, out, bands.qs("otodom", lo, hi)),
             log=log, pacer=pacer)
         cov.extend(rows)
-        bands.check_totals("otodom", typ, row.get("portal_total"), seeds, log=log)
+        totals_ok = bands.check_totals(
+            "otodom", typ, row.get("portal_total"), seeds, log=log)
+        bands.record_partition(row, seeds, totals_ok)
     scrape.last_coverage = cov
     return out

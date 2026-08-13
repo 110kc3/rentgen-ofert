@@ -146,10 +146,14 @@ def _walk(base_url, typ, tag, max_pages, delay, session, log, seen, out, extra="
     page = 1
     got = 0
     served = 0             # ads OLX handed over, before our own filtering
+    served_keys = set()
+    kept_keys = set()
     total_pages = None
     visible = None          # ads OLX says match the search   (5 503 for śląskie flats)
     servable = None         # ads OLX will actually hand over (1 000 — its cap)
     stopped = coverage.OK
+    error = None
+    http_status = None
     while page <= max_pages:
         url = f"{base_url}?page={page}" + (f"&{extra}" if extra else "")
         try:
@@ -158,6 +162,7 @@ def _walk(base_url, typ, tag, max_pages, delay, session, log, seen, out, extra="
         except Exception as exc:  # keep what we have, stop this search
             log(f"  olx {typ}/{tag} page {page} error: {exc}")
             stopped = coverage.ERROR
+            error, http_status = coverage.error_details(exc)
             break
         try:
             state = extract_state(r.text)
@@ -167,10 +172,18 @@ def _walk(base_url, typ, tag, max_pages, delay, session, log, seen, out, extra="
             # and a re-skin are distinguishable from the log alone.
             log(f"  olx {typ}/{tag} page {page} error: {exc} — {fingerprint(r)}")
             stopped = coverage.ERROR
+            error, http_status = coverage.error_details(exc)
+            if http_status is None:
+                http_status = getattr(r, "status_code", None)
             break
         ads = listing.get("ads", [])
         served += len(ads)
-        batch = [a for a in parse_ads(ads, typ) if a["url"] not in seen]
+        served_keys.update(coverage.listing_key(
+            typ, ad.get("id") or ad.get("url")) for ad in ads)
+        parsed = parse_ads(ads, typ)
+        kept_keys.update(coverage.listing_key(
+            typ, a.get("source_id") or a.get("url")) for a in parsed)
+        batch = [a for a in parsed if a["url"] not in seen]
         for a in batch:
             seen.add(a["url"])
         out.extend(batch)
@@ -210,7 +223,9 @@ def _walk(base_url, typ, tag, max_pages, delay, session, log, seen, out, extra="
         stopped = coverage.PORTAL_CAP
     return coverage.row("olx", typ, tag, page, got, stopped,
                         portal_pages=total_pages, portal_total=visible,
-                        served=served)
+                        served=served, served_keys=served_keys,
+                        kept_keys=kept_keys, error=error,
+                        http_status=http_status)
 
 
 def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
@@ -237,6 +252,7 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
         # transient block that cost 28 seconds.
         row = pacer.attempt(typ, lambda: _walk(SEARCH[typ], typ, REGION, max_pages,
                                                delay, session, log, seen, out))
+        row["role"] = coverage.PARENT
         cov.append(row)
         if row["stopped"] != coverage.PORTAL_CAP:
             continue
@@ -251,6 +267,7 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
             town_row = pacer.attempt(slug, lambda s=slug: _walk(
                 search_url(typ, s), typ, s, max_pages, delay, session, log,
                 seen, out))
+            town_row["role"] = coverage.SUPPLEMENT
             cov.append(town_row)
             if banded and bands.overflows(town_row, "olx"):
                 rows, _ = bands.subdivide(
@@ -259,6 +276,8 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
                         search_url(typ, s), typ, f"{s}/{btag}", max_pages, delay,
                         session, log, seen, out, bands.qs("olx", lo, hi)),
                     log=log, pacer=pacer)
+                for band_row in rows:
+                    band_row["role"] = coverage.SUPPLEMENT
                 cov.extend(rows)
         if banded:
             # …and band the region search itself, so a region whose town list is
@@ -270,6 +289,8 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
                                            bands.qs("olx", lo, hi)),
                 log=log, pacer=pacer)
             cov.extend(rows)
-            bands.check_totals("olx", typ, row.get("portal_total"), seeds, log=log)
+            totals_ok = bands.check_totals(
+                "olx", typ, row.get("portal_total"), seeds, log=log)
+            bands.record_partition(row, seeds, totals_ok)
     scrape.last_coverage = cov
     return out

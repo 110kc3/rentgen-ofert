@@ -217,13 +217,22 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
         if typ not in types:
             continue
         seen = set()
+        served_keys = set()
+        kept_keys = set()
         pages_total = 0
         got = 0
-        capped = 0
+        capped_towns = []
+        current = 0
+        archived = 0
+        succeeded_towns = 0
+        failed_towns = []
+        first_error = None
+        first_http_status = None
         for town in towns:
             base = f"https://{town}.nieruchomosci-online.pl/{path}/"
             page = 1
             dup_pages = 0
+            town_succeeded = False
             while page <= max_pages:
                 url = base if page == 1 else f"{base}?p={page}"
                 try:
@@ -232,7 +241,26 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
                     batch = parse_offers(extract_offers(r.text), typ, town, towns)
                 except Exception as exc:  # missing sub-domain etc. -> skip town
                     log(f"  nieruchomosci-online {typ}/{town} page {page} error: {exc}")
+                    error, http_status = coverage.error_details(exc)
+                    # A derived town without a portal sub-domain is a clean
+                    # empty partition. Refusals and parser/server failures are
+                    # coverage defects and must not masquerade as zero stock.
+                    if http_status == 404:
+                        if not town_succeeded:
+                            succeeded_towns += 1
+                            town_succeeded = True
+                    else:
+                        failed_towns.append(town)
+                        if first_error is None:
+                            first_error, first_http_status = error, http_status
                     break
+                if not town_succeeded:
+                    succeeded_towns += 1
+                    town_succeeded = True
+                served_keys.update(coverage.listing_key(
+                    typ, b.get("source_id") or b.get("url")) for b in batch)
+                kept_keys.update(coverage.listing_key(
+                    typ, b.get("source_id") or b.get("url")) for b in batch)
                 # Key on the AD ID, not the URL. Every town subdomain serves its
                 # neighbours' offers under its own hostname, so the same ad
                 # arrives as gliwice.…/26859971.html and katowice.…/26859971.html
@@ -247,6 +275,8 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
                     seen.add(b["source_id"])
                 out.extend(fresh)
                 got += len(fresh)
+                current += sum(1 for b in fresh if not b.get("archived"))
+                archived += sum(1 for b in fresh if b.get("archived"))
                 if fresh:
                     log(f"  nieruchomosci-online {typ}/{town} page {page}: +{len(fresh)}")
                 if not batch:
@@ -264,12 +294,25 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
                 page += 1
                 time.sleep(delay)
                 if page > max_pages:
-                    capped += 1       # a town with more pages than we allowed
+                    capped_towns.append(town)  # more pages than we allowed
             pages_total += page - 1
         # one row per type, not per town: 60 towns x 2 types would bury the
         # other portals in meta.json, and the towns share one budget anyway
-        cov.append(coverage.row(
+        stopped = (coverage.ERROR if failed_towns else
+                   coverage.OUR_CAP if capped_towns else coverage.OK)
+        cov_row = coverage.row(
             "nieruchomosci-online", typ, f"{len(towns)} towns", pages_total, got,
-            coverage.OUR_CAP if capped else coverage.OK))
+            stopped,
+            served_keys=served_keys, kept_keys=kept_keys,
+            current=current, archived=archived,
+            error=first_error, http_status=first_http_status)
+        if failed_towns:
+            cov_row["failed_partitions"] = failed_towns
+            cov_row["partial_success"] = succeeded_towns > 0
+        if capped_towns:
+            cov_row["capped_partitions"] = capped_towns
+        if not towns:
+            cov_row["unknown"] = True
+        cov.append(cov_row)
     scrape.last_coverage = cov
     return out

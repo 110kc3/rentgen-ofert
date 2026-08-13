@@ -31,6 +31,9 @@ h1 { margin: 0; font-size: 22px; letter-spacing: -.02em; }
 .backlink:hover { text-decoration: underline; }
 .stats { margin-top: 6px; font-size: 13px; color: var(--muted); }
 .stats b { color: var(--text); }
+.coverage-health { display: block; margin-top: 3px; }
+.coverage-health.partial, .coverage-health.unknown { color: #9a6700; }
+.coverage-health.blocked { color: #b42318; }
 
 .controls {
   position: sticky; top: 0; z-index: 5; background: var(--bg);
@@ -46,6 +49,24 @@ h1 { margin: 0; font-size: 22px; letter-spacing: -.02em; }
   padding: 5px 10px; border-radius: 6px; font-size: 13px;
 }
 .seg button.active { background: var(--card); color: var(--text); box-shadow: var(--shadow); }
+.seg button:disabled { cursor: not-allowed; opacity: .72; }
+.seg button.source-blocked:disabled { color: #b42318; opacity: 1; }
+.source-count {
+  display: inline-block; margin-left: 5px; padding: 0 5px; border-radius: 999px;
+  background: var(--line); color: var(--muted); font-size: 10px; font-weight: 700;
+  line-height: 15px; vertical-align: 1px;
+}
+.source-blocked .source-count { background: #fef3f2; color: #b42318; }
+.source-warning {
+  display: inline-grid; place-items: center; width: 15px; height: 15px;
+  margin-left: 4px; border-radius: 50%; background: #f5a623; color: #1b1f24;
+  font-size: 10px; font-weight: 800; vertical-align: 1px;
+}
+@media (prefers-color-scheme: dark) {
+  .coverage-health.partial, .coverage-health.unknown { color: #facc15; }
+  .coverage-health.blocked, .seg button.source-blocked:disabled { color: #fda29b; }
+  .source-blocked .source-count { background: #4a1d1a; color: #fda29b; }
+}
 /* how many rows a view holds — an empty archive view otherwise reads as broken */
 .segcount {
   display: inline-block; margin-left: 6px; padding: 0 5px; border-radius: 999px;

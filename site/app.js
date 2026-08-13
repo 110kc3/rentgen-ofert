@@ -197,16 +197,53 @@ function renderStats(meta) {
   const gap = g
     ? ` · wg RCN sprzedaż kończy się typowo <b>${Math.abs(g.med_pct).toFixed(0)}%</b> ${g.med_pct <= 0 ? "poniżej" : "powyżej"} ceny ofertowej${g.med_days ? ` po ~<b>${g.med_days}</b> dniach` : ""} (${PLN.format(g.n)} sprzedaży)`
     : "";
+  const cov = meta.coverage && meta.coverage.schema >= 2 ? meta.coverage : null;
+  const unhealthy = cov ? Object.entries(cov.by_source || {})
+    .filter(([, h]) => h.status !== "healthy")
+    .map(([source, h]) => `${label(source)}: ${healthLabel(h.status)}${httpLabel(h)}`) : [];
+  const health = cov
+    ? `<span class="coverage-health ${escapeHtml(cov.status)}">Pokrycie źródeł: ` +
+      (unhealthy.length ? unhealthy.map(escapeHtml).join(" · ") : "pełne") + `</span>`
+    : "";
   $("#stats").innerHTML =
-    `<b>${PLN.format(meta.count || 0)}</b> ofert · ${bySrc}${rel}${arch}${gap} · zaktualizowano ${when}`;
+    `<b>${PLN.format(meta.count || 0)}</b> ofert · ${bySrc}${rel}${arch}${gap} · zaktualizowano ${when}${health}`;
+}
+
+function healthLabel(status) {
+  return ({ healthy: "pełne", partial: "częściowe", blocked: "zablokowane",
+            unknown: "brak danych" })[status] || "stan nieznany";
+}
+
+function httpLabel(health) {
+  const statuses = (health && health.http_statuses) || [];
+  return statuses.length ? ` (HTTP ${statuses.join("/")})` : "";
 }
 
 function buildSourceFilter() {
-  const present = [...new Set(state.all.flatMap((l) => l.sources || [l.source]))]
+  const health = ((state.meta || {}).coverage || {}).by_source || {};
+  const present = [...new Set([
+    ...state.all.flatMap((l) => l.sources || [l.source]),
+    ...Object.keys(health),
+  ].filter(Boolean))]
     .sort((a, b) => label(a).localeCompare(label(b)));
+  const counts = (state.meta || {}).by_source || {};
   $("#source-seg").innerHTML =
     `<button data-val="all" class="active">Wszystkie</button>` +
-    present.map((s) => `<button data-val="${s}">${label(s)}</button>`).join("");
+    present.map((s) => {
+      const h = health[s];
+      const count = Number(counts[s] ?? (h && h.current) ?? 0);
+      const status = h && h.status;
+      const empty = count === 0;
+      const blocked = status === "blocked";
+      const unknown = status === "unknown";
+      const stateBadge = blocked ? "blokada" : unknown ? "brak danych" : PLN.format(count);
+      const title = h ? `${label(s)} — ${healthLabel(status)}${httpLabel(h)}`
+        : `${label(s)} — ${PLN.format(count)} ofert`;
+      return `<button data-val="${escapeHtml(s)}" class="source-${escapeHtml(status || "legacy")}" ` +
+        `title="${escapeHtml(title)}"${empty ? " disabled" : ""}>${escapeHtml(label(s))}` +
+        `<span class="source-count${empty ? " zero" : ""}">${escapeHtml(stateBadge)}</span>` +
+        `${status === "partial" ? `<span class="source-warning" aria-label="częściowe pokrycie">!</span>` : ""}</button>`;
+    }).join("");
 }
 
 // ---- locality (town) multi-select -----------------------------------------
@@ -278,7 +315,7 @@ function wireControls() {
   document.querySelectorAll(".seg").forEach((seg) => {
     seg.addEventListener("click", (ev) => {
       const btn = ev.target.closest("button");
-      if (!btn) return;
+      if (!btn || btn.disabled) return;
       seg.querySelectorAll("button").forEach((b) => b.classList.remove("active"));
       btn.classList.add("active");
       state[seg.dataset.key] = btn.dataset.val;

@@ -155,10 +155,23 @@ def best_of(first, retry):
     further does.
     """
     if retry.get("stopped") != coverage.ERROR:
-        return retry
-    if first.get("stopped") != coverage.ERROR:
-        return first
-    return retry if _reach(retry) > _reach(first) else first
+        chosen = retry
+    elif first.get("stopped") != coverage.ERROR:
+        chosen = first
+    else:
+        chosen = retry if _reach(retry) > _reach(first) else first
+
+    # Both attempts contributed to the additive caller-owned result set. Keep
+    # one diagnostic row, but do not throw away identities served by the other
+    # attempt: schema-v2 coverage unions these private sets across searches.
+    private = ("_served_keys", "_kept_keys")
+    if any(k in first or k in retry for k in private):
+        chosen = dict(chosen)
+        for key in private:
+            if key in first or key in retry:
+                chosen[key] = frozenset(
+                    set(first.get(key) or ()) | set(retry.get(key) or ()))
+    return chosen
 
 
 def params(source, lo, hi) -> dict:
@@ -258,6 +271,11 @@ def subdivide(source, walk, log=print, edges=SEED_EDGES, max_depth=MAX_DEPTH,
         tag = label(lo, hi)
         pacer.pause()
         row = pacer.attempt(f"band {tag}", lambda: walk(lo, hi, tag))
+        row["role"] = coverage.PARTITION
+        row["partition"] = {
+            "axis": "price", "lo": lo, "hi": hi,
+            "depth": depth, "label": tag,
+        }
         rows.append(row)
         if depth == 0:
             seeds.append(row)
@@ -268,8 +286,25 @@ def subdivide(source, walk, log=print, edges=SEED_EDGES, max_depth=MAX_DEPTH,
             log(f"  !! {source} band {label(lo, hi)} still overflows and cannot "
                 f"be split further — {row.get('portal_total')} ads at one price")
             continue
+        # This row diagnosed an overflow and was intentionally replaced by its
+        # two disjoint children. It must not count as an actionable failure or
+        # as another denominator/numerator row in the summary.
+        row["replaced"] = True
         queue.extend((a, b, depth + 1) for a, b in halves)
     return rows, seeds
+
+
+def record_partition(parent, seeds, totals_ok):
+    """Attach the price-partition accounting result to its inventory owner."""
+    parent["role"] = coverage.PARENT
+    parent["partitioned"] = True
+    parent["partition_total_ok"] = bool(totals_ok)
+    stated = sum(r.get("portal_total") or 0 for r in seeds)
+    parent["partition_total"] = stated
+    missing = max((parent.get("portal_total") or 0) - stated, 0)
+    if missing:
+        parent["partition_unaccounted"] = missing
+    return totals_ok
 
 
 def check_totals(source, typ, unbanded_total, seeds, log=print) -> bool:
