@@ -1,9 +1,9 @@
 # Whole-Poland rollout: status and next tasks
 
-> Audited: 2026-08-13 11:06 UTC; P0.1 implementation update: 11:56 UTC
-> Scope: the production snapshot remains the audit baseline. P0.1 is now
-> implemented in the local worktree; it has not generated or published a live
-> schema-v2 dataset yet.
+> Audited: 2026-08-23 08:05 UTC; P0.2/P0.3 implementation update
+> Scope: production is current through the successful 2026-08-22 evening run.
+> P0.1 is live-validated. The local P0.2/P0.3 request-policy changes pass the
+> offline suite but have not yet run on a scheduled GitHub runner.
 > This is the current source of truth for the nationwide rollout. `TODO.md`
 > retains the detailed development diary and older measurements.
 
@@ -20,13 +20,13 @@ the regional user experience, scheduling and nationwide hosting are not ready.
 | All 16 RCN/TERYT mappings | Ready in code | `scraper/main.py` contains all 16 voivodeships; only Śląskie has run end to end. |
 | One data branch per region | Proven | `data-slaskie` was created and has been refreshed successfully. |
 | Deploy overlay for multiple region branches | Proven for one branch | The live deploy overlays `data-slaskie`; a second branch has not been exercised. |
-| Portal coverage | Blocked | Otodom regressed by about half after the scout change; OLX is blocked; n-online is capped. |
-| Coverage KPI | Implemented locally; live validation pending | Schema v2 owns the denominator at the parent and unions listing IDs across overlapping searches. The published dataset still uses the old schema until the next run. |
-| Per-region runtime | Blocked for 16 daily regions | The latest two jobs took 250 and 263 minutes. |
+| Portal coverage | Blocked; recovery local | Published Otodom remains at ~8.5k, OLX is blocked and n-online caps Katowice flats. The local fix restores Otodom's full baseline and makes OLX fail fast; live validation is pending. |
+| Coverage KPI | Proven in production | Schema v2 has published repeatedly: bounded percentages, explicit missing partitions and healthy/partial/blocked source states all survive real runs. |
+| Per-region runtime | Provisional gate met | The latest two completed warm jobs took 167 and 162 minutes, under the 180-minute gate but above the preferred 150; the request-policy change still needs remeasurement. |
 | Region picker and durable regional URLs | Not ready | There is no picker; changing filters removes `?region=`, and saved filters are shared across regions. |
 | Per-region metadata / OG / sitemap / llms.txt | Not ready | The generator and committed HTML are Śląskie-only. |
 | CI region matrix / cadence | Not implemented | The workflow still schedules Śląskie twice daily and accepts other regions only by manual input. |
-| Nationwide data hosting | Not decided | One incomplete region already serves about 102 MB; GitHub Pages has a published-site limit of 1 GB. |
+| Nationwide data hosting | Not decided | One incomplete region already serves about 106 MB; GitHub Pages has a published-site limit of 1 GB. |
 
 **Rollout decision:** do not add a scheduled second region yet. First complete
 the P0 stability gate below. A manual, disposable pilot is the next region
@@ -36,93 +36,97 @@ action after that gate—not a 16-region matrix.
 
 ### Repository and deployment
 
-- HEAD is `5c48745` (`fix: spend otodom's page budget on the bands, cut the
-  sweep, and one branch per region`). The local worktree now also contains the
-  uncommitted P0.1 slice and rollout documentation.
+- Main HEAD is `d9a0c67` (`feat: make coverage accounting truthful and expose
+  source health`). This worktree also contains the local P0.2/P0.3 request
+  policy, regression tests and documentation update described below.
 - The [live site](https://110kc3.github.io/rentgen-ofert/) and
   [live `data/slaskie/meta.json`](https://110kc3.github.io/rentgen-ofert/data/slaskie/meta.json)
   both return HTTP 200.
-- [Deploy run 31651087974](https://github.com/110kc3/rentgen-ofert/actions/runs/31651087974)
-  logged `overlaid slaskie from data-slaskie` and published on its first attempt.
-- Latest published data: **2026-08-12 23:29 UTC**, **26,136** current unique
-  properties from **44,399** current raw listings.
+- [Deploy run 32599191378](https://github.com/110kc3/rentgen-ofert/actions/runs/32599191378)
+  published the latest successful scrape; the site and `meta.json` both return
+  HTTP 200 as of this audit.
+- Latest published data: **2026-08-22 21:17 UTC**, **25,412** current unique
+  properties from **44,052** current raw listings.
 - Published data comes from four sources in that run, not five: Otodom, Gratka,
   Morizon and nieruchomości-online. OLX contributed zero.
-- The suite now contains **189** offline tests; all **189 passed locally** in an
-  isolated temporary environment after P0.1. The Actions scrape workflow still
+- The suite now contains **192** offline tests; all **192 passed locally** in an
+  isolated temporary environment after P0.2/P0.3. The Actions scrape workflow still
   has no test step, so a green production scrape is not yet a unit-test gate.
 
-### Validation runs for the latest commit
+### Latest completed validation runs
 
-The 2026-08-12 TODO was waiting for the run triggered by `5c48745`. Two runs on
-that commit have now completed and published successfully:
+Schema v2 has now published repeatedly. The two latest completed warm runs are:
 
 | Run | Trigger | Actual job time | Result | Published properties |
 |---|---|---:|---|---:|
-| [31576707243](https://github.com/110kc3/rentgen-ofert/actions/runs/31576707243) | push | 250 min | success; created `data-slaskie` | 26,008 |
-| [31631007171](https://github.com/110kc3/rentgen-ofert/actions/runs/31631007171) | schedule | 263 min | success; refreshed `data-slaskie` | 26,136 |
+| [32557869486](https://github.com/110kc3/rentgen-ofert/actions/runs/32557869486) | schedule | 167 min | success; schema v2 | 25,491 |
+| [32591212134](https://github.com/110kc3/rentgen-ofert/actions/runs/32591212134) | schedule | 162 min | success; schema v2 | 25,412 |
 
-[Run 31678762271](https://github.com/110kc3/rentgen-ofert/actions/runs/31678762271)
-was still in progress at the audit timestamp and is deliberately not used as
-evidence below.
+[Run 32623879451](https://github.com/110kc3/rentgen-ofert/actions/runs/32623879451)
+was cancelled after exactly 60 minutes while walking Morizon. It did not push
+data and is deliberately not treated as source-coverage evidence.
 
 ### Latest source health
 
-These are the published `meta.json` values from run `31631007171`:
+These are the published schema-v2 `meta.json` values from run `32591212134`:
 
 | Source | Current kept listings | Reported search state | Assessment |
 |---|---:|---|---|
-| Otodom | 8,541 | 8 truncated rows; displayed `pct` 29.8 | Regression and blocker. Seven upper flat bands were refused. |
-| OLX | 0 | Both first pages returned 403 | Blocked on the GitHub runner. |
-| Gratka | 12,379 | displayed `pct` 87.4; one parent search capped | Useful but the parent/band warning and percentage need clearer semantics. |
-| Morizon | 12,380 | displayed `pct` 103.3 against a lower-bound total | Useful and mostly twinned with Gratka; percentage is not a bounded completeness KPI. |
-| nieruchomości-online | 11,099 current | 58,550 rows including archived evidence; flat search capped | Valuable, but expensive and not complete. |
+| Otodom | 8,427 | `partial`, 37.7%; seven missing flat partitions, HTTP 405 | Regression and blocker; schema v2 keeps every failed band in the denominator. |
+| OLX | 0 | `blocked`, two root rows, HTTP 403 | Runner/IP block. The local P0.3 fix reduces four real requests to one probe. |
+| Gratka | 12,481 | `healthy`, 99.9% | Full useful coverage in the current accounting model. |
+| Morizon | 12,481 | `partial`, bounded 100% against a lower-bound total | Useful and mostly twinned with Gratka; partial because seed-band totals are short of the parent floor. |
+| nieruchomości-online | 10,663 current | `partial`; 58,609 served including 47,946 archived; Katowice flats capped | Valuable, but expensive and not complete. |
 
 The published unique count is lower than the source sum because Gratka and
 Morizon substantially overlap and are merged.
 
-### What the latest change actually proved
+### What production now proves
 
 - **Per-region branches succeeded.** The first validation run seeded from the
   old shared `data` branch, created `data-slaskie`, and the next run fetched and
   force-refreshed it. The site deployed the new data successfully.
 - **The delist change succeeded.** The phase fell from 27–44 minutes in bad
   runs to **37 seconds** and **42 seconds** for 300 checks.
-- **Skipping known Gratka/Morizon twins helped but did not clear the photo
-  backlog.** The two runs skipped about 8,100 known twins, yet the photo phase
-  still took 94–98 minutes and left 5,872 then 4,420 listings unprocessed when
-  its budget expired.
+- **Schema v2 works live.** Percentages stay bounded, the seven failed Otodom
+  leaves remain named and counted, OLX is blocked rather than a clean zero, and
+  Gratka is independently healthy.
+- **The warm photo backlog has converged.** The latest two runs completed the
+  phase in 74 and 50 seconds; the latest reused 83,684 cache entries, skipped
+  8,130 known twins and reported no budget-exhausted records. P0.5's priority
+  should be reassessed, though its correctness/history scheduling split is not
+  implemented.
 - **The Otodom scout hypothesis failed.** The unbanded flat search correctly
   stopped after 12 pages, but Otodom started returning 405 after only about
   5–6 minutes: at `200k-300k` page 35 in the first run and `300k-400k` page 2
   in the second. Kept Otodom listings fell from the long-running **16.6k**
   baseline to **8,461 / 8,541**. This is not evidence of a stable 320-page
-  allowance; the current scout is a production coverage regression.
-- **OLX remains a runner block, not a parser mystery.** Both types returned 403
-  on page one in both validation runs, after the two earlier consecutive 403
-  runs documented in `TODO.md`.
+  allowance; the currently published scout is a production coverage regression.
+- **The failures are persistent.** Every one of the eight most recent completed
+  logs inspected (2026-08-19 through 2026-08-22) refused the same seven Otodom
+  bands and returned OLX 403 on all four root attempts.
 
 ### Runtime and scheduling capacity
 
-Approximate phase times from the same two validation logs:
+Approximate phase times from the latest two completed validation logs:
 
-| Phase | Run 315767 | Run 316310 |
+| Phase | Run 325578 | Run 325912 |
 |---|---:|---:|
-| Otodom | 24.5 min | 22.6 min |
+| Otodom | 23.6 min | 23.4 min |
 | OLX (blocked) | 1.0 min | 1.0 min |
-| Gratka | 14.6 min | 17.9 min |
-| Morizon | 20.6 min | 23.3 min |
-| nieruchomości-online | 70.6 min | 76.1 min |
-| Photo hashing | 94.4 min | 97.6 min |
-| Remaining history, RCN, geo and write work | about 24 min | about 24 min |
-| **Whole job** | **250 min** | **263 min** |
+| Gratka | 19.5 min | 17.9 min |
+| Morizon | 20.7 min | 19.2 min |
+| nieruchomości-online | 72.3 min | 77.4 min |
+| Photo hashing | 1.2 min | 0.8 min |
+| Remaining history, delist, RCN, geo and write work | about 28 min | about 22 min |
+| **Whole job** | **167 min** | **162 min** |
 
-At the 256.5-minute average, one daily sweep of 16 regions needs about **68.4
-runner-hours per day**. `max-parallel: 2` would still need about **34.2 hours**
-of wall time. Fitting a daily sweep into 24 hours needs average parallelism of
-three, which conflicts with the runner-IP blocking already visible on Otodom
-and OLX. The old “16 regions, max-parallel 1–2, once daily” plan therefore does
-not fit current measurements.
+At the latest 164.5-minute average, one daily sweep of 16 Śląskie-sized regions
+would need about **43.9 runner-hours per day**, or **21.9 hours** at
+`max-parallel: 2`. That fits arithmetically but has almost no operational
+headroom, assumes every cold region converges like Śląskie, and conflicts with
+the runner-IP blocking already visible on Otodom and OLX. A matrix is still not
+justified before the P0 source and cold-region gates.
 
 The capacity gate should be **at most 180 minutes per warm region**, with a
 preferred target of **150 minutes** for headroom, before a two-wide daily
@@ -135,13 +139,13 @@ Current `data-slaskie` branch contents:
 
 | Part | Size |
 |---|---:|
-| Whole per-region branch | 159.0 MB |
-| `site/data/slaskie` including pipeline-only history | 128.9 MB |
-| Pipeline-only `history.json.gz` removed before deploy | 26.5 MB |
-| **Approximate data actually served for Śląskie** | **102.4 MB** |
-| Caches on the branch | 30.1 MB |
-| `index.json` alone | 19.5 MB |
-| `archive.json` alone | 7.9 MB |
+| Whole per-region branch | 168.6 MB |
+| `site/data/slaskie` including pipeline-only history | 137.0 MB |
+| Pipeline-only `history.json.gz` removed before deploy | 30.6 MB |
+| **Approximate data actually served for Śląskie** | **106.4 MB** |
+| Caches on the branch | 31.5 MB |
+| `index.json` alone | 19.2 MB |
+| `archive.json` alone | 11.2 MB |
 
 GitHub currently documents a **1 GB published-site limit**, a 10-minute deploy
 timeout and a soft 100 GB/month bandwidth limit: [GitHub Pages limits](https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits).
@@ -168,11 +172,11 @@ before region four, not after the artifact approaches the limit.
    deliberately picks Śląskie and hardcodes its titles/descriptions. The root
    page, stats page, OG card, JSON-LD, canonical links, sitemap, footer and
    `llms.txt` do not represent multiple regions.
-5. **The published coverage percentages cannot gate rollout.** Its schema-v1
-   summary combines an unbanded parent with overlapping child bands; failed
-   bands can disappear from the denominator and lower-bound totals can exceed
-   100%. P0.1 fixes this locally with parent-owned totals, unique-ID unions and
-   bounded percentages; production validation is still pending.
+5. **The old published coverage percentages could not gate rollout.** Schema v1
+   combined an unbanded parent with overlapping child bands; failed bands could
+   disappear from the denominator and lower-bound totals could exceed 100%.
+   P0.1 is now proven live: parent-owned totals, unique-ID unions, bounded
+   percentages and explicit failed leaves all appear in the published output.
 6. **n-online is no longer “the portal that is never truncated.”** Its latest
    flat crawl hit the per-town page cap. P0.1 now separates current and archived
    coverage counts and names failed/capped town partitions, but P0.4 still has
@@ -213,9 +217,8 @@ before region four, not after the artifact approaches the limit.
 
 No second scheduled region is added in this phase.
 
-**Current pick-up point:** P0.2. P0.1 is implemented and fully covered by the
-offline suite, but its first live schema-v2 output should be inspected alongside
-the Otodom re-measurement.
+**Current pick-up point:** publish and validate the local P0.2/P0.3 slice on two
+scheduled runs, then begin P0.4. P0.1 is complete and live-validated.
 
 - [x] **P0.1 Redesign the coverage model and region health result.**
   - Record parent inventory total once per source/type.
@@ -236,9 +239,9 @@ the Otodom re-measurement.
     partitions; bounds `pct` to 0–100; separates n-online current/archive; and
     emits source/type/region health. The dashboard keeps zero-result sources in
     its filter and labels a clean `0`, `blokada`, `brak danych` or partial state.
-  - **Verification:** Python compilation, JavaScript syntax and whitespace
-    checks pass; **189/189** offline tests pass. A production run is deliberately
-    still required before treating the new numbers as a live baseline.
+  - **Verification:** repeated production runs through 2026-08-22 publish
+    bounded percentages and the expected source/type health. The local suite is
+    now **192/192** after the P0.2/P0.3 regression cases.
 
 - [ ] **P0.2 Restore and re-measure Otodom.**
   - Remove the unproven “~320-page budget” assumption from behavior and docs.
@@ -248,6 +251,11 @@ the Otodom re-measurement.
   - **Accept when:** two consecutive scheduled runs keep at least 16k Otodom
     listings or a new evidence-backed floor is explicitly approved; no tested
     strategy can cut the published baseline in half silently.
+  - **Implemented locally 2026-08-23:** removed the 12-page scout; the default
+    is the full 200-page unbanded baseline. Otodom bands require
+    `RENTGEN_OTODOM_BANDS=1` and run only after that baseline. Each run logs
+    elapsed time, application-level successful/attempted pages and first
+    refusal evidence. Acceptance remains open until two scheduled runs land.
 
 - [ ] **P0.3 Settle the OLX runner policy.**
   - On a first-request 403, stop the whole portal for that run without cooldown,
@@ -258,6 +266,11 @@ the Otodom re-measurement.
     dataset.
   - **Accept when:** a blocked CI run uses at most one probe per type (preferably
     one for the portal), finishes in seconds and publishes `blocked: 403`.
+  - **Implemented locally 2026-08-23:** the first root 403 performs no cooldown
+    or follow-up requests and stops the portal. The unrequested type receives a
+    synthetic blocked row that counts as zero searches/pages/issues; generated
+    source-count copy uses positive contributors and names blocked sources.
+    Acceptance remains open until a scheduled runner confirms the one-probe log.
 
 - [ ] **P0.4 Bound n-online and separate archive harvesting.**
   - Identify which towns hit 200 pages instead of hiding them in a two-row
@@ -277,6 +290,10 @@ the Otodom re-measurement.
   - **Accept when:** all correctness-critical candidates are processed, the
     phase is at most 60 minutes on a warm region, and history-only backlog never
     blocks publishing.
+  - **Reassess before coding:** the two latest warm runs completed all photo
+    work in 74/50 seconds with no budget exhaustion because the cache converged.
+    The requested priority split is still architecturally useful for cold
+    regions, but it is no longer the current Śląskie runtime blocker.
 
 - [ ] **P0.6 Add a cheap CI quality gate and run summary.**
   - Run all offline tests before any network work.

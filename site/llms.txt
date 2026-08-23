@@ -1,8 +1,9 @@
 # Rentgen ofert — woj. śląskie
 
 > Aggregated dashboard of every house/flat sale listing in the Śląskie voivodeship,
-> Poland — scraped twice daily from five portals (Otodom, OLX, Gratka, Morizon,
-> nieruchomości-online), de-duplicated by photo hash, with price history and real
+> Poland — attempts up to five configured portals (Otodom, OLX, Gratka, Morizon,
+> nieruchomości-online) and reports blocked sources explicitly; listings are
+> de-duplicated by photo hash, with price history and real
 > notarial transaction prices (RCN). Personal, non-commercial project; listings link
 > back to the source portals. Page content is in Polish.
 

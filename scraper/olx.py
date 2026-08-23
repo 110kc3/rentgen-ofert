@@ -228,6 +228,19 @@ def _walk(base_url, typ, tag, max_pages, delay, session, log, seen, out, extra="
                         http_status=http_status)
 
 
+def _portal_blocked_on_first_request(row) -> bool:
+    """A root-page 403 on a fresh run is a runner/IP block, not a search miss.
+
+    OLX has returned this exact response for both property types on every
+    GitHub-hosted run since 2026-08-11.  Retrying the same URL after a cooldown,
+    then probing the other type, cannot distinguish or recover that state.
+    """
+    return (row.get("stopped") == coverage.ERROR
+            and row.get("http_status") == 403
+            and (row.get("pages") or 0) <= 1
+            and coverage.unique_seen_by(row) == 0)
+
+
 def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
            types=("house", "flat"), towns=None, banded=True):
     """`towns`: {slug: display} used ONLY to subdivide a search that OLX refused
@@ -241,19 +254,34 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
     # here: OLX has ~120 town searches, so a per-search cooldown with no budget
     # would be an hour of sleeping the run cannot afford.
     pacer = bands.Pacer("olx", delay=delay, log=log)
-    for typ in PATHS:
-        if typ not in types:
-            continue
+    requested_types = [typ for typ in PATHS if typ in types]
+    for type_index, typ in enumerate(requested_types):
         seen = set()
         pacer.pause()
-        # Run 31422141701 lost this portal entirely to a page-1 refusal on both
-        # types: an error row is never subdivided, so nothing else ran. One
-        # bounded retry is the difference between "OLX contributed 0" and a
-        # transient block that cost 28 seconds.
-        row = pacer.attempt(typ, lambda: _walk(SEARCH[typ], typ, REGION, max_pages,
-                                               delay, session, log, seen, out))
+        # Keep the bounded retry for transient failures, but a first-request
+        # 403 is the portal-wide runner block production has repeated for days.
+        # It is terminal evidence: no cooldown, no second type, towns or bands.
+        row = pacer.attempt(
+            typ,
+            lambda: _walk(SEARCH[typ], typ, REGION, max_pages,
+                          delay, session, log, seen, out),
+            retry_if=lambda r: not _portal_blocked_on_first_request(r))
         row["role"] = coverage.PARENT
         cov.append(row)
+        if _portal_blocked_on_first_request(row):
+            remaining = requested_types[type_index + 1:]
+            skipped = f"; skipping {', '.join(remaining)}" if remaining else ""
+            log(f"  olx portal probe returned HTTP 403 on {typ} page 1 — "
+                f"stopping the portal for this run{skipped}")
+            for skipped_typ in remaining:
+                reason = (f"OLX {skipped_typ} skipped after the {typ} portal "
+                          f"probe returned HTTP 403")
+                cov.append(coverage.row(
+                    "olx", skipped_typ, REGION, 0, 0, coverage.ERROR,
+                    role=coverage.PARENT, error=reason, http_status=403,
+                    served_keys=set(), kept_keys=set(), skipped=True,
+                    skip_reason=reason))
+            break
         if row["stopped"] != coverage.PORTAL_CAP:
             continue
         # Two independent axes, and OLX needs both: towns cut the region into

@@ -391,11 +391,11 @@ def test_a_healthy_subdivision_never_waits_out_an_error():
     assert set(slept) == {0.5 * bands.SEARCH_PAUSE}
 
 
-# --- otodom's scout pass -----------------------------------------------------
-# Otodom serves ~320 pages per run and then 405s. The unbanded search used to
-# spend 200 of them on ads the bands were about to be sent for, and the bands
-# died on the remainder — measured across four runs, otodom's kept count came
-# out at 16 6xx whether they ran or not (see TODO.md, 2026-08-12).
+# --- otodom's restored baseline ---------------------------------------------
+# The 12-page scout was disproved by production: bands began returning 405
+# after 5–6 minutes and the portal's kept count fell from a stable ~16.6k to
+# ~8.5k.  The default must therefore be the full unbanded walk.  Bands remain
+# available only as an explicit, additive experiment after that baseline.
 
 class OtodomSession:
     """Otodom's shape: `__NEXT_DATA__` with `totalItems` / `totalPages`.
@@ -458,39 +458,61 @@ class _Resp2:
         pass
 
 
-def test_the_unbanded_otodom_search_stands_aside_for_the_bands():
+def test_otodom_defaults_to_the_full_unbanded_baseline():
     sess = OtodomSession()
-    rows = otodom.scrape(max_pages=200, delay=0, session=sess,
-                         log=lambda *a: None, types=("flat",))
+    out = otodom.scrape(max_pages=200, delay=0, session=sess,
+                        log=lambda *a: None, types=("flat",))
     unbanded = sess.unbanded_pages()
-    assert unbanded == otodom.SCOUT_PAGES, (
-        f"the scout pass walked {unbanded} pages, not {otodom.SCOUT_PAGES}")
-    # ...and the bands, not the scout, are what actually enumerate the portal
-    banded = len(sess.urls) - unbanded
-    assert banded > unbanded * 10
-    assert len(rows) > 18_000, f"only {len(rows)} of 18 334 ads collected"
+    assert unbanded == 200
+    assert len(sess.urls) == unbanded, "price bands must be opt-in for Otodom"
+    assert len(out) == 200 * sess.per_page
+    row = otodom.scrape.last_coverage[0]
+    assert row["stopped"] == coverage.OUR_CAP and row["pages"] == 200
+    assert len(coverage.warnings([row])) == 1
 
 
-def test_a_scout_capped_search_is_not_advice_worthy():
-    """It stopped on our cap on purpose, with bands queued behind it. Telling
-    the reader to `raise RENTGEN_MAX_PAGES or subdivide` is the one thing the
-    log must not do — that is precisely what it just did."""
-    scout = coverage.row("otodom", "flat", None, 12, 800, coverage.OUR_CAP,
-                         portal_pages=255, portal_total=18_334, scout=True)
-    assert coverage.warnings([scout]) == []
-    # the same row without the marker is still a warning — nothing else changed
-    plain = dict(scout)
-    del plain["scout"]
-    assert len(coverage.warnings([plain])) == 1
-    # it remains a diagnostic row, but is not an actionable terminal defect
-    assert coverage.summarise([scout])["by_source"]["otodom"]["truncated"] == 0
+def test_explicit_otodom_bands_are_additive_after_the_full_baseline():
+    sess = OtodomSession()
+    out = otodom.scrape(max_pages=200, delay=0, session=sess,
+                        log=lambda *a: None, types=("flat",), banded=True)
+    assert sess.unbanded_pages() == 200
+    assert len(sess.urls) > 200, "the explicit experiment did not run bands"
+    assert len(out) > 18_000, f"only {len(out)} of 18 334 ads collected"
+    parent = otodom.scrape.last_coverage[0]
+    assert parent["partitioned"] is True
 
 
-def test_a_search_within_the_window_is_never_scout_capped():
-    """Houses do not overflow, so no bands follow — capping that search at 12
-    pages would simply lose the rest of it."""
+def test_an_otodom_search_within_the_window_walks_to_its_real_end():
+    """Houses do not overflow; even an explicit band experiment must not cut
+    their unbanded baseline short."""
     sess = OtodomSession(stock=3_000)          # under otodom's 7 200 window
     otodom.scrape(max_pages=200, delay=0, session=sess, log=lambda *a: None,
-                  types=("flat",))
+                  types=("flat",), banded=True)
     assert sess.unbanded_pages() == 42    # 3 000 / 72, walked to the end
     assert all("priceMin" not in u for u in sess.urls), "should not subdivide"
+
+
+def test_otodom_logs_request_evidence_for_each_run():
+    said = []
+    sess = OtodomSession(stock=144)
+    otodom.scrape(max_pages=10, delay=0, session=sess, log=said.append,
+                  types=("flat",))
+    summary = [line for line in said if "otodom requests:" in line]
+    assert len(summary) == 1
+    assert "2/2 successful" in summary[0]
+    assert "first refusal: none" in summary[0]
+
+
+def test_otodom_logs_where_the_first_refusal_happened():
+    said = []
+    sess = _RefusingSession(OtodomSession(stock=144), refusals=1)
+    otodom.scrape(max_pages=10, delay=0, session=sess, log=said.append,
+                  types=("flat",))
+    stats = otodom.scrape.last_request_stats
+    assert stats["attempted"] == 3 and stats["successful"] == 2
+    first = stats["first_refusal"]
+    assert (first["http_status"], first["type"], first["tag"], first["page"],
+            first["successful_before"]) == (405, "flat", otodom.REGION, 1, 0)
+    assert first["elapsed_s"] >= 0
+    summary = [line for line in said if "otodom requests:" in line][0]
+    assert "first refusal: HTTP 405 at flat/slaskie page 1" in summary

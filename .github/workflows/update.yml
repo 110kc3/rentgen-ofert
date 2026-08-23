@@ -44,8 +44,8 @@ permissions:
 concurrency:
   # One scrape at a time, ACROSS regions — deliberately not per-region. The
   # portals see one pool of runner IPs whichever voivodeship we are asking
-  # about, and they are already refusing us: otodom 405s after ~320 pages and
-  # OLX has been answering 403 outright since 2026-08-11. Serialising is the
+  # about, and they are already refusing us: Otodom repeatedly rejects filtered
+  # bands and OLX has answered 403 outright since 2026-08-11. Serialising is the
   # cheapest thing keeping that from getting worse. Parallelism, if it ever
   # comes, belongs in a matrix with `max-parallel` set explicitly.
   group: rentgen-scrape

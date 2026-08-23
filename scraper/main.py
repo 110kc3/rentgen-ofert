@@ -12,6 +12,9 @@ Environment overrides (optional):
     RENTGEN_TYPES       which to scrape, e.g. "house" (default "house,flat")
     RENTGEN_BANDS       "0" to disable price-band subdivision (see scraper/bands.py);
                         the escape hatch if a portal starts rejecting the filters
+    RENTGEN_OTODOM_BANDS
+                        "1" to opt into Otodom bands *after* its full unbanded
+                        baseline (default 0; repeated 405s made them regress)
     RENTGEN_PHOTOS      "0" to skip photo hashing (disables dedupe-by-photo and
                         relist/price history)
     RENTGEN_DELIST_BUDGET_MIN
@@ -86,6 +89,12 @@ def run() -> int:
     http = net.session()
     cov_rows = []
     banded = os.environ.get("RENTGEN_BANDS", "1") != "0"
+    # Otodom is deliberately different from the other banded portals.  Its
+    # 12-page scout + bands halved production coverage for ten days straight;
+    # keep the restored full parent crawl unless an operator explicitly runs
+    # an additive experiment. RENTGEN_BANDS=0 remains the global kill switch.
+    otodom_banded = (banded
+                      and os.environ.get("RENTGEN_OTODOM_BANDS", "0") == "1")
     for name, mod in SOURCES:
         # Do not inherit a previous in-process invocation's diagnostics when a
         # scraper raises before publishing its new rows.
@@ -93,7 +102,7 @@ def run() -> int:
         kwargs = dict(max_pages=max_pages, delay=delay, types=types, session=http)
         if mod is not nieruchomosci_online:
             # n-online is subdivided by town already and has no price filter
-            kwargs["banded"] = banded
+            kwargs["banded"] = otodom_banded if mod is otodom else banded
         if mod is olx:
             # OLX caps its own pagination; a capped search is re-run per town.
             # Towns come from the same resolver n-online uses, but OLX runs

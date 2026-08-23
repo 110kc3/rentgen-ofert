@@ -36,23 +36,52 @@ HEADERS = {
 # count on the biggest portal (515 pages -> 258 for śląskie flats, verified).
 PAGE_SIZE = 72
 
-# How far the UNBANDED search walks when price bands are going to cover the
-# same ground properly. Otodom serves roughly 320 pages per run and then
-# refuses with `405 Not Allowed` — measured four times (runs 31408840562,
-# 31422141701, 31468177600, 31502042693), always inside the `300k-400k` band,
-# always between its pages 5 and 11. A 200-page unbanded walk spends two thirds
-# of that budget re-fetching ads the bands are then sent to fetch again, and
-# the bands die on what is left: seven of the nine never got past page 1, and
-# otodom's kept count came out at 16 6xx in every run whether they ran or not.
-# The band yields say it outright — `200k-300k page 1/35: +4`, `page 2: +0`,
-# `page 3: +2` — the unbanded pass had already taken them.
-#
-# So the unbanded pass becomes a SCOUT: deep enough to state the total, seed
-# the dedupe and pick up the priceless ads that no price filter can return,
-# then it stands aside. The bands partition the whole price line, which is what
-# they were built for, and they get the page budget to do it with.
-SCOUT_PAGES = 12
+# Production disproved the old "~320 successful pages per run" theory.  With a
+# 12-page unbanded scout, Otodom began returning 405 after only 5–6 minutes and
+# seven upper flat bands failed on page one; the stable ~16.6k source baseline
+# fell to ~8.5k for every run from 2026-08-12 through 2026-08-22.  The default
+# is therefore the full unbanded walk.  Price bands are an explicit experiment
+# only, and even then run *after* that full baseline so they can only add data.
 _NEXT = re.compile(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', re.S)
+_REFUSAL_STATUSES = (403, 405, 429)
+
+
+def _new_request_stats():
+    return {"started": time.monotonic(), "attempted": 0, "successful": 0,
+            "first_refusal": None}
+
+
+def _note_refusal(stats, typ, tag, page, status):
+    if stats is None or status not in _REFUSAL_STATUSES \
+            or stats["first_refusal"] is not None:
+        return
+    stats["first_refusal"] = {
+        "http_status": status,
+        "type": typ,
+        "tag": tag,
+        "page": page,
+        "successful_before": stats["successful"],
+        "elapsed_s": round(time.monotonic() - stats["started"], 1),
+    }
+
+
+def _finish_request_stats(stats, log):
+    elapsed = round(time.monotonic() - stats["started"], 1)
+    public = {"attempted": stats["attempted"],
+              "successful": stats["successful"],
+              "elapsed_s": elapsed,
+              "first_refusal": stats["first_refusal"]}
+    first = public["first_refusal"]
+    if first:
+        refusal = (f"first refusal: HTTP {first['http_status']} at "
+                   f"{first['type']}/{first['tag']} page {first['page']} after "
+                   f"{first['successful_before']} successful request(s), "
+                   f"{first['elapsed_s']:.1f}s")
+    else:
+        refusal = "first refusal: none"
+    log(f"  otodom requests: {public['successful']}/{public['attempted']} "
+        f"successful in {elapsed:.1f}s; {refusal}")
+    return public
 
 
 def extract_search_ads(html: str) -> dict:
@@ -103,14 +132,8 @@ def parse_items(items, typ: str):
 
 
 def _walk(path, typ, tag, max_pages, delay, session, log, seen, out, extra="",
-          scout_pages=None):
-    """Page through one search (optionally price-banded). Returns its cov row.
-
-    ``scout_pages`` caps an unbanded search that bands are about to subdivide
-    (see SCOUT_PAGES). It only bites once the portal has stated a total past
-    its serving window — the same question `bands.overflows` asks, asked one
-    page in — so a search that needs no bands still walks to ``max_pages``.
-    """
+          request_stats=None):
+    """Page through one search (optionally price-banded). Returns its cov row."""
     page = 1
     got = 0
     served = 0        # ads Otodom handed over, before the INVESTMENT filter
@@ -119,20 +142,24 @@ def _walk(path, typ, tag, max_pages, delay, session, log, seen, out, extra="",
     total_pages = None
     total_ads = None
     stopped = coverage.OK
-    scouted = False
     error = None
     http_status = None
     while page <= max_pages:
         url = f"{BASE}{path}?page={page}&limit={PAGE_SIZE}" + (f"&{extra}" if extra else "")
+        if request_stats is not None:
+            request_stats["attempted"] += 1
         try:
             r = session.get(url, headers=HEADERS, timeout=30)
             r.raise_for_status()
             sa = extract_search_ads(r.text)
         except Exception as exc:  # keep what we have, stop this category
-            log(f"  otodom {typ}/{tag} page {page} error: {exc}")
             stopped = coverage.ERROR
             error, http_status = coverage.error_details(exc)
+            _note_refusal(request_stats, typ, tag, page, http_status)
+            log(f"  otodom {typ}/{tag} page {page} error: {exc}")
             break
+        if request_stats is not None:
+            request_stats["successful"] += 1
         items = sa.get("items") or []
         served += len(items)
         served_keys.update(coverage.listing_key(
@@ -157,13 +184,6 @@ def _walk(path, typ, tag, max_pages, delay, session, log, seen, out, extra="",
         # nothing but INVESTMENT bundles filters to [] while more pages exist
         if not items:
             break
-        if (scout_pages and page >= scout_pages and total_ads
-                and total_ads > bands.WINDOW["otodom"]):
-            # Past the window, so `overflows` will subdivide this search no
-            # matter how far it walks. Stop and let it: every further page here
-            # is a page the bands will not get.
-            stopped, scouted = coverage.OUR_CAP, True
-            break
         if page >= min(total_pages, max_pages):
             # Otodom states its own totalPages, so we know exactly which
             # limit bit: ours (more pages exist) or the portal's end.
@@ -174,49 +194,53 @@ def _walk(path, typ, tag, max_pages, delay, session, log, seen, out, extra="",
         time.sleep(delay)
     return coverage.row("otodom", typ, tag, page, got, stopped,
                         portal_pages=total_pages, portal_total=total_ads,
-                        served=served, scout=scouted,
+                        served=served,
                         served_keys=served_keys, kept_keys=kept_keys,
                         error=error, http_status=http_status)
 
 
 def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
-           types=("house", "flat"), banded=True):
+           types=("house", "flat"), banded=False):
     session = session or requests.Session()
     out = []
     cov = []
+    request_stats = _new_request_stats()
     # One pacer for the whole portal: the unbanded searches and every band
     # share its retry budget, so a refusing Otodom costs minutes, not an hour.
     pacer = bands.Pacer("otodom", delay=delay, log=log)
-    for typ, path in SEARCH.items():
-        if typ not in types:
-            continue
-        seen = set()
-        pacer.pause()
-        # A refused FIRST search loses the whole type — `overflows` will not
-        # subdivide an error row (rightly: a filtered search fails the same
-        # way), so there are no bands to fall back on. It gets the same one
-        # bounded retry a band does.
-        row = pacer.attempt(typ, lambda: _walk(path, typ, REGION, max_pages,
-                                               delay, session, log, seen, out,
-                                               scout_pages=SCOUT_PAGES if banded
-                                               else None))
-        row["role"] = coverage.PARENT
-        cov.append(row)
-        if not banded or not bands.overflows(row, "otodom"):
-            continue
-        # 18 505 flats behind a window worth ~7 200: the region search can only
-        # ever show a third of them, so ask by price instead. Additive — the
-        # unbanded results above are kept.
-        log(f"  otodom {typ}: {row.get('portal_total')} ads stated, past the "
-            f"reachable window — subdividing by price")
-        rows, seeds = bands.subdivide(
-            "otodom",
-            lambda lo, hi, tag: _walk(path, typ, tag, max_pages, delay, session,
-                                      log, seen, out, bands.qs("otodom", lo, hi)),
-            log=log, pacer=pacer)
-        cov.extend(rows)
-        totals_ok = bands.check_totals(
-            "otodom", typ, row.get("portal_total"), seeds, log=log)
-        bands.record_partition(row, seeds, totals_ok)
+    try:
+        for typ, path in SEARCH.items():
+            if typ not in types:
+                continue
+            seen = set()
+            pacer.pause()
+            # Retry only an outright root refusal. Restarting a partially
+            # successful 200-page baseline from page one wastes the very
+            # request budget this mode is meant to protect.
+            row = pacer.attempt(
+                typ,
+                lambda: _walk(path, typ, REGION, max_pages, delay, session,
+                              log, seen, out, request_stats=request_stats),
+                retry_if=lambda r: coverage.unique_seen_by(r) == 0)
+            row["role"] = coverage.PARENT
+            cov.append(row)
+            if not banded or not bands.overflows(row, "otodom"):
+                continue
+            # Experimental and strictly additive: the full unbanded baseline
+            # above is already held before a single filtered request is made.
+            log(f"  otodom {typ}: {row.get('portal_total')} ads stated after "
+                f"the full baseline — experimentally subdividing by price")
+            rows, seeds = bands.subdivide(
+                "otodom",
+                lambda lo, hi, tag: _walk(
+                    path, typ, tag, max_pages, delay, session, log, seen, out,
+                    bands.qs("otodom", lo, hi), request_stats=request_stats),
+                log=log, pacer=pacer)
+            cov.extend(rows)
+            totals_ok = bands.check_totals(
+                "otodom", typ, row.get("portal_total"), seeds, log=log)
+            bands.record_partition(row, seeds, totals_ok)
+    finally:
+        scrape.last_request_stats = _finish_request_stats(request_stats, log)
     scrape.last_coverage = cov
     return out

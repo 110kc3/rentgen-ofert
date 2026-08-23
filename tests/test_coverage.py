@@ -390,6 +390,43 @@ def test_olx_complete_search_reports_its_total_without_warning():
     assert coverage.warnings([row]) == []
 
 
+def test_olx_first_403_stops_the_whole_portal_without_a_cooldown():
+    """GitHub-hosted runners have returned 403 on OLX page one for every
+    scheduled run since 2026-08-11.  One reachability probe is useful; retrying
+    it for both types only repeats a portal-wide block."""
+    class BlockedSession:
+        def __init__(self):
+            self.urls = []
+
+        def get(self, url, **kw):
+            self.urls.append(url)
+            raise IOError("403 Client Error: Forbidden")
+
+    sess = BlockedSession()
+    said = []
+    out = olx.scrape(
+        max_pages=200, delay=0, session=sess, log=said.append,
+        types=("house", "flat"), towns={"gliwice": "Gliwice"}, banded=True)
+
+    assert out == []
+    assert len(sess.urls) == 1, "a portal-wide 403 must cost one real request"
+    rows = olx.scrape.last_coverage
+    assert len(rows) == 2                       # both requested types explained
+    assert rows[0]["http_status"] == 403 and not rows[0].get("skipped")
+    assert rows[1]["http_status"] == 403 and rows[1]["skipped"] is True
+    assert rows[1]["pages"] == 0
+    assert len(coverage.warnings(rows)) == 1    # no duplicate synthetic warning
+
+    source = coverage.summarise(
+        rows, expected_types=("house", "flat"))["by_source"]["olx"]
+    assert source["status"] == coverage.BLOCKED
+    assert source["searches"] == source["pages"] == source["issues"] == 1
+    assert source["http_statuses"] == [403]
+    assert all(t["status"] == coverage.BLOCKED
+               for t in source["types"].values())
+    assert any("stopping the portal" in line for line in said)
+
+
 # --- served vs kept: our own filtering is not missed coverage ----------------
 
 def test_pct_measures_what_the_portal_served_not_what_we_kept():

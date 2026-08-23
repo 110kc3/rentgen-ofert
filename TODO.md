@@ -1,9 +1,70 @@
 # TODO — rentgen-ofert
 
 > Keep this file and `README.md` updated after each change.
-> Last updated: 2026-08-13
+> Last updated: 2026-08-23
 
-## Next (2026-08-13) — stop before region two and repair the template
+## Current (2026-08-23) — stop repeating requests a service has already refused
+
+The schema-v2 coverage slice is no longer merely local: repeated scheduled
+runs have published it successfully. The latest completed run,
+`32591212134` (2026-08-22 18:36–21:18 UTC), published **25,412** current
+properties from 44,052 raw rows in 162 minutes. Its source health is truthful:
+Gratka `healthy`; Morizon, Otodom and n-online `partial`; OLX `blocked` with
+HTTP 403. The 2026-08-23 morning run was cancelled after 60 minutes while
+walking Morizon and published nothing; it is not coverage evidence.
+
+The request failures are stable enough to act on, not probe again blindly:
+
+- the eight most recent completed logs inspected (2026-08-19 through
+  2026-08-22) all show Otodom refusing the same seven upper flat price bands
+  with HTTP 405; kept counts remained **8,427–8,667**, roughly half the old
+  ~16.6k floor;
+- each run then asked OLX four versions of the same already-answered question:
+  house page one, its cooldown retry, flat page one, its cooldown retry. Every
+  one returned HTTP 403, and OLX contributed zero;
+- schema v2 correctly kept the missing Otodom partitions in the denominator
+  (latest coverage **37.7%**) and reported OLX as blocked, so P0.1's live
+  acceptance evidence is now present.
+
+### Implemented locally in this slice (P0.2 + P0.3 behavior)
+
+- **Otodom's safe floor is restored first.** The 12-page scout and the
+  unproven “~320-page budget” behavior are gone. The default walks the full
+  unbanded search to `RENTGEN_MAX_PAGES=200`, matching the old ~16.6k strategy.
+  Price bands are disabled for this portal unless
+  `RENTGEN_OTODOM_BANDS=1`; when explicitly enabled they run only after the
+  full baseline, so an experimental refusal can add nothing but cannot remove
+  half the source again.
+- **Otodom now leaves evidence, not another theory.** Every run logs elapsed
+  time, successful/application-level page requests and the first refusal's
+  HTTP status, type/tag/page, elapsed time and number of prior successes. A
+  partially successful root crawl is not restarted from page one.
+- **OLX's first 403 ends the whole portal.** It performs one reachability
+  request, no 28-second cooldown, no second property type, towns or bands.
+  A synthetic skipped row carries the same 403 to the unrequested type for
+  health accounting without pretending it was another search/page/issue;
+  source health remains `blocked`, with one request and one warning.
+- **Source-count claims are no longer fixed at five.** Generated summaries and
+  `llms.txt` count only positive contributors and name blocked sources; static
+  hero/OG copy says the configured portals without claiming they all served
+  the current dataset.
+- Verification: **192/192** offline tests, Python compilation, JavaScript
+  syntax checks and `git diff --check` pass. The behavior has not been pushed
+  or exercised by a scheduled runner yet.
+
+### Next
+
+1. Publish this slice and inspect two consecutive scheduled runs. Accept P0.2
+   only if Otodom returns to at least 16k kept listings (or a new floor is
+   explicitly approved); verify its request-summary line on both runs.
+2. In the same runs, verify OLX makes one page-one request, finishes in seconds
+   and publishes `blocked: 403` for both types without a duplicate warning.
+3. Then resume P0.4: name and bound n-online's capped towns, and decouple its
+   archive harvest. The latest completed phase still took ~77 minutes and
+   capped Katowice flats.
+4. Add the offline-test/schema gate before any scrape requests (P0.6).
+
+## Superseded (2026-08-13) — stop before region two and repair the template
 
 **Current source of truth:** [`POLAND_ROLLOUT.md`](POLAND_ROLLOUT.md). That
 document contains the evidence, decisions, acceptance gates and full P0–P5

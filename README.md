@@ -7,8 +7,9 @@ and presents it on one searchable page. No application server: a GitHub Actions
 job scrapes, writes static JSON, and GitHub Pages displays it.
 
 Portal blocking and serving caps mean “all listings” is a target, not a current
-guarantee. The live 2026-08-12 dataset has four contributing sources because
-OLX returned 403, and Otodom coverage regressed in the latest experiment.
+guarantee. The published 2026-08-22 dataset has 25,412 current properties from
+four contributing sources: OLX is blocked with HTTP 403, and Otodom remains
+partial after the failed price-band experiment.
 
 ```
 GitHub Actions (cron) → python -m scraper.main → site/data/<region>/*.json
@@ -20,24 +21,25 @@ never in main's git history — main stays a few MB of code while a region's
 branch is force-pushed fresh each run (the price history lives *inside*
 `history.json.gz`, so old git versions of it carry no information). One branch
 per region because a shared one is what a second region would break: Śląskie
-alone is currently ~159 MB including caches and pipeline-only history, and
+alone is currently ~169 MB including caches and pipeline-only history, and
 every job would fetch, and force-push over, all of everyone's. A deploy overlays
 every `data-*` branch (plus the pre-split shared `data` branch, still read so
 the split needed no flag day).
 
 ## Poland rollout status
 
-As of 2026-08-13, **1 of 16 voivodeships is published**. Region-scoped output,
+As of 2026-08-23, **1 of 16 voivodeships is published**. Region-scoped output,
 all 16 RCN/TERYT mappings and per-region data branches are implemented; the
 `data-slaskie` branch has been created, refreshed and deployed successfully.
 
-The next step is not a 16-region CI matrix. The latest two warm Śląskie jobs
-took 250 and 263 minutes, Otodom fell from a stable ~16.6k listings to ~8.5k,
-OLX contributed zero, and the served region payload is already ~102 MB. The
-P0.1 coverage/health redesign is implemented locally and passes all 189 offline
-tests, but has not yet been published; restoring and re-measuring Otodom is the
-current P0.2 slice. The audited status, evidence, decisions, acceptance gates
-and P0–P5 task order are
+The next step is not a 16-region CI matrix. The latest two completed warm
+Śląskie jobs improved to 167 and 162 minutes, and schema-v2 coverage/health is
+now live-validated, but Otodom still produced only 8.6k / 8.4k listings and OLX
+still contributed zero. The local P0.2/P0.3 slice restores Otodom's full
+unbanded baseline, makes its bands opt-in and strictly additive, and turns an
+OLX page-one 403 into one portal-wide probe. All 192 offline tests pass; two
+scheduled runs must still validate the recovery. The audited status, evidence,
+decisions, acceptance gates and P0–P5 task order are
 in [`POLAND_ROLLOUT.md`](POLAND_ROLLOUT.md). `TODO.md` remains the detailed
 development diary.
 
@@ -113,14 +115,15 @@ development diary.
   and retries, producing `served_unique`, `kept_unique`, `current` and
   `archived`; the internal ID sets are stripped before `meta.json` is written.
   Failed/capped/missing partitions remain explicit, `pct` is bounded to 0–100,
-  and losing a band cannot improve it. Intentional scout/parent/intermediate
+  and losing a band cannot improve it. Intentional partitioned-parent/intermediate
   rows no longer emit “raise the cap” warnings—the terminal leaf does.
   `coverage.status`, each source, and each source/type report `healthy`,
   `partial`, `blocked` or `unknown`, independently of process success. The
   dashboard therefore keeps a source that returned no listings visible and
-  distinguishes a clean `0` from `blokada` or `brak danych`. The currently
-  published 2026-08-12 dataset predates schema v2; its first live validation is
-  still pending. The served/kept split remains important: each scraper filters
+  distinguishes a clean `0` from `blokada` or `brak danych`. Schema v2 has run
+  successfully in production through 2026-08-22; the latest output reports
+  Gratka healthy, Morizon/Otodom/n-online partial and OLX blocked. The
+  served/kept split remains important: each scraper filters
   while parsing (otodom drops INVESTMENT
   bundles, OLX drops ads syndicated from Otodom), and comparing kept-against-
   stated declared all ~60 OLX town searches truncated — 126 warnings in one run,
@@ -149,13 +152,14 @@ development diary.
   which is why an *empty* search must never look like a refusal: a village with
   no flats states no total and serves no ads, and reading that as overflow made
   every empty band bisect into two more (see the 2026-08-10 entry in `TODO.md`).
-  A portal can also simply refuse the bands. Otodom currently retries a 405
-  once after a bounded cooldown, and its unbanded flat search runs as a
-  12-page **scout** so the bands receive most requests. The latest two
-  production runs disproved the original “~320-page budget” explanation: the
-  first 405 arrived after only ~5–6 minutes and Otodom's kept count fell from
-  ~16.6k to ~8.5k. Restoring the coverage floor is a rollout blocker; see P0.2
-  in `POLAND_ROLLOUT.md`.
+  A portal can also simply refuse the bands. Otodom did so on the same seven
+  upper flat bands throughout the completed runs inspected through 2026-08-22,
+  cutting its stable ~16.6k baseline to ~8.5k. Otodom therefore now runs the
+  full unbanded crawl by default. `RENTGEN_OTODOM_BANDS=1` enables a separate
+  experiment only *after* that baseline is already collected, so a failed band
+  cannot halve the published source again. Each Otodom run logs elapsed time,
+  successful page requests and the first refusal. Two scheduled runs still
+  have to validate the restored floor; see P0.2 in `POLAND_ROLLOUT.md`.
 - **Empty views explain themselves.** When a filter combination returns
   nothing, the dashboard re-runs the filter with each dimension relaxed and
   offers the ones that would bring results back ("Miejscowość: Gliwice — 43"),
@@ -301,7 +305,8 @@ RENTGEN_MAX_PAGES=3 RENTGEN_DELAY=0.3 python -m scraper.main
 | `RENTGEN_PHOTOS` | 1 | photo-match ambiguous listings; `0` skips the detail fetches |
 | `RENTGEN_PHOTO_BUDGET_MIN` | 90 | max minutes of photo fetching per run (`0` = unlimited); skipped listings retry next run |
 | `RENTGEN_TYPES` | house,flat | which to scrape; e.g. `house` for houses only |
-| `RENTGEN_BANDS` | 1 | price-band subdivision; `0` disables it (see *Price bands*) |
+| `RENTGEN_BANDS` | 1 | price-band subdivision for supported portals; `0` disables all of it (see *Price bands*) |
+| `RENTGEN_OTODOM_BANDS` | 0 | `1` explicitly tests Otodom bands after its full unbanded baseline; never enabled by default |
 | `RENTGEN_VERIFY_MAX` | 300 | stale listings URL-verified per run (`0` disables) |
 | `RENTGEN_DELIST_BUDGET_MIN` | 10 | max minutes the delist sweep may spend (`0` = unlimited); unasked records retry next run |
 | `RENTGEN_RCN` | 1 | `0` skips RCN; `force` re-pulls the transaction snapshot now |
@@ -312,10 +317,12 @@ RENTGEN_MAX_PAGES=3 RENTGEN_DELAY=0.3 python -m scraper.main
 **Rate limiting (HTTP 429/405):** the scraper backs off and retries automatically —
 Otodom phrases its refusals as `405 Not Allowed`, so that counts as one too.
 `RENTGEN_DELAY` paces more than the pages inside a search: searches are spaced
-`4 x` that delay apart, and a search the portal refuses outright — a price band, a
-town, or the portal's own first search — is walked once more after `40 x` it, at
-most 10 times per portal per run (`bands.SEARCH_PAUSE` / `bands.ERROR_COOLDOWN` /
-`bands.MAX_COOLDOWNS`, all on `bands.Pacer`). If a portal
+`4 x` that delay apart, and a transiently refused search is walked once more
+after `40 x` it, at most 10 times per portal per run (`bands.SEARCH_PAUSE` /
+`bands.ERROR_COOLDOWN` / `bands.MAX_COOLDOWNS`, all on `bands.Pacer`). A 403 on
+OLX's first root request is different: it stops that portal immediately, with
+no cooldown, second type, towns or bands, while coverage remains explicitly
+`blocked: 403`. If a portal
 still rate-limits you (nieruchomości-online is strict, especially on repeat runs),
 slow down with `RENTGEN_DELAY=2`, scrape less with `RENTGEN_TYPES=house`, skip the
 heavy photo step with `RENTGEN_PHOTOS=0`, and avoid back-to-back runs.

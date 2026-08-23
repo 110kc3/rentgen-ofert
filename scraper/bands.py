@@ -13,10 +13,13 @@ ever return:
     olx        5 503 visible            serves 1 000 (`totalElements`), and
                                         states the cap as a smaller total
 
-The fix has to be something all four accept, because their location taxonomies
-never will: otodom nests region/powiat/gmina/city while the others take one
-flat slug. Price is the one axis every portal filters on, and each one's
-parameter was verified by probe (see PARAMS below).
+The helper supports all four because their location taxonomies never agree:
+otodom nests region/powiat/gmina/city while the others take one flat slug.
+Price is the one axis every portal filters on, and each one's parameter was
+verified by probe (see PARAMS below). Otodom is no longer banded by default:
+its repeated 405s made the strategy a production regression, so that portal
+uses a full unbanded baseline unless an operator explicitly enables an
+additive experiment.
 
 **Contract.** The unbanded search runs FIRST and is kept — priceless ads, and
 anything a portal's own price filter quietly drops, are only ever visible
@@ -110,15 +113,19 @@ class Pacer:
         """The gap between two searches — wider than the gap between pages."""
         self.sleep(self.delay * SEARCH_PAUSE)
 
-    def attempt(self, tag, walk):
+    def attempt(self, tag, walk, retry_if=None):
         """Walk one search; if the portal refused it outright, ask once more.
 
         Exactly ONE row comes back, so a recovered search is never counted
         twice by `check_totals`, and it is the better of the two attempts —
-        see `best_of`. Never a loop, never unbudgeted.
+        see `best_of`. Never a loop, never unbudgeted. ``retry_if`` lets a
+        caller classify a terminal response such as OLX's portal-wide 403:
+        that is evidence, not a transient search refusal worth cooling down.
         """
         row = walk()
         if row.get("stopped") != coverage.ERROR:
+            return row
+        if retry_if is not None and not retry_if(row):
             return row
         if self.left <= 0:
             self.log(f"  {self.source} {tag} was refused — no retry budget left "

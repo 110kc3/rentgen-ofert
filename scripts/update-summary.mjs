@@ -74,7 +74,18 @@ function inject(file, blocks) {
 
 // ---------- index.html ----------
 
-const sources = Object.keys(meta.by_source || {}).length || 5;
+const SOURCE_LABEL = {
+  otodom: 'Otodom', olx: 'OLX', gratka: 'Gratka', morizon: 'Morizon',
+  'nieruchomosci-online': 'nieruchomości-online',
+};
+const sourceKeys = Object.entries(meta.by_source || {})
+  .filter(([, count]) => Number(count) > 0)
+  .map(([source]) => source);
+const sources = sourceKeys.length;
+const sourceNames = sourceKeys.map((source) => SOURCE_LABEL[source] || source);
+const blockedNames = Object.entries(meta.coverage?.by_source || {})
+  .filter(([, state]) => state?.status === 'blocked')
+  .map(([source]) => SOURCE_LABEL[source] || source);
 const indexSummary =
 `    <p class="sub" id="data-summary">W bazie: <b>${nf(meta.count)}</b> ofert
     (${nf(meta.by_type?.flat)} mieszkań, ${nf(meta.by_type?.house)} domów) z ${sources} portali,
@@ -151,8 +162,8 @@ try {
 writeFileSync(join(SITE, 'llms.txt'), `# Rentgen ofert — woj. śląskie
 
 > Aggregated dashboard of every house/flat sale listing in the Śląskie voivodeship,
-> Poland — scraped twice daily from five portals (Otodom, OLX, Gratka, Morizon,
-> nieruchomości-online), de-duplicated by photo hash, with price history and real
+> Poland — currently contributed by ${sources} portals (${sourceNames.join(', ')}).
+> ${blockedNames.length ? `${blockedNames.join(', ')} ${blockedNames.length === 1 ? 'is' : 'are'} currently blocked and still reported in source health. ` : ''}Listings are de-duplicated by photo hash, with price history and real
 > notarial transaction prices (RCN). Personal, non-commercial project; listings link
 > back to the source portals. Page content is in Polish.
 

@@ -8,13 +8,13 @@ hours inside one request and the CI job hit its 6-hour kill switch. A capped
 wait keeps every request's worst case bounded; if the portal is still angry
 after the retries, the caller's error handling drops that page and moves on.
 
-405 is in the list because that is the shape Otodom's refusal takes. In runs
-31408840562 and 31422141701 the `300k-400k` price band died at page 5 with
-`405 Client Error: Not Allowed` and the next seven bands died on page 1 — then
-the eighth was served normally. A transient refusal, not a rejected method:
-the scraper only ever issues GETs on URLs that answer GET, so a 405 here means
-"not you, not now". Retrying it costs ~30 s of back-off in the worst case and
-buys back seven whole price bands' worth of coverage.
+405 is in the list because that is the shape Otodom's refusal takes. The
+scraper only issues GETs on URLs that normally answer GET, so it is a temporary
+edge refusal rather than a method error. Retries remain bounded for a failure
+inside the restored unbanded baseline. They did *not* make price bands viable:
+scheduled runs through 2026-08-22 refused the same seven bands repeatedly, so
+Otodom bands are now disabled by default and can only run as an explicit
+additive experiment.
 """
 from __future__ import annotations
 

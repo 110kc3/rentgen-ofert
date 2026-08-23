@@ -109,18 +109,20 @@ def error_details(exc) -> tuple[str | None, int | None]:
 
 def row(source, typ, tag, pages, listings, stopped,
         portal_pages=None, portal_total=None, total_is_min=False,
-        served=None, scout=False, role=DIRECT, served_keys=None,
+        served=None, role=DIRECT, served_keys=None,
         kept_keys=None, current=None, archived=None, error=None,
-        http_status=None) -> dict:
+        http_status=None, skipped=False, skip_reason=None) -> dict:
     out = {"source": source, "type": typ, "pages": pages,
            "listings": listings, "stopped": stopped}
     if role != DIRECT:
         out["role"] = role
-    if scout:
-        # Stopped on purpose, with price bands queued up behind it to cover the
-        # same ground properly (see otodom.SCOUT_PAGES). It remains a diagnostic
-        # row, but is neither an actionable issue nor a warning.
-        out["scout"] = True
+    if skipped:
+        # A synthetic row can explain why an expected type was not requested
+        # after one portal-wide reachability probe failed.  It must affect
+        # health, but it is not another search, page, issue or warning.
+        out["skipped"] = True
+        if skip_reason:
+            out["skip_reason"] = str(skip_reason)[:240]
     if served is not None and served != listings:
         out["served"] = served
     if tag and tag != typ:
@@ -227,14 +229,13 @@ def _role(r):
 
 def _replaced(r) -> bool:
     """A non-terminal diagnostic row whose narrower children own coverage."""
-    return bool(r.get("scout")
-                or (_role(r) == PARENT and r.get("partitioned"))
+    return bool((_role(r) == PARENT and r.get("partitioned"))
                 or (_role(r) == PARTITION and r.get("replaced")))
 
 
 def _issue(r) -> str | None:
     """Actionable leaf defect, or None for intentional/overlapping rows."""
-    if _role(r) == SUPPLEMENT or _replaced(r):
+    if r.get("skipped") or _role(r) == SUPPLEMENT or _replaced(r):
         return None
     stopped = r.get("stopped")
     if stopped == ERROR:
@@ -350,7 +351,8 @@ def _type_summary(source, typ, rows, listings=None):
         reasons.append("no_partitions_resolved")
     elif root_failed and kept_unique == 0:
         status = BLOCKED
-        reasons.append("root_search_failed")
+        reasons.append("portal_probe_blocked" if any(r.get("skipped") for r in roots)
+                       else "root_search_failed")
     else:
         if issue_rows:
             reasons.append("incomplete_searches")
@@ -362,7 +364,7 @@ def _type_summary(source, typ, rows, listings=None):
 
     out = {
         "status": status,
-        "searches": len(rows),
+        "searches": sum(1 for r in rows if not r.get("skipped")),
         "pages": sum(r.get("pages") or 0 for r in rows),
         "served_unique": served_unique,
         "kept_unique": kept_unique,
@@ -380,8 +382,9 @@ def _type_summary(source, typ, rows, listings=None):
     partitions = _partition_summary(rows, parents)
     if partitions:
         out["partitions"] = partitions
-    statuses = sorted({r.get("http_status") for r, _ in issue_rows
-                       if r.get("http_status") is not None})
+    statuses = sorted({r.get("http_status") for r in rows
+                       if r.get("http_status") is not None
+                       and (_issue(r) is not None or r.get("skipped"))})
     if statuses:
         out["http_statuses"] = statuses
     return out, issue_rows
@@ -461,7 +464,7 @@ def summarise(rows, listings=None, expected_sources=None, expected_types=None) -
 
         src = {
             "status": status,
-            "searches": len(src_rows),
+            "searches": sum(1 for r in src_rows if not r.get("skipped")),
             "pages": sum(r.get("pages") or 0 for r in src_rows),
             "listings": current,
             "served_unique": served_unique,
@@ -483,8 +486,9 @@ def summarise(rows, listings=None, expected_sources=None, expected_types=None) -
                 src["total_is_min"] = True
             if len(declared) != len(type_summaries):
                 src["total_scope"] = "partial"
-        statuses = sorted({r.get("http_status") for r, _ in src_issue_rows
-                           if r.get("http_status") is not None})
+        statuses = sorted({status
+                           for t in type_summaries.values()
+                           for status in t.get("http_statuses", [])})
         if statuses:
             src["http_statuses"] = statuses
         by_source[source] = src
@@ -527,8 +531,10 @@ def warnings(rows) -> list:
     """Human lines for the run log — one per search that did not finish."""
     out = []
     for r in rows or ():
-        # A parent/scout or overflowing intermediate partition is supposed to
-        # stop early: its children are the implementation of the remedy. Only
+        if r.get("skipped"):
+            continue
+        # A partitioned parent or overflowing intermediate partition is
+        # supposed to stop early: its children implement the remedy. Only
         # terminal leaves can still require operator action.
         if _replaced(r):
             continue
