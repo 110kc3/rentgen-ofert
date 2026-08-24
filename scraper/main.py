@@ -26,6 +26,10 @@ Environment overrides (optional):
                         the cached snapshot when it's older than 7 days
     RENTGEN_GEO         "0" = skip geocoding listings for the map view
     RENTGEN_GEO_MAX     max new UUG geocoder lookups per run (default 500)
+    RENTGEN_NOL_ARCHIVE auto = refresh archived n-online ads every 7 days;
+                        force = refresh now; skip = current listings only
+    RENTGEN_NOL_ARCHIVE_DAYS
+                        archive refresh cadence in days (default 7)
 """
 from __future__ import annotations
 
@@ -34,6 +38,7 @@ import json
 import os
 import pathlib
 import sys
+import time
 
 from . import cache as phcache
 from . import coverage, delist, geo, gratka, history, marketstats, morizon, net, nieruchomosci_online, olx, otodom, overrides, payload, photomatch, rcn, rcnstats
@@ -52,6 +57,7 @@ CACHE_PATH = CACHE_DIR / f"phash_{REGION}.json.gz"
 RCN_CACHE = CACHE_DIR / f"rcn_{REGION}.json.gz"
 GEO_CACHE = CACHE_DIR / "geo_cache.json"
 NOL_TOWNS = CACHE_DIR / "nol_towns.json"   # per-region town lists for n-online
+NOL_ARCHIVE_STATE = CACHE_DIR / f"nol_archive_{REGION}.json"
 
 SOURCES = (
     ("otodom", otodom),
@@ -72,6 +78,8 @@ TERYT = {
 
 
 def run() -> int:
+    run_started = time.monotonic()
+    phase_seconds = {}
     # 200, not the old 50: with 50 EVERY paginated portal stopped on our cap
     # inside śląskie alone (gratka's domy search alone runs to page 72 and only
     # then 404s, so ~700 houses were being dropped silently). The scrapers all
@@ -95,7 +103,15 @@ def run() -> int:
     # an additive experiment. RENTGEN_BANDS=0 remains the global kill switch.
     otodom_banded = (banded
                       and os.environ.get("RENTGEN_OTODOM_BANDS", "0") == "1")
+    nol_archive_state = nieruchomosci_online.load_archive_state(
+        NOL_ARCHIVE_STATE, DATA_DIR / "meta.json")
+    nol_archive_mode = os.environ.get("RENTGEN_NOL_ARCHIVE", "auto")
+    nol_archive_days = int(os.environ.get("RENTGEN_NOL_ARCHIVE_DAYS", "7"))
+    # Resolve invalid operator input before the first portal request.
+    nol_harvest_archive = nieruchomosci_online.archive_due(
+        nol_archive_state, today, nol_archive_mode, nol_archive_days)
     for name, mod in SOURCES:
+        source_started = time.monotonic()
         # Do not inherit a previous in-process invocation's diagnostics when a
         # scraper raises before publishing its new rows.
         mod.scrape.last_coverage = []
@@ -119,9 +135,22 @@ def run() -> int:
             kwargs["towns"] = nieruchomosci_online.resolve_towns(
                 REGION, raw, cache_path=NOL_TOWNS)
             print(f"  n-online towns for {REGION}: {len(kwargs['towns'])}")
+            kwargs.update(
+                harvest_archive=nol_harvest_archive,
+                archive_state=nol_archive_state,
+                today=today,
+            )
+            archive_action = ("full archive refresh" if nol_harvest_archive
+                              else "current-only; archive cache "
+                              + (nol_archive_state.get("refreshed") or
+                                 "unavailable"))
+            print(f"  n-online mode: {archive_action}")
         try:
             print(f"Scraping {name} ...")
             raw.extend(mod.scrape(**kwargs))
+            if mod is nieruchomosci_online and mod.scrape.last_archive_state:
+                nieruchomosci_online.save_archive_state(
+                    NOL_ARCHIVE_STATE, mod.scrape.last_archive_state)
         except Exception as exc:  # one portal failing must not lose the others
             errors.append(f"{name}: {exc}")
             print(f"  !! {name} failed: {exc}", file=sys.stderr)
@@ -130,6 +159,8 @@ def run() -> int:
                 name, typ, REGION, 0, 0, coverage.ERROR,
                 role=coverage.PARENT, error=error,
                 http_status=http_status) for typ in types]
+        phase_seconds[f"scrape_{name}"] = round(
+            time.monotonic() - source_started, 1)
         cov_rows.extend(getattr(mod.scrape, "last_coverage", None) or [])
 
     # Truncation is silent by nature — a capped search returns a plausible pile
@@ -153,9 +184,14 @@ def run() -> int:
         kept = (f", kept {s['kept_unique']}"
                 if s["served_unique"] != s["kept_unique"] else "")
         archive = f", archived {s['archived']}" if s["archived"] else ""
+        harvest = s.get("archive_harvest") or {}
+        archive_cache = (f", archive {harvest.get('mode')} "
+                         f"{harvest.get('records', 0)} as of "
+                         f"{harvest.get('refreshed')}"
+                         if harvest.get("refreshed") else "")
         print(f"  coverage {name} [{s['status']}]: {s['served_unique']} unique "
               f"served from {s['searches']} search(es), {s['pages']} pages"
-              f"{against}{kept}{archive}"
+              f"{against}{kept}{archive}{archive_cache}"
               + (f", {s['truncated']} issue(s)" if s["truncated"] else ""))
 
     if not raw:
@@ -176,6 +212,7 @@ def run() -> int:
     # only n-online flags `archived`, so a gratka/morizon pair is never left
     # with one half on each side of it. (`dedupe` links again, idempotently —
     # the pairing must also hold when RENTGEN_PHOTOS=0 skips this entirely.)
+    photo_started = time.monotonic()
     linked = link_twins(raw)
     if linked:
         print(f"  gratka<->morizon twins linked off the search page: {linked}")
@@ -190,8 +227,10 @@ def run() -> int:
         phcache.save(CACHE_PATH, pc)
         print(f"  phash cache: {len(pc.get('entries', {}))} urls "
               f"({pruned} pruned as stale)")
+    phase_seconds["photos"] = round(time.monotonic() - photo_started, 1)
 
     # Portal-archived ads (n-online flags them) are history evidence, not offers.
+    history_started = time.monotonic()
     archived_raw = [x for x in raw if x.get("archived")]
     raw = [x for x in raw if not x.get("archived")]
 
@@ -211,23 +250,31 @@ def run() -> int:
     n_arch = history.observe_archived(archived_raw, records, today)
     if archived_raw:
         print(f"  archived ads ingested into history: {n_arch}/{len(archived_raw)}")
+    phase_seconds["history_prepare"] = round(
+        time.monotonic() - history_started, 1)
     if verify_max > 0:
         # Its OWN session: a liveness probe wants no retry ladder (see
         # net.probe_session), and inheriting the scraper's turned 300 questions
         # into 27-44 min of three separate runs.
         sweep_min = float(os.environ.get("RENTGEN_DELIST_BUDGET_MIN", "10"))
+        delist_started = time.monotonic()
         delist.sweep(records, today, net.probe_session(),
                      active_urls=active_urls, max_checks=verify_max,
                      budget_s=sweep_min * 60 if sweep_min > 0 else None)
+        phase_seconds["delist"] = round(time.monotonic() - delist_started, 1)
 
+    history_update_started = time.monotonic()
     history.update(listings, records, today)
     overrides.apply(records, overrides.load())   # hand-pinned addresses win
+    phase_seconds["history_update"] = round(
+        time.monotonic() - history_update_started, 1)
 
     # Real sale prices from notarial deeds (RCN) matched onto our records.
     # Runs after update so brand-new records already carry a snapshot
     # (locality/street/rooms) to match on; the affected cards are re-enriched.
     rcn_stats = None
     snap = None
+    rcn_started = time.monotonic()
     if rcn_mode != "0":
         teryt = TERYT.get(REGION)
         if teryt:
@@ -241,8 +288,10 @@ def run() -> int:
         else:
             print(f"RCN: no TERYT mapping for region '{REGION}', skipping")
     history.reenrich(listings)   # always: also drops the transient _rec links
+    phase_seconds["rcn"] = round(time.monotonic() - rcn_started, 1)
 
     # Coordinates for the map view (UUG geocoder, cached; towns first).
+    geo_started = time.monotonic()
     geocoded = 0
     if os.environ.get("RENTGEN_GEO", "1") != "0":
         gc = geo.load(GEO_CACHE)
@@ -250,7 +299,9 @@ def run() -> int:
             listings, gc, session=http, today=today,
             max_new=int(os.environ.get("RENTGEN_GEO_MAX", "500")))
         geo.save(GEO_CACHE, gc)
+    phase_seconds["geo"] = round(time.monotonic() - geo_started, 1)
 
+    write_started = time.monotonic()
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     history.save(hist_path, records)
     link_same_size(listings)   # flag same-area duplicates/relists visible right now
@@ -285,6 +336,8 @@ def run() -> int:
     for x in raw:
         by_source[x["source"]] = by_source.get(x["source"], 0) + 1
 
+    phase_seconds["write"] = round(time.monotonic() - write_started, 1)
+    phase_seconds["total"] = round(time.monotonic() - run_started, 1)
     meta = {
         "updated": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
         "count": len(listings),
@@ -304,6 +357,8 @@ def run() -> int:
         "sold_confirmed": sum(1 for a in archive if a.get("sold")),
         "health": cov_summary["status"],
         "coverage": cov_summary,
+        "runtime": {"seconds": phase_seconds["total"],
+                    "phases": phase_seconds},
         "errors": errors,
     }
     (DATA_DIR / "meta.json").write_text(

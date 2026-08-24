@@ -29,12 +29,20 @@ on:
         description: "voivodeship slug to scrape (data goes to site/data/<region>/)"
         required: false
         default: "slaskie"
+      nol_archive:
+        description: "n-online archive: auto (weekly), force now, or skip"
+        required: false
+        type: choice
+        options: [auto, force, skip]
+        default: auto
   push:
     branches: [main]
     # only scraper-affecting changes trigger the heavy scrape; pure site/
     # changes are published by the lightweight deploy.yml instead
     paths:
       - "scraper/**"
+      - "tests/**"
+      - "scripts/validate_data.py"
       - "overrides.json"
       - ".github/workflows/update.yml"
 
@@ -86,10 +94,17 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip                                # reuse the pip download cache
-          cache-dependency-path: scraper/requirements.txt
+          cache-dependency-path: |
+            scraper/requirements.txt
+            scraper/requirements-test.txt
 
-      - name: Install dependencies
-        run: pip install -r scraper/requirements.txt
+      - name: Install runtime + test dependencies
+        run: pip install -r scraper/requirements-test.txt
+
+      # This suite is fixture-only/offline. A parser/schema regression must fail
+      # before the job spends a single request from the portals' shared budget.
+      - name: Run offline test gate
+        run: python -m pytest -q
 
       - name: Scrape listings
         env:
@@ -101,7 +116,11 @@ jobs:
           # block reports whether it still binds.
           RENTGEN_DELAY: "0.7"
           RENTGEN_RCN: ${{ github.event.inputs.rcn || '1' }}
+          RENTGEN_NOL_ARCHIVE: ${{ github.event.inputs.nol_archive || 'auto' }}
         run: python -u -m scraper.main   # -u: unbuffered logs, visible while running
+
+      - name: Validate generated data + publish run summary
+        run: python -m scripts.validate_data "site/data/$REGION"
 
       - name: Push refreshed data (single-commit per-region data branch)
         run: |
@@ -115,6 +134,7 @@ jobs:
           # every region's caches in its tree, and a region's branch has no
           # business carrying another region's 15 MB phash cache around.
           for f in cache/geo_cache.json cache/nol_towns.json \
+                   "cache/nol_archive_${REGION}.json" \
                    "cache/phash_${REGION}.json.gz" "cache/rcn_${REGION}.json.gz"; do
             if [ -f "$f" ]; then git add -f "$f"; fi
           done

@@ -151,8 +151,9 @@ def row(source, typ, tag, pages, listings, stopped,
 
 
 def public_row(r: dict) -> dict:
-    """JSON-safe coverage row (private identity sets removed)."""
-    return {k: v for k, v in r.items() if not k.startswith("_")}
+    """JSON-safe coverage row (private identities/bulky detail removed)."""
+    return {k: v for k, v in r.items()
+            if not k.startswith("_") and k != "towns"}
 
 
 def seen_by(r) -> int:
@@ -294,26 +295,52 @@ def _inventory_total(rows):
 
 def _partition_summary(rows, parents):
     parts = [r for r in rows if _role(r) == PARTITION]
-    if not parts:
+    if parts:
+        leaves = [r for r in parts if not r.get("replaced")]
+        failed = [r.get("tag") or r.get("partition", {}).get("label")
+                  for r in leaves if r.get("stopped") == ERROR]
+        capped = [r.get("tag") or r.get("partition", {}).get("label")
+                  for r in leaves if r.get("stopped") in (OUR_CAP, PORTAL_CAP)]
+        missing = [r.get("tag") or r.get("partition", {}).get("label")
+                   for r in leaves
+                   if r.get("stopped") == ERROR and not unique_seen_by(r)]
+        out = {
+            "axis": "price",
+            "leaves": len(leaves),
+            "complete": sum(1 for r in leaves if _issue(r) is None),
+            "failed": [x for x in failed if x],
+            "capped": [x for x in capped if x],
+            "missing": [x for x in missing if x],
+        }
+        unaccounted = sum(p.get("partition_unaccounted") or 0 for p in parents)
+        if unaccounted:
+            out["unaccounted"] = unaccounted
+        return out
+
+    # Some portals aggregate many overlapping partitions into one coverage row
+    # so their identity sets can be unioned once. Preserve their compact town
+    # diagnostics instead of making the operator mine thousands of log lines.
+    aggregates = [r for r in rows if r.get("partition_axis")]
+    if not aggregates:
         return None
-    leaves = [r for r in parts if not r.get("replaced")]
-    failed = [r.get("tag") or r.get("partition", {}).get("label")
-              for r in leaves if r.get("stopped") == ERROR]
-    capped = [r.get("tag") or r.get("partition", {}).get("label")
-              for r in leaves if r.get("stopped") in (OUR_CAP, PORTAL_CAP)]
-    missing = [r.get("tag") or r.get("partition", {}).get("label")
-               for r in leaves if r.get("stopped") == ERROR and not unique_seen_by(r)]
+    total = sum(int(r.get("partitions_total") or 0) for r in aggregates)
+    failed = list(dict.fromkeys(
+        town for r in aggregates for town in r.get("failed_partitions", [])))
+    capped = list(dict.fromkeys(
+        town for r in aggregates for town in r.get("capped_partitions", [])))
+    details = {}
+    for r in aggregates:
+        details.update(r.get("towns") or {})
     out = {
-        "axis": "price",
-        "leaves": len(leaves),
-        "complete": sum(1 for r in leaves if _issue(r) is None),
-        "failed": [x for x in failed if x],
-        "capped": [x for x in capped if x],
-        "missing": [x for x in missing if x],
+        "axis": aggregates[0]["partition_axis"],
+        "leaves": total,
+        "complete": max(0, total - len(set(failed) | set(capped))),
+        "failed": failed,
+        "capped": capped,
+        "missing": failed,
     }
-    unaccounted = sum(p.get("partition_unaccounted") or 0 for p in parents)
-    if unaccounted:
-        out["unaccounted"] = unaccounted
+    if details:
+        out["details"] = details
     return out
 
 
@@ -382,6 +409,10 @@ def _type_summary(source, typ, rows, listings=None):
     partitions = _partition_summary(rows, parents)
     if partitions:
         out["partitions"] = partitions
+    harvests = [r.get("archive_harvest") for r in rows
+                if r.get("archive_harvest")]
+    if harvests:
+        out["archive_harvest"] = harvests[-1]
     statuses = sorted({r.get("http_status") for r in rows
                        if r.get("http_status") is not None
                        and (_issue(r) is not None or r.get("skipped"))})
@@ -491,6 +522,25 @@ def summarise(rows, listings=None, expected_sources=None, expected_types=None) -
                            for status in t.get("http_statuses", [])})
         if statuses:
             src["http_statuses"] = statuses
+        harvests = {typ: summary["archive_harvest"]
+                    for typ, summary in type_summaries.items()
+                    if summary.get("archive_harvest")}
+        if harvests:
+            refreshed = sorted(h.get("refreshed") for h in harvests.values()
+                               if h.get("refreshed"))
+            src["archive_harvest"] = {
+                "mode": ("refresh" if any(h.get("mode") == "refresh"
+                                            for h in harvests.values())
+                         else "cached" if any(h.get("mode") == "cached"
+                                               for h in harvests.values())
+                         else "not_available"),
+                "records": sum(int(h.get("records") or 0)
+                               for h in harvests.values()),
+                "complete": all(bool(h.get("complete"))
+                                for h in harvests.values()),
+            }
+            if refreshed:
+                src["archive_harvest"]["refreshed"] = refreshed[-1]
         by_source[source] = src
 
         for r, issue in src_issue_rows:
@@ -527,6 +577,14 @@ def _of_total(r) -> str:
             f" ({covered(seen, total)}%){kept}")
 
 
+def _partition_suffix(r, key) -> str:
+    names = list(r.get(key) or ())
+    if not names:
+        return ""
+    label = "capped" if key == "capped_partitions" else "failed"
+    return f"; {label} partition(s): {', '.join(names)}"
+
+
 def warnings(rows) -> list:
     """Human lines for the run log — one per search that did not finish."""
     out = []
@@ -554,6 +612,7 @@ def warnings(rows) -> list:
                 extra = f" of {r['portal_pages']} the portal has"
             out.append(f"  !! {_where(r)}: stopped at our page cap ({r['pages']}"
                        f"{extra}){_of_total(r)}"
+                       f"{_partition_suffix(r, 'capped_partitions')}"
                        f" — raise RENTGEN_MAX_PAGES or subdivide the search")
         elif st == PORTAL_CAP:
             out.append(f"  !! {_where(r)}: portal refused to serve past page "
@@ -561,5 +620,6 @@ def warnings(rows) -> list:
                        f" — subdivision is the only way to see the rest")
         else:
             status = f" (HTTP {r['http_status']})" if r.get("http_status") else ""
-            out.append(f"  !! {_where(r)}: failed after {r['pages']} page(s){status}")
+            out.append(f"  !! {_where(r)}: failed after {r['pages']} page(s){status}"
+                       f"{_partition_suffix(r, 'failed_partitions')}")
     return out

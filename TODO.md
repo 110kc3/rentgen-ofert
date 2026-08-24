@@ -1,68 +1,69 @@
 # TODO — rentgen-ofert
 
 > Keep this file and `README.md` updated after each change.
-> Last updated: 2026-08-23
+> Last updated: 2026-08-24
 
-## Current (2026-08-23) — stop repeating requests a service has already refused
+## Current (2026-08-24) — P0.2/P0.3 accepted; bound n-online and gate the scrape
 
-The schema-v2 coverage slice is no longer merely local: repeated scheduled
-runs have published it successfully. The latest completed run,
-`32591212134` (2026-08-22 18:36–21:18 UTC), published **25,412** current
-properties from 44,052 raw rows in 162 minutes. Its source health is truthful:
-Gratka `healthy`; Morizon, Otodom and n-online `partial`; OLX `blocked` with
-HTTP 403. The 2026-08-23 morning run was cancelled after 60 minutes while
-walking Morizon and published nothing; it is not coverage evidence.
+The request-policy recovery from `5b936ac` is published and accepted. The push
+run plus two consecutive schedules all succeeded and deployed. The scheduled
+runs `32658518259` (153 min) and `32700052454` (168 min) kept **16,267** and
+**16,280** Otodom listings respectively. Both logged 263/263 successful Otodom
+requests with no refusal; both made exactly one OLX page-one request, stopped
+in about three seconds on HTTP 403, and published the source as `blocked`.
+P0.2 and P0.3 are therefore complete, not “local and awaiting validation.”
 
-The request failures are stable enough to act on, not probe again blindly:
+The latest run published **31,196** current properties from 52,168 current raw
+rows. Its remaining repeatable bottleneck is n-online: 1,701 pages and about
+76.5 minutes to serve 58,831 unique records, of which **47,922 (81.5%) were
+archived** and 10,909 current. Katowice flats alone walked to page 200; schema
+v2 preserved `capped_partitions: ["katowice"]`, but the human warning still
+hid that fact behind `flat/60 towns`.
 
-- the eight most recent completed logs inspected (2026-08-19 through
-  2026-08-22) all show Otodom refusing the same seven upper flat price bands
-  with HTTP 405; kept counts remained **8,427–8,667**, roughly half the old
-  ~16.6k floor;
-- each run then asked OLX four versions of the same already-answered question:
-  house page one, its cooldown retry, flat page one, its cooldown retry. Every
-  one returned HTTP 403, and OLX contributed zero;
-- schema v2 correctly kept the missing Otodom partitions in the denominator
-  (latest coverage **37.7%**) and reported OLX as blocked, so P0.1's live
-  acceptance evidence is now present.
+### Implemented in this slice (P0.4 + P0.6)
 
-### Implemented locally in this slice (P0.2 + P0.3 behavior)
-
-- **Otodom's safe floor is restored first.** The 12-page scout and the
-  unproven “~320-page budget” behavior are gone. The default walks the full
-  unbanded search to `RENTGEN_MAX_PAGES=200`, matching the old ~16.6k strategy.
-  Price bands are disabled for this portal unless
-  `RENTGEN_OTODOM_BANDS=1`; when explicitly enabled they run only after the
-  full baseline, so an experimental refusal can add nothing but cannot remove
-  half the source again.
-- **Otodom now leaves evidence, not another theory.** Every run logs elapsed
-  time, successful/application-level page requests and the first refusal's
-  HTTP status, type/tag/page, elapsed time and number of prior successes. A
-  partially successful root crawl is not restarted from page one.
-- **OLX's first 403 ends the whole portal.** It performs one reachability
-  request, no 28-second cooldown, no second property type, towns or bands.
-  A synthetic skipped row carries the same 403 to the unrequested type for
-  health accounting without pretending it was another search/page/issue;
-  source health remains `blocked`, with one request and one warning.
-- **Source-count claims are no longer fixed at five.** Generated summaries and
-  `llms.txt` count only positive contributors and name blocked sources; static
-  hero/OG copy says the configured portals without claiming they all served
-  the current dataset.
-- Verification: **192/192** offline tests, Python compilation, JavaScript
-  syntax checks and `git diff --check` pass. The behavior has not been pushed
-  or exercised by a scheduled runner yet.
+- **The twice-daily n-online path is current-only.** The portal orders current
+  offers before its archive. A bounded live probe confirmed Katowice pages
+  1–46 were current and pages 47 onward archived; the new walk stops after two
+  consecutive archive-only pages. The end-to-end one-town smoke kept all 1,534
+  current flats and stopped after 48 pages instead of reaching page 200.
+- **Archive harvesting has its own cadence and cache.** `RENTGEN_NOL_ARCHIVE`
+  is `auto` (default, seven days), `force`, or `skip`; the cadence is adjustable
+  with `RENTGEN_NOL_ARCHIVE_DAYS`. A per-region
+  `cache/nol_archive_<region>.json` records refresh date, counts and whether the
+  harvest capped/failed. The first run bootstraps it from the last full
+  `meta.json`, so rollout does not immediately repeat the 1,700-page walk.
+  Full refreshes still return archived ads to the durable history store.
+- **Town coverage is explicit.** Each type publishes compact per-town request,
+  live/archive, new-unique and stop statistics. Coverage summaries name capped
+  and failed towns, and warnings now say `capped partition(s): katowice`.
+  Seed order is stable, then newly observed towns rank by inventory, then
+  cached fallbacks.
+- **The expensive workflow is gated.** CI installs test dependencies and runs
+  the offline suite before any portal request. After scraping,
+  `scripts/validate_data.py` parses every JSON/JSON.GZ file, checks the manifest
+  count/hash, exact shard set and URL-to-shard mapping, verifies meta/coverage
+  invariants, and writes source/phase/size tables to the GitHub job summary.
+  A failure prevents the data-branch push.
+- **Phase timings are data, not log archaeology.** `meta.json.runtime` records
+  each source plus photo/history/delist/RCN/geo/write and total seconds.
+- Verification: **199/199** offline tests, Python compilation, JavaScript
+  syntax checks and `git diff --check` pass.
 
 ### Next
 
-1. Publish this slice and inspect two consecutive scheduled runs. Accept P0.2
-   only if Otodom returns to at least 16k kept listings (or a new floor is
-   explicitly approved); verify its request-summary line on both runs.
-2. In the same runs, verify OLX makes one page-one request, finishes in seconds
-   and publishes `blocked: 403` for both types without a duplicate warning.
-3. Then resume P0.4: name and bound n-online's capped towns, and decouple its
-   archive harvest. The latest completed phase still took ~77 minutes and
-   capped Katowice flats.
-4. Add the offline-test/schema gate before any scrape requests (P0.6).
+1. Inspect the push-triggered workflow. Confirm the offline-test step finishes
+   before `Scrape listings`, the generated-data validator finishes before the branch
+   push, and the job summary contains source health, phase times and bytes.
+2. Inspect two consecutive scheduled active-only runs. Accept P0.4 only if
+   n-online retains its ~10.9k current floor, names every problematic town and
+   finishes within 40 minutes. Confirm the archive cache date/count remains
+   visible while current-run `archived` is zero.
+3. Manually run `nol_archive=force` once to validate the full-harvest path and
+   cache refresh, then confirm the following active run returns to the bounded
+   path. Accept P0.6 when both validators have protected real publications.
+4. Reassess P0.5 against the new active-only photo input; do not schedule a
+   second region until the full P0 gate is recorded in `POLAND_ROLLOUT.md`.
 
 ## Superseded (2026-08-13) — stop before region two and repair the template
 
@@ -92,8 +93,8 @@ They proved the per-region branch and delist changes, but they also make a
 1. [x] Fix coverage semantics and add explicit per-source/region health
        (`healthy`, `partial`, `blocked`, `unknown`). Schema v2 is implemented
        locally; its first published run remains to be inspected.
-2. [ ] Restore the Otodom coverage floor and re-measure two scheduled runs.
-3. [ ] Make an OLX page-one 403 fail fast and report the source as blocked.
+2. [x] Restore the Otodom coverage floor and re-measure two scheduled runs.
+3. [x] Make an OLX page-one 403 fail fast and report the source as blocked.
 4. [ ] Bound n-online/archive work and split photo correctness work from the
        history-only backlog.
 5. [ ] Add the offline-test/schema gate before any scrape requests.

@@ -7,9 +7,9 @@ and presents it on one searchable page. No application server: a GitHub Actions
 job scrapes, writes static JSON, and GitHub Pages displays it.
 
 Portal blocking and serving caps mean “all listings” is a target, not a current
-guarantee. The published 2026-08-22 dataset has 25,412 current properties from
-four contributing sources: OLX is blocked with HTTP 403, and Otodom remains
-partial after the failed price-band experiment.
+guarantee. The published 2026-08-24 dataset has 31,196 current properties from
+four contributing sources. OLX is blocked with HTTP 403; Otodom's 16.3k floor
+has recovered, although its flat root remains partial at the 200-page cap.
 
 ```
 GitHub Actions (cron) → python -m scraper.main → site/data/<region>/*.json
@@ -28,18 +28,20 @@ the split needed no flag day).
 
 ## Poland rollout status
 
-As of 2026-08-23, **1 of 16 voivodeships is published**. Region-scoped output,
+As of 2026-08-24, **1 of 16 voivodeships is published**. Region-scoped output,
 all 16 RCN/TERYT mappings and per-region data branches are implemented; the
 `data-slaskie` branch has been created, refreshed and deployed successfully.
 
 The next step is not a 16-region CI matrix. The latest two completed warm
-Śląskie jobs improved to 167 and 162 minutes, and schema-v2 coverage/health is
-now live-validated, but Otodom still produced only 8.6k / 8.4k listings and OLX
-still contributed zero. The local P0.2/P0.3 slice restores Otodom's full
-unbanded baseline, makes its bands opt-in and strictly additive, and turns an
-OLX page-one 403 into one portal-wide probe. All 192 offline tests pass; two
-scheduled runs must still validate the recovery. The audited status, evidence,
-decisions, acceptance gates and P0–P5 task order are
+Śląskie jobs completed in 153 and 168 minutes. Otodom recovered to 16,267 and
+16,280 kept listings with all 263 unbanded searches succeeding, while an OLX
+page-one 403 caused exactly one portal-wide probe in each run. P0.2 and P0.3
+are therefore accepted from production evidence. The P0.4/P0.6 slice
+now bounds n-online's current crawl separately from its weekly archive harvest,
+adds town-level diagnostics and archive state, and puts 199 offline tests plus
+a generated-data validator in front of publication. Live scheduled-run
+validation remains. The audited status, evidence, decisions, acceptance
+gates and P0–P5 task order are
 in [`POLAND_ROLLOUT.md`](POLAND_ROLLOUT.md). `TODO.md` remains the detailed
 development diary.
 
@@ -53,7 +55,9 @@ development diary.
   Every listing keeps its **town (locality)**, and the dashboard has a searchable
   **town multi-select** filter.
 - Keeps archived / sold listings (e.g. nieruchomości-online *Ogłoszenie archiwalne*)
-  out of the dashboard, but harvests them as history evidence (see below).
+  out of the dashboard. Nieruchomości-online's normal crawl stops after the
+  active-results boundary; a separate weekly full harvest retains archived
+  rows as history evidence without paying that cost on every run (see below).
 - **Relist & price history.** Each run reuses known photo fingerprints and
   attempts new galleries within a time budget, recording price/date in
   `site/data/<region>/history.json.gz`. When an agent re-posts the same flat
@@ -121,7 +125,7 @@ development diary.
   `partial`, `blocked` or `unknown`, independently of process success. The
   dashboard therefore keeps a source that returned no listings visible and
   distinguishes a clean `0` from `blokada` or `brak danych`. Schema v2 has run
-  successfully in production through 2026-08-22; the latest output reports
+  successfully in production through 2026-08-24; the latest output reports
   Gratka healthy, Morizon/Otodom/n-online partial and OLX blocked. The
   served/kept split remains important: each scraper filters
   while parsing (otodom drops INVESTMENT
@@ -153,13 +157,14 @@ development diary.
   no flats states no total and serves no ads, and reading that as overflow made
   every empty band bisect into two more (see the 2026-08-10 entry in `TODO.md`).
   A portal can also simply refuse the bands. Otodom did so on the same seven
-  upper flat bands throughout the completed runs inspected through 2026-08-22,
-  cutting its stable ~16.6k baseline to ~8.5k. Otodom therefore now runs the
+  upper flat bands throughout the affected runs, cutting its stable ~16.6k
+  baseline to ~8.5k. Otodom therefore now runs the
   full unbanded crawl by default. `RENTGEN_OTODOM_BANDS=1` enables a separate
   experiment only *after* that baseline is already collected, so a failed band
   cannot halve the published source again. Each Otodom run logs elapsed time,
-  successful page requests and the first refusal. Two scheduled runs still
-  have to validate the restored floor; see P0.2 in `POLAND_ROLLOUT.md`.
+  successful page requests and the first refusal. Two scheduled runs on
+  2026-08-23 and 2026-08-24 restored 16.3k listings with 263/263 successful
+  unbanded searches, satisfying P0.2; see `POLAND_ROLLOUT.md`.
 - **Empty views explain themselves.** When a filter combination returns
   nothing, the dashboard re-runs the filter with each dimension relaxed and
   offers the ones that would bring results back ("Miejscowość: Gliwice — 43"),
@@ -269,6 +274,7 @@ git fetch origin data-$REGION && git checkout FETCH_HEAD -- site/data cache && g
 python -m scraper.main                                   # ~minutes with warm caches
 git checkout --orphan data-local && git rm -r --cached -q . \
   && git add -f site/data/$REGION cache/geo_cache.json cache/nol_towns.json \
+       cache/nol_archive_$REGION.json \
        cache/phash_$REGION.json.gz cache/rcn_$REGION.json.gz \
   && git commit -m "data: local scrape" \
   && git push --force origin HEAD:data-$REGION && git checkout -
@@ -278,7 +284,11 @@ Then publish via **Actions tab → "Deploy site" → Run workflow** (pushes to a
 `data-*` branch can't trigger workflows themselves). The heavy **Update
 listings** workflow runs on its cron, on `scraper/**` changes, or manually
 (inputs: `rcn` — set `force` to re-pull the RCN transaction snapshot;
-`region` — voivodeship slug, default `slaskie`).
+`nol_archive` — `auto` uses the weekly cadence, `force` harvests now and `skip`
+does only the bounded current crawl; `region` — voivodeship slug, default
+`slaskie`). Before contacting a portal it runs the offline tests; after scraping
+it validates every generated JSON/gzip file, manifest count, detail shard,
+coverage block and runtime summary before anything is pushed.
 
 ### C) Run locally (dashboard preview)
 
@@ -313,6 +323,8 @@ RENTGEN_MAX_PAGES=3 RENTGEN_DELAY=0.3 python -m scraper.main
 | `RENTGEN_GEO` | 1 | `0` skips geocoding listings for the map view |
 | `RENTGEN_GEO_MAX` | 500 | max new UUG geocoder lookups per run (cache does the rest) |
 | `RENTGEN_NOL_TOWNS` | 60 | max nieruchomości-online town sub-domains per region |
+| `RENTGEN_NOL_ARCHIVE` | auto | n-online archive harvest mode: `auto`, `force` or `skip` |
+| `RENTGEN_NOL_ARCHIVE_DAYS` | 7 | minimum days between automatic full n-online archive harvests |
 
 **Rate limiting (HTTP 429/405):** the scraper backs off and retries automatically —
 Otodom phrases its refusals as `405 Not Allowed`, so that counts as one too.
@@ -369,8 +381,14 @@ to skip the lookup offline).
 ## Tests
 
 ```bash
-python -m pytest -q          # parser + dedupe unit tests (offline, use fixtures)
+python -m pip install -r scraper/requirements-test.txt
+python -m pytest -q
+python -m scripts.validate_data site/data/slaskie  # after a scrape
 ```
+
+The test suite is entirely offline. The data validator checks the emitted
+payload as a consumer would and exits non-zero on malformed JSON/gzip, count or
+shard mismatches, missing coverage health, or missing runtime diagnostics.
 
 ## Customise
 
@@ -409,6 +427,7 @@ scraper/
   uldk.py        address -> canonical street + cadastral parcel (UUG + ULDK)
   rcncheck.py    manual RCN lookup / --pin; overrides.py  hand-pinned addresses
   main.py        runs every source, photo-checks look-alikes, writes site/data/*.json
+  requirements-test.txt  runtime dependencies plus the pinned pytest range
 cache/                 (on the `data-<region>` branch, gitignored on main)
   phash_<region>.json.gz  gallery-hash cache, reused run-to-run (auto-pruned)
   rcn_<region>.json.gz  RCN transaction snapshot (refreshed weekly)
@@ -418,6 +437,9 @@ cache/                 (on the `data-<region>` branch, gitignored on main)
                         by each neighbour, which is cheaper than sharing state
                         between jobs that force-push
   nol_towns.json        per-region town lists for n-online (slug -> display name)
+  nol_archive_<region>.json  last full n-online archive harvest and town bounds
+scripts/
+  validate_data.py      publication gate for generated regional payloads
 site/
   index.html  app.js  styles.css        listings dashboard + map view (GitHub Pages)
   stats.html  stats.js  stats.css       Statystyki market dashboard (SVG charts)
@@ -426,7 +448,7 @@ site/
                   history.json.gz, archive.json, meta.json, rcnstats.json,
                   stats.json   (generated each run; on the `data-<region>` branch —
                   one directory per voivodeship, ?region= to view)
-tests/         parser + dedupe + history + RCN + stats + geo tests, offline fixtures
+tests/         parser, crawl-boundary, payload, history, RCN, stats and geo tests
 .github/workflows/   update.yml (cron scrape) + deploy.yml (Pages publish)
 POLAND_ROLLOUT.md  current nationwide status, gates and ordered task plan
 TODO.md        detailed development diary + other pending work

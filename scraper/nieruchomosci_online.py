@@ -2,13 +2,16 @@
 
 Each town is a sub-domain (e.g. ``pyskowice.nieruchomosci-online.pl``) whose
 result pages embed a schema.org ``CollectionPage`` JSON-LD block. Rental
-listings are skipped; archived ("OutOfStock"/"SoldOut") listings are returned
+listings are skipped. The portal orders current offers before archived
+("OutOfStock"/"SoldOut") offers, so normal runs stop after a confirmed
+archive-only boundary. A less-frequent full harvest returns archived records
 with ``archived: True`` — main.py keeps them out of the dashboard but feeds
 them to the history store as evidence the ad ended (likely sold).
 
 Unlike the other four portals this one has no region-wide search, so it needs a
-town list per region — which is also why it is the ONLY portal not silently
-truncated by a pagination cap (see TODO.md, whole-Poland plan).
+town list per region. Town-level request/current/archive/stop statistics are
+published explicitly; a capped town must never disappear inside a two-row
+source aggregate.
 
 Where that list comes from (probed 2026-08-08): **not** from the portal. It
 publishes no sitemap (`/sitemap.xml` 404s, robots.txt declares none) and its
@@ -22,6 +25,7 @@ before. A sub-domain that does not exist costs one request and is skipped
 """
 from __future__ import annotations
 
+import datetime as dt
 import json
 import os
 import pathlib
@@ -38,6 +42,13 @@ from .rcn import _fold
 # Cap the town list: each town costs at least one request per type, and the tail
 # of villages is already covered by the other portals' region-wide searches.
 MAX_TOWNS = int(os.environ.get("RENTGEN_NOL_TOWNS", "60"))
+
+# The live/current results precede the archive. Two consecutive archive-only
+# pages make the boundary robust to one malformed availability page while still
+# avoiding the ~1,400 archive pages the old twice-daily walk consumed.
+ACTIVE_ARCHIVE_ONLY_PAGES = max(1, int(
+    os.environ.get("RENTGEN_NOL_ARCHIVE_BOUNDARY_PAGES", "2")))
+ARCHIVE_STATE_SCHEMA = 1
 
 # Hand-curated seed for śląskie: the cities with powiat rights plus major towns.
 # slug -> proper display name. The slug loses Polish diacritics, so a derived
@@ -94,6 +105,109 @@ def save_towns(cache_path, cache: dict):
     os.replace(tmp, p)
 
 
+def _state_from_meta(meta_path) -> dict:
+    """Bootstrap archive cadence from the last pre-split production output.
+
+    The first run after this feature ships has no dedicated marker yet, but the
+    previous ``meta.json`` came from a full archive walk. Reusing its date/counts
+    avoids paying for another identical 1,700-page harvest immediately.
+    """
+    try:
+        meta = json.loads(pathlib.Path(meta_path).read_text(encoding="utf-8"))
+    except (FileNotFoundError, TypeError, ValueError):
+        return {}
+    source = (((meta.get("coverage") or {}).get("by_source") or {})
+              .get("nieruchomosci-online") or {})
+    refreshed = str(meta.get("updated") or "")[:10]
+    if not refreshed or not source:
+        return {}
+
+    issues = [i for i in (meta.get("coverage") or {}).get("issues", [])
+              if i.get("source") == "nieruchomosci-online"]
+    by_type = {}
+    for typ, summary in (source.get("types") or {}).items():
+        capped = sorted({town for issue in issues if issue.get("type") == typ
+                         for town in issue.get("capped_partitions", [])})
+        failed = sorted({town for issue in issues if issue.get("type") == typ
+                         for town in issue.get("failed_partitions", [])})
+        by_type[typ] = {
+            "current": int(summary.get("current") or 0),
+            "archived": int(summary.get("archived") or 0),
+            "pages": int(summary.get("pages") or 0),
+            "capped": capped,
+            "failed": failed,
+        }
+    return {
+        "schema": ARCHIVE_STATE_SCHEMA,
+        "refreshed": refreshed,
+        "records": sum(v["archived"] for v in by_type.values()),
+        "complete": not any(v["capped"] or v["failed"]
+                            for v in by_type.values()),
+        "by_type": by_type,
+        "bootstrapped_from_meta": True,
+    }
+
+
+def load_archive_state(path, meta_path=None) -> dict:
+    try:
+        state = json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
+        return state if state.get("schema") == ARCHIVE_STATE_SCHEMA else {}
+    except (FileNotFoundError, TypeError, ValueError):
+        return _state_from_meta(meta_path) if meta_path else {}
+
+
+def save_archive_state(path, state: dict):
+    p = pathlib.Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    tmp = p.with_name(p.name + ".tmp")
+    tmp.write_text(json.dumps(state, ensure_ascii=False, indent=1,
+                              sort_keys=True), encoding="utf-8")
+    os.replace(tmp, p)
+
+
+def archive_due(state: dict, today, mode="auto", interval_days=7) -> bool:
+    """Whether this run should walk past the current/archive boundary.
+
+    ``mode`` accepts ``auto`` (default cadence), ``force``/``1`` and
+    ``skip``/``0``. Invalid operator input fails before any portal request.
+    """
+    mode = str(mode or "auto").strip().lower()
+    if mode in {"force", "refresh", "1", "true", "yes"}:
+        return True
+    if mode in {"skip", "off", "0", "false", "no"}:
+        return False
+    if mode != "auto":
+        raise ValueError("RENTGEN_NOL_ARCHIVE must be auto, force or skip")
+    try:
+        refreshed = dt.date.fromisoformat(str(state.get("refreshed")))
+    except (TypeError, ValueError):
+        return True
+    current = (today if isinstance(today, dt.date)
+               else dt.date.fromisoformat(str(today)))
+    return (current - refreshed).days >= max(0, int(interval_days))
+
+
+def archive_state_from_rows(rows, today) -> dict:
+    by_type = {}
+    for row in rows:
+        by_type[row["type"]] = {
+            "current": int(row.get("current") or 0),
+            "archived": int(row.get("archived") or 0),
+            "pages": int(row.get("pages") or 0),
+            "capped": list(row.get("capped_partitions") or ()),
+            "failed": list(row.get("failed_partitions") or ()),
+        }
+    return {
+        "schema": ARCHIVE_STATE_SCHEMA,
+        "refreshed": str(today),
+        "records": sum(v["archived"] for v in by_type.values()),
+        "complete": bool(rows) and not any(
+            v["capped"] or v["failed"] for v in by_type.values())
+            and not any(row.get("unknown") for row in rows),
+        "by_type": by_type,
+    }
+
+
 def resolve_towns(region, listings, cache_path=None, max_towns=None) -> dict:
     """{slug: display} for `region`: the hand-curated seed, plus the towns the
     other portals just found (busiest first), plus whatever a previous run
@@ -126,9 +240,17 @@ def resolve_towns(region, listings, cache_path=None, max_towns=None) -> dict:
     for slug, _ in counts.most_common():
         towns.setdefault(slug, names[slug])
 
-    # rank: seeded towns first (curated = certainly real), then by listing count
+    # Stable priority: the curated seed's declared order, then towns observed in
+    # this region's current source results (inventory desc, slug tie-break), then
+    # cached fallbacks. This keeps cold-region bootstrap deterministic without
+    # letting small count fluctuations reorder the known seed on every run.
     seed = SEED_TOWNS.get(region) or {}
-    ranked = sorted(towns, key=lambda s: (s not in seed, -counts[s], s))[:max_towns]
+    ranked = list(seed)
+    ranked.extend(s for s, _ in sorted(counts.items(),
+                                       key=lambda item: (-item[1], item[0]))
+                  if s not in seed)
+    ranked.extend(s for s in towns if s not in seed and s not in counts)
+    ranked = list(dict.fromkeys(ranked))[:max_towns]
     out = {s: towns[s] for s in ranked}
 
     if cache_path:
@@ -205,11 +327,20 @@ def parse_offers(offers, typ: str, town: str = "", towns: dict = None):
 
 
 def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
-           types=("house", "flat"), towns=None):
+           types=("house", "flat"), towns=None, harvest_archive=True,
+           archive_state=None, today=None, archive_only_pages=None):
     """`towns`: {slug: display} from resolve_towns(). Defaults to the region's
-    seed list so the module still works standalone."""
+    seed list so the module still works standalone.
+
+    Normal pipeline runs pass ``harvest_archive=False`` and stop after two
+    archive-only result pages. A forced/cadenced full harvest keeps the legacy
+    behavior and returns archive rows for history ingestion.
+    """
     if towns is None:
         towns = SEED_TOWNS.get(os.environ.get("RENTGEN_REGION", "slaskie")) or {}
+    archive_only_pages = (ACTIVE_ARCHIVE_ONLY_PAGES if archive_only_pages is None
+                          else max(1, int(archive_only_pages)))
+    today = today or dt.date.today().isoformat()
     session = session or requests.Session()
     out = []
     cov = []
@@ -228,17 +359,27 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
         failed_towns = []
         first_error = None
         first_http_status = None
+        town_coverage = {}
         for town in towns:
             base = f"https://{town}.nieruchomosci-online.pl/{path}/"
             page = 1
             dup_pages = 0
+            archive_pages = 0
             town_succeeded = False
+            town_stop = "end"
+            town_stats = {
+                "requests": 0, "pages": 0,
+                "served_current": 0, "served_archived": 0,
+                "new_current": 0, "new_archived": 0,
+            }
             while page <= max_pages:
                 url = base if page == 1 else f"{base}?p={page}"
+                town_stats["requests"] += 1
                 try:
                     r = session.get(url, headers=HEADERS, timeout=30)
                     r.raise_for_status()
-                    batch = parse_offers(extract_offers(r.text), typ, town, towns)
+                    all_batch = parse_offers(
+                        extract_offers(r.text), typ, town, towns)
                 except Exception as exc:  # missing sub-domain etc. -> skip town
                     log(f"  nieruchomosci-online {typ}/{town} page {page} error: {exc}")
                     error, http_status = coverage.error_details(exc)
@@ -249,14 +390,23 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
                         if not town_succeeded:
                             succeeded_towns += 1
                             town_succeeded = True
+                        town_stop = "empty" if page == 1 else "end"
                     else:
                         failed_towns.append(town)
+                        town_stop = "error"
+                        town_stats["http_status"] = http_status
                         if first_error is None:
                             first_error, first_http_status = error, http_status
                     break
                 if not town_succeeded:
                     succeeded_towns += 1
                     town_succeeded = True
+                town_stats["pages"] += 1
+                current_batch = [b for b in all_batch if not b.get("archived")]
+                archived_batch = [b for b in all_batch if b.get("archived")]
+                town_stats["served_current"] += len(current_batch)
+                town_stats["served_archived"] += len(archived_batch)
+                batch = all_batch if harvest_archive else current_batch
                 served_keys.update(coverage.listing_key(
                     typ, b.get("source_id") or b.get("url")) for b in batch)
                 kept_keys.update(coverage.listing_key(
@@ -275,12 +425,33 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
                     seen.add(b["source_id"])
                 out.extend(fresh)
                 got += len(fresh)
-                current += sum(1 for b in fresh if not b.get("archived"))
-                archived += sum(1 for b in fresh if b.get("archived"))
+                fresh_current = sum(1 for b in fresh if not b.get("archived"))
+                fresh_archived = len(fresh) - fresh_current
+                current += fresh_current
+                archived += fresh_archived
+                town_stats["new_current"] += fresh_current
+                town_stats["new_archived"] += fresh_archived
                 if fresh:
                     log(f"  nieruchomosci-online {typ}/{town} page {page}: +{len(fresh)}")
-                if not batch:
+                if not all_batch:
+                    town_stop = "end"
                     break              # empty result page = past the end
+                if not harvest_archive and not current_batch:
+                    archive_pages += 1
+                    if archive_pages >= archive_only_pages:
+                        town_stop = "archive_boundary"
+                        log(f"  nieruchomosci-online {typ}/{town}: current offers "
+                            f"ended before page {page - archive_only_pages + 1}; "
+                            "archive deferred")
+                        break
+                    if page >= max_pages:
+                        capped_towns.append(town)
+                        town_stop = "cap"
+                        break
+                    page += 1
+                    time.sleep(delay)
+                    continue
+                archive_pages = 0
                 if not fresh:
                     # towns cross-list each other's offers, so a page can be all
                     # already-seen URLs while later pages still hold new ones —
@@ -288,14 +459,19 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
                     # portals that echo the last page forever when paged past it)
                     dup_pages += 1
                     if dup_pages >= 2:
+                        town_stop = "duplicate_boundary"
                         break
                 else:
                     dup_pages = 0
+                if page >= max_pages:
+                    capped_towns.append(town)
+                    town_stop = "cap"
+                    break
                 page += 1
                 time.sleep(delay)
-                if page > max_pages:
-                    capped_towns.append(town)  # more pages than we allowed
-            pages_total += page - 1
+            town_stats["stop"] = town_stop
+            pages_total += town_stats["pages"]
+            town_coverage[town] = town_stats
         # one row per type, not per town: 60 towns x 2 types would bury the
         # other portals in meta.json, and the towns share one budget anyway
         stopped = (coverage.ERROR if failed_towns else
@@ -306,6 +482,10 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
             served_keys=served_keys, kept_keys=kept_keys,
             current=current, archived=archived,
             error=first_error, http_status=first_http_status)
+        cov_row["partition_axis"] = "town"
+        cov_row["partitions_total"] = len(towns)
+        cov_row["partitions_succeeded"] = succeeded_towns
+        cov_row["towns"] = town_coverage
         if failed_towns:
             cov_row["failed_partitions"] = failed_towns
             cov_row["partial_success"] = succeeded_towns > 0
@@ -314,5 +494,19 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
         if not towns:
             cov_row["unknown"] = True
         cov.append(cov_row)
+    if harvest_archive:
+        archive_state = archive_state_from_rows(cov, today)
+    else:
+        archive_state = dict(archive_state or {})
+    for row in cov:
+        cached = (archive_state.get("by_type") or {}).get(row["type"], {})
+        info = {"mode": "refresh" if harvest_archive else
+                ("cached" if archive_state.get("refreshed") else "not_available")}
+        if archive_state.get("refreshed"):
+            info["refreshed"] = archive_state["refreshed"]
+            info["records"] = int(cached.get("archived") or 0)
+            info["complete"] = bool(archive_state.get("complete"))
+        row["archive_harvest"] = info
+    scrape.last_archive_state = archive_state
     scrape.last_coverage = cov
     return out

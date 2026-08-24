@@ -398,3 +398,131 @@ def test_nol_without_resolved_towns_is_unknown_not_a_clean_zero():
     assert row["unknown"] is True
     health = coverage.summarise([row])["by_source"]["nieruchomosci-online"]
     assert health["status"] == coverage.UNKNOWN
+
+
+class _NolPages:
+    def __init__(self, pages):
+        self.pages = pages
+        self.urls = []
+
+    def get(self, url, **kwargs):
+        self.urls.append(url)
+        page = int(url.rsplit("?p=", 1)[1]) if "?p=" in url else 1
+        offers = self.pages.get(page, [])
+
+        class Response:
+            status_code = 200
+            text = json.dumps(offers)
+
+            @staticmethod
+            def raise_for_status():
+                pass
+
+        return Response()
+
+
+def _nol_offer(source_id, archived=False):
+    availability = "OutOfStock" if archived else "InStock"
+    return {
+        "url": f"https://katowice.nieruchomosci-online.pl/x/{source_id}.html",
+        "availability": f"https://schema.org/{availability}",
+        "price": "500000",
+        "itemOffered": {"floorSize": {"value": 50}},
+    }
+
+
+def test_nol_active_pass_stops_at_confirmed_archive_boundary(monkeypatch):
+    """Current offers are sorted before the archive. Normal runs confirm that
+    boundary twice, discard the archive rows, and retain the last harvest's
+    count/date instead of walking it again twice daily.
+    """
+    monkeypatch.setattr(nol, "extract_offers", json.loads)
+    session = _NolPages({
+        1: [_nol_offer(1), _nol_offer(2)],
+        2: [_nol_offer(10, archived=True)],
+        3: [_nol_offer(11, archived=True)],
+        4: [_nol_offer(12, archived=True)],
+    })
+    state = {
+        "schema": 1, "refreshed": "2026-08-24", "records": 99,
+        "complete": False,
+        "by_type": {"flat": {"archived": 99, "current": 2}},
+    }
+    out = nol.scrape(
+        max_pages=20, delay=0, session=session, log=lambda *a: None,
+        types=("flat",), towns={"katowice": "Katowice"},
+        harvest_archive=False, archive_state=state,
+        today="2026-08-25", archive_only_pages=2)
+
+    assert {row["source_id"] for row in out} == {"1", "2"}
+    assert len(session.urls) == 3
+    row = nol.scrape.last_coverage[0]
+    assert row["stopped"] == coverage.OK
+    assert row["current"] == 2 and row["archived"] == 0
+    assert row["towns"]["katowice"]["stop"] == "archive_boundary"
+    assert row["towns"]["katowice"]["served_archived"] == 2
+    assert row["archive_harvest"] == {
+        "mode": "cached", "refreshed": "2026-08-24",
+        "records": 99, "complete": False,
+    }
+
+    source = coverage.summarise([row])["by_source"]["nieruchomosci-online"]
+    assert source["status"] == coverage.HEALTHY
+    assert source["archive_harvest"]["records"] == 99
+    assert source["types"]["flat"]["partitions"]["axis"] == "town"
+    assert source["types"]["flat"]["partitions"]["details"]["katowice"][
+        "stop"] == "archive_boundary"
+
+
+def test_nol_full_archive_harvest_names_the_capped_town(monkeypatch):
+    monkeypatch.setattr(nol, "extract_offers", json.loads)
+    session = _NolPages({
+        1: [_nol_offer(1), _nol_offer(10, archived=True)],
+        2: [_nol_offer(11, archived=True)],
+    })
+    out = nol.scrape(
+        max_pages=2, delay=0, session=session, log=lambda *a: None,
+        types=("flat",), towns={"katowice": "Katowice"},
+        harvest_archive=True, today="2026-08-25")
+
+    assert sum(bool(row.get("archived")) for row in out) == 2
+    row = nol.scrape.last_coverage[0]
+    assert row["stopped"] == coverage.OUR_CAP
+    assert row["capped_partitions"] == ["katowice"]
+    warning = coverage.warnings([row])[0]
+    assert "capped partition(s): katowice" in warning
+    parts = coverage.summarise([row])["by_source"][
+        "nieruchomosci-online"]["types"]["flat"]["partitions"]
+    assert parts["capped"] == ["katowice"] and parts["complete"] == 0
+    assert nol.scrape.last_archive_state["records"] == 2
+    assert nol.scrape.last_archive_state["complete"] is False
+
+
+def test_nol_archive_cadence_bootstraps_from_previous_meta(tmp_path):
+    meta = tmp_path / "meta.json"
+    meta.write_text(json.dumps({
+        "updated": "2026-08-24T09:54:34+00:00",
+        "coverage": {
+            "by_source": {"nieruchomosci-online": {"types": {
+                "flat": {"current": 8, "archived": 38, "pages": 20},
+                "house": {"current": 2, "archived": 9, "pages": 5},
+            }}},
+            "issues": [{
+                "source": "nieruchomosci-online", "type": "flat",
+                "capped_partitions": ["katowice"],
+            }],
+        },
+    }), encoding="utf-8")
+    state_path = tmp_path / "nol_archive.json"
+    state = nol.load_archive_state(state_path, meta)
+
+    assert state["refreshed"] == "2026-08-24" and state["records"] == 47
+    assert state["complete"] is False
+    assert state["by_type"]["flat"]["capped"] == ["katowice"]
+    assert not nol.archive_due(state, "2026-08-30", "auto", interval_days=7)
+    assert nol.archive_due(state, "2026-08-31", "auto", interval_days=7)
+    assert nol.archive_due(state, "2026-08-24", "force", interval_days=7)
+    assert not nol.archive_due({}, "2026-08-24", "skip", interval_days=7)
+
+    nol.save_archive_state(state_path, state)
+    assert nol.load_archive_state(state_path) == state
