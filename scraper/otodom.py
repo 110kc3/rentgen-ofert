@@ -44,6 +44,7 @@ PAGE_SIZE = 72
 # only, and even then run *after* that full baseline so they can only add data.
 _NEXT = re.compile(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', re.S)
 _REFUSAL_STATUSES = (403, 405, 429)
+_ESTATE_FOR_TYPE = {"house": "HOUSE", "flat": "FLAT"}
 
 
 def _new_request_stats():
@@ -95,10 +96,17 @@ def extract_search_ads(html: str) -> dict:
 
 def parse_items(items, typ: str):
     """Turn raw Otodom ad dicts into normalized listing dicts."""
+    expected_estate = _ESTATE_FOR_TYPE.get(typ)
+    if expected_estate is None:
+        raise ValueError(f"unsupported Otodom listing type: {typ}")
     out = []
     for it in items:
         estate = it.get("estate")
-        if estate not in ("HOUSE", "FLAT"):  # skip INVESTMENT bundles etc.
+        # Search result pages can contain promoted cards from another estate
+        # category. Trust the card's explicit estate and keep only the category
+        # this walk requested; otherwise the same URL can become both a house
+        # and a flat and survive size-based dedupe as two dashboard cards.
+        if estate != expected_estate:  # also skips INVESTMENT bundles etc.
             continue
         loc = (it.get("location") or {}).get("address") or {}
         price = it.get("totalPrice") or {}

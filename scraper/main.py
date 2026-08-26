@@ -42,7 +42,7 @@ import time
 
 from . import cache as phcache
 from . import coverage, delist, geo, gratka, history, marketstats, morizon, net, nieruchomosci_online, olx, otodom, overrides, payload, photomatch, rcn, rcnstats
-from .normalize import dedupe, link_same_size, link_twins
+from .normalize import dedupe, link_same_size, link_twins, require_unique_urls
 
 # Region = the unit of everything (data dir, caches, RCN snapshot). Output goes
 # to site/data/<region>/ and per-region cache files so more voivodeships can be
@@ -198,6 +198,11 @@ def run() -> int:
         print("No listings collected - aborting (keeping previous data).", file=sys.stderr)
         return 1
 
+    # URL is portal-level identity. Catch cross-category/promoted-card leaks
+    # before the expensive photo, history and RCN phases; the publication
+    # validator repeats the invariant at the consumer boundary.
+    require_unique_urls(raw, "raw scrape")
+
     # Fingerprint every listing by its gallery photos. Powers photo-based
     # de-duplication, the relist/price history and the photo archive. A
     # committed cache (cache/phash_<region>.json.gz) lets repeat runs reuse hashes
@@ -235,6 +240,7 @@ def run() -> int:
     raw = [x for x in raw if not x.get("archived")]
 
     listings = dedupe(raw)
+    require_unique_urls(listings, "deduplicated properties")
 
     # Lifecycle bookkeeping, in dependency order:
     #   1. ingest portal-archived ads (direct "this ad ended" evidence)

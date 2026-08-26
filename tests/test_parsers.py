@@ -17,6 +17,19 @@ def test_otodom_parse_items():
     assert all(r["type"] in ("house", "flat") for r in rows)
 
 
+def test_otodom_discards_cross_category_promoted_cards():
+    items = [
+        {"id": 1, "slug": "right-house", "estate": "HOUSE"},
+        {"id": 2, "slug": "promoted-flat", "estate": "FLAT"},
+        {"id": 3, "slug": "investment", "estate": "INVESTMENT"},
+    ]
+
+    rows = otodom.parse_items(items, "house")
+
+    assert [row["source_id"] for row in rows] == ["1"]
+    assert rows[0]["type"] == "house"
+
+
 def test_olx_skips_syndicated_partner_ads():
     state = json.loads((FIX / "olx_state.json").read_text(encoding="utf-8"))
     ads = state["listing"]["listing"]["ads"]

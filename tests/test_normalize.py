@@ -1,6 +1,7 @@
 from scraper.normalize import (
-    otodom_rooms, olx_rooms, to_float, to_int, dedupe,
+    otodom_rooms, olx_rooms, to_float, to_int, dedupe, require_unique_urls,
 )
+import pytest
 
 
 def test_room_maps():
@@ -20,6 +21,22 @@ def test_number_coercion():
     assert to_float(None) is None
     assert to_int("3 644,88") == 3645
     assert to_int("nonsense") is None
+
+
+def test_duplicate_url_diagnostic_includes_conflicting_provenance():
+    rows = [
+        _l(source_id="44", url="same", type="house", area=120),
+        _l(source_id="44", url="same", type="flat", area=120),
+    ]
+
+    with pytest.raises(ValueError) as exc:
+        require_unique_urls(rows, "raw scrape")
+
+    message = str(exc.value)
+    assert "raw scrape contains 1 duplicate URL(s)" in message
+    assert "same:" in message
+    assert "source_id=44 type=house" in message
+    assert "source_id=44 type=flat" in message
 
 
 def _l(**kw):

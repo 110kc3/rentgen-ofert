@@ -243,6 +243,37 @@ def _build(members):
     return prop
 
 
+def require_unique_urls(listings, stage="listings"):
+    """Fail with useful provenance when one URL represents multiple records.
+
+    A portal URL identifies one advertisement independently of type, area or
+    price. Letting it enter two normalization groups creates duplicate index
+    cards and silently overwrites one detail-shard entry. Keep this invariant
+    close to normalization as well as in the final generated-data validator so
+    a bad scrape fails before photo/history/RCN work.
+    """
+    by_url = defaultdict(list)
+    for listing in listings:
+        url = listing.get("url")
+        if url:
+            by_url[url].append(listing)
+    duplicates = {url: rows for url, rows in by_url.items() if len(rows) > 1}
+    if not duplicates:
+        return listings
+
+    lines = [f"{stage} contains {len(duplicates)} duplicate URL(s)"]
+    for url, rows in sorted(duplicates.items()):
+        details = ", ".join(
+            f"source={row.get('source') or '?'} "
+            f"source_id={row.get('source_id') or '?'} "
+            f"type={row.get('type') or '?'} "
+            f"area={row.get('area')!r} price={row.get('price')!r}"
+            for row in rows
+        )
+        lines.append(f"{url}: {details}")
+    raise ValueError("\n".join(lines))
+
+
 def _hamming(a, b):
     return bin(a ^ b).count("1")
 
