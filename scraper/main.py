@@ -134,6 +134,7 @@ def run() -> int:
             # precisely for this) so a brand-new region works on its first run.
             kwargs["towns"] = nieruchomosci_online.resolve_towns(
                 REGION, raw, cache_path=NOL_TOWNS)
+            kwargs["region"] = REGION
             print(f"  n-online towns for {REGION}: {len(kwargs['towns'])}")
             kwargs.update(
                 harvest_archive=nol_harvest_archive,

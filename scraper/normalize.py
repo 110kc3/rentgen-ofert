@@ -25,6 +25,7 @@ new-build units); the trade-off was chosen for coverage over precision.
 from __future__ import annotations
 
 import re
+import unicodedata
 from collections import defaultdict
 
 OTODOM_ROOMS = {
@@ -45,6 +46,22 @@ VOIVODESHIPS = frozenset({
     "małopolskie", "mazowieckie", "opolskie", "podkarpackie", "podlaskie",
     "pomorskie", "śląskie", "świętokrzyskie", "warmińsko-mazurskie",
     "wielkopolskie", "zachodniopomorskie"})
+
+
+def region_slug(value):
+    """Normalize a Polish voivodeship label to the repository's URL slug.
+
+    Portal result pages can carry promoted cards from outside the requested
+    region. Their address metadata uses labels such as ``"śląskie"`` while
+    ``RENTGEN_REGION`` uses ``"slaskie"``; comparing this normalized form lets
+    scrapers reject those cards before one leaked locality expands another
+    portal's town crawl.
+    """
+    # Unicode does not decompose Polish ł/Ł under NFKD.
+    folded = unicodedata.normalize(
+        "NFKD", str(value or "").translate(str.maketrans({"ł": "l", "Ł": "L"})))
+    ascii_value = "".join(c for c in folded if not unicodedata.combining(c))
+    return re.sub(r"[^a-z0-9]+", "-", ascii_value.lower()).strip("-")
 
 
 def location_parts(location):

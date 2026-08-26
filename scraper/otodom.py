@@ -14,7 +14,7 @@ import time
 import requests
 
 from . import bands, coverage
-from .normalize import otodom_rooms, take_unseen, to_int
+from .normalize import otodom_rooms, region_slug, take_unseen, to_int
 
 BASE = "https://www.otodom.pl"
 # Whole-voivodeship search by default. Override with RENTGEN_REGION (an Otodom
@@ -94,7 +94,7 @@ def extract_search_ads(html: str) -> dict:
     return data["props"]["pageProps"]["data"]["searchAds"]
 
 
-def parse_items(items, typ: str):
+def parse_items(items, typ: str, region: str = REGION):
     """Turn raw Otodom ad dicts into normalized listing dicts."""
     expected_estate = _ESTATE_FOR_TYPE.get(typ)
     if expected_estate is None:
@@ -109,6 +109,13 @@ def parse_items(items, typ: str):
         if estate != expected_estate:  # also skips INVESTMENT bundles etc.
             continue
         loc = (it.get("location") or {}).get("address") or {}
+        province = ((loc.get("province") or {}).get("name") or "")
+        # Promoted result cards are not guaranteed to belong to the search's
+        # voivodeship. Besides polluting the dashboard, one such locality is
+        # enough to make n-online crawl an entirely different region because
+        # its town list is derived from the other portals' current results.
+        if province and region_slug(province) != region:
+            continue
         price = it.get("totalPrice") or {}
         ppm = it.get("pricePerSquareMeter") or {}
         images = it.get("images") or []

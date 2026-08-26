@@ -36,7 +36,7 @@ from collections import Counter
 import requests
 
 from . import coverage
-from .normalize import take_unseen, to_float, to_int
+from .normalize import region_slug, take_unseen, to_float, to_int
 from .rcn import _fold
 
 # Cap the town list: each town costs at least one request per type, and the tail
@@ -284,7 +284,8 @@ def extract_offers(html: str):
     return []
 
 
-def parse_offers(offers, typ: str, town: str = "", towns: dict = None):
+def parse_offers(offers, typ: str, town: str = "", towns: dict = None,
+                 region: str | None = None):
     """`town` is the sub-domain slug; `towns` maps it to the display name. The
     slug is never title-cased into a locality — that would invent spellings
     like "Dabrowa-Gornicza" and split dedupe/geocoding keys."""
@@ -297,6 +298,12 @@ def parse_offers(offers, typ: str, town: str = "", towns: dict = None):
         archived = (o.get("availability") or "").rsplit("/", 1)[-1] in ARCHIVED
         item = o.get("itemOffered") or {}
         addr = item.get("address") or {}
+        province = addr.get("addressRegion") or ""
+        # Cached/derived town lists can contain a stale foreign locality. The
+        # offer itself carries the authoritative province, so never let that
+        # cache escape the selected region even if we still probe its page.
+        if region and province and region_slug(province) != region:
+            continue
         floor = item.get("floorSize") or {}
         spec = o.get("priceSpecification") or {}
         out.append({
@@ -328,7 +335,8 @@ def parse_offers(offers, typ: str, town: str = "", towns: dict = None):
 
 def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
            types=("house", "flat"), towns=None, harvest_archive=True,
-           archive_state=None, today=None, archive_only_pages=None):
+           archive_state=None, today=None, archive_only_pages=None,
+           region=None):
     """`towns`: {slug: display} from resolve_towns(). Defaults to the region's
     seed list so the module still works standalone.
 
@@ -338,6 +346,7 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
     """
     if towns is None:
         towns = SEED_TOWNS.get(os.environ.get("RENTGEN_REGION", "slaskie")) or {}
+    region = region or os.environ.get("RENTGEN_REGION", "slaskie")
     archive_only_pages = (ACTIVE_ARCHIVE_ONLY_PAGES if archive_only_pages is None
                           else max(1, int(archive_only_pages)))
     today = today or dt.date.today().isoformat()
@@ -379,7 +388,7 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
                     r = session.get(url, headers=HEADERS, timeout=30)
                     r.raise_for_status()
                     all_batch = parse_offers(
-                        extract_offers(r.text), typ, town, towns)
+                        extract_offers(r.text), typ, town, towns, region=region)
                 except Exception as exc:  # missing sub-domain etc. -> skip town
                     log(f"  nieruchomosci-online {typ}/{town} page {page} error: {exc}")
                     error, http_status = coverage.error_details(exc)

@@ -2,6 +2,7 @@ import json
 import pathlib
 
 from scraper import gratka, nieruchomosci_online as nol, olx, otodom
+from scraper.normalize import region_slug
 
 FIX = pathlib.Path(__file__).parent / "fixtures"
 
@@ -28,6 +29,25 @@ def test_otodom_discards_cross_category_promoted_cards():
 
     assert [row["source_id"] for row in rows] == ["1"]
     assert rows[0]["type"] == "house"
+
+
+def test_otodom_discards_cross_region_promoted_cards():
+    def item(ident, province):
+        return {
+            "id": ident, "slug": f"offer-{ident}", "estate": "HOUSE",
+            "location": {"address": {"province": {"name": province}}},
+        }
+
+    rows = otodom.parse_items(
+        [item(1, "śląskie"), item(2, "warmińsko-mazurskie")],
+        "house", region="slaskie")
+
+    assert [row["source_id"] for row in rows] == ["1"]
+
+
+def test_region_slug_matches_catalog_style():
+    assert region_slug("warmińsko-mazurskie") == "warminsko-mazurskie"
+    assert region_slug("  Łódzkie ") == "lodzkie"
 
 
 def test_olx_skips_syndicated_partner_ads():
@@ -61,6 +81,19 @@ def test_nieruchomosci_online_parse_offers():
         assert r["source"] == "nieruchomosci-online"
         assert r["url"].startswith("https://")
         assert r["price"] is None or isinstance(r["price"], int)
+
+
+def test_nieruchomosci_online_discards_cross_region_offers():
+    html = (FIX / "nol_collection.html").read_text(encoding="utf-8")
+    offers = nol.extract_offers(html)
+    foreign = json.loads(json.dumps(offers[0]))
+    foreign["url"] = "https://olsztyn.nieruchomosci-online.pl/dom/999.html"
+    foreign["itemOffered"]["address"]["addressRegion"] = "warmińsko-mazurskie"
+
+    rows = nol.parse_offers([offers[0], foreign], "house", region="slaskie")
+
+    assert len(rows) == 1
+    assert rows[0]["url"] == offers[0]["url"]
 
 
 # --- n-online town resolution (no region-wide search, no portal index) -------
