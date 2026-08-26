@@ -14,7 +14,7 @@ import time
 import requests
 
 from . import bands, coverage
-from .normalize import otodom_rooms, to_int
+from .normalize import otodom_rooms, take_unseen, to_int
 
 BASE = "https://www.otodom.pl"
 # Whole-voivodeship search by default. Override with RENTGEN_REGION (an Otodom
@@ -115,7 +115,7 @@ def parse_items(items, typ: str):
         slug = it.get("slug")
         out.append({
             "source": "otodom",
-            "source_id": str(it.get("id")),
+            "source_id": str(it["id"]) if it.get("id") is not None else None,
             "url": f"{BASE}/pl/oferta/{slug}" if slug else None,
             "title": it.get("title"),
             "type": typ,
@@ -170,14 +170,16 @@ def _walk(path, typ, tag, max_pages, delay, session, log, seen, out, extra="",
             request_stats["successful"] += 1
         items = sa.get("items") or []
         served += len(items)
+        # Otodom sometimes emits the same slug twice on one page under a real
+        # ad id and a synthetic ``9<id>00067`` id. The URL/slug is the stable
+        # advert identity; counting ids would inflate coverage as well as the
+        # raw output.
         served_keys.update(coverage.listing_key(
-            typ, it.get("id") or it.get("slug")) for it in items)
+            typ, it.get("slug") or it.get("id")) for it in items)
         parsed = parse_items(items, typ)
         kept_keys.update(coverage.listing_key(
-            typ, a.get("source_id") or a.get("url")) for a in parsed)
-        batch = [a for a in parsed if a["url"] not in seen]
-        for a in batch:
-            seen.add(a["url"])
+            typ, a.get("url") or a.get("source_id")) for a in parsed)
+        batch = take_unseen(parsed, seen)
         out.extend(batch)
         got += len(batch)
         pg = sa.get("pagination") or {}

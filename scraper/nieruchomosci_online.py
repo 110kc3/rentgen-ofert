@@ -36,7 +36,7 @@ from collections import Counter
 import requests
 
 from . import coverage
-from .normalize import to_float, to_int
+from .normalize import take_unseen, to_float, to_int
 from .rcn import _fold
 
 # Cap the town list: each town costs at least one request per type, and the tail
@@ -420,9 +420,7 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
                 # (b) meant the `dup_pages` exit below could never fire, so
                 # every town was walked to the cap. That was 75 of the run's
                 # 123 scrape minutes, spent to gain 83 listings.
-                fresh = [b for b in batch if b["source_id"] not in seen]
-                for b in fresh:
-                    seen.add(b["source_id"])
+                fresh = take_unseen(batch, seen, key="source_id")
                 out.extend(fresh)
                 got += len(fresh)
                 fresh_current = sum(1 for b in fresh if not b.get("archived"))

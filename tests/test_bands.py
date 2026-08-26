@@ -471,6 +471,29 @@ def test_otodom_defaults_to_the_full_unbanded_baseline():
     assert len(coverage.warnings([row])) == 1
 
 
+def test_otodom_deduplicates_synthetic_clones_on_the_same_page():
+    class ClonedPage(OtodomSession):
+        def get(self, url, **kw):
+            response = super().get(url, **kw)
+            marker = '<script id="__NEXT_DATA__">'
+            body = json.loads(response.text.removeprefix(marker).removesuffix("</script>"))
+            items = body["props"]["pageProps"]["data"]["searchAds"]["items"]
+            if items:
+                clone = dict(items[0], id=f"9{items[0].get('id')}00067")
+                items.insert(1, clone)
+            return _Resp2(marker + json.dumps(body) + "</script>")
+
+    sess = ClonedPage(stock=72)
+    out = otodom.scrape(max_pages=2, delay=0, session=sess,
+                        log=lambda *a: None, types=("flat",))
+
+    assert len(out) == 72
+    assert len({row["url"] for row in out}) == len(out)
+    row = otodom.scrape.last_coverage[0]
+    assert coverage.unique_seen_by(row) == 72
+    assert coverage.unique_kept_by(row) == 72
+
+
 def test_explicit_otodom_bands_are_additive_after_the_full_baseline():
     sess = OtodomSession()
     out = otodom.scrape(max_pages=200, delay=0, session=sess,

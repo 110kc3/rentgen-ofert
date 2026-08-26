@@ -274,6 +274,24 @@ def require_unique_urls(listings, stage="listings"):
     raise ValueError("\n".join(lines))
 
 
+def take_unseen(items, seen, key="url"):
+    """Return records whose identity is new, including within this batch.
+
+    A list comprehension followed by ``seen.update`` only removes records seen
+    on earlier pages; two clones on the same page both pass before ``seen`` is
+    updated. Portal result pages do contain such clones, so mutate ``seen`` as
+    each item is accepted.
+    """
+    fresh = []
+    for item in items:
+        identity = item.get(key)
+        if not identity or identity in seen:
+            continue
+        seen.add(identity)
+        fresh.append(item)
+    return fresh
+
+
 def _hamming(a, b):
     return bin(a ^ b).count("1")
 

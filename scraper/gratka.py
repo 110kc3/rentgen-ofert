@@ -16,7 +16,7 @@ import requests
 from bs4 import BeautifulSoup
 
 from . import bands, coverage
-from .normalize import location_parts, stated_total, to_float, to_int
+from .normalize import location_parts, stated_total, take_unseen, to_float, to_int
 
 BASE = "https://gratka.pl"
 # Whole-voivodeship search by default; override with RENTGEN_REGION.
@@ -160,7 +160,7 @@ def _walk(base, typ, tag, max_pages, delay, session, log, seen, out, extra=""):
             if total is None:
                 total, total_min = stated_total(r.text)
             cards = parse_cards(r.text, typ)
-            batch = [c for c in cards if c["url"] not in seen]
+            batch = take_unseen(cards, seen)
         except Exception as exc:  # keep what we have, move on
             log(f"  gratka {typ}/{tag} page {page} error: {exc}")
             stopped = coverage.ERROR
@@ -170,8 +170,6 @@ def _walk(base, typ, tag, max_pages, delay, session, log, seen, out, extra=""):
             typ, c.get("source_id") or c.get("url")) for c in cards)
         kept_keys.update(coverage.listing_key(
             typ, c.get("source_id") or c.get("url")) for c in cards)
-        for c in batch:
-            seen.add(c["url"])
         out.extend(batch)
         got += len(batch)
         served += len(cards)

@@ -18,7 +18,7 @@ import time
 import requests
 
 from . import bands, coverage
-from .normalize import olx_rooms, to_float, to_int
+from .normalize import olx_rooms, take_unseen, to_float, to_int
 
 # Whole-voivodeship search by default; override with RENTGEN_REGION.
 REGION = os.environ.get("RENTGEN_REGION", "slaskie")
@@ -183,9 +183,7 @@ def _walk(base_url, typ, tag, max_pages, delay, session, log, seen, out, extra="
         parsed = parse_ads(ads, typ)
         kept_keys.update(coverage.listing_key(
             typ, a.get("source_id") or a.get("url")) for a in parsed)
-        batch = [a for a in parsed if a["url"] not in seen]
-        for a in batch:
-            seen.add(a["url"])
+        batch = take_unseen(parsed, seen)
         out.extend(batch)
         got += len(batch)
         total_pages = listing.get("totalPages", 1) or 1

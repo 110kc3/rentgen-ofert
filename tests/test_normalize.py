@@ -1,5 +1,6 @@
 from scraper.normalize import (
     otodom_rooms, olx_rooms, to_float, to_int, dedupe, require_unique_urls,
+    take_unseen,
 )
 import pytest
 
@@ -37,6 +38,19 @@ def test_duplicate_url_diagnostic_includes_conflicting_provenance():
     assert "same:" in message
     assert "source_id=44 type=house" in message
     assert "source_id=44 type=flat" in message
+
+
+def test_take_unseen_removes_clones_inside_one_page():
+    seen = {"old"}
+    rows = [
+        {"url": "old", "source_id": "1"},
+        {"url": "new", "source_id": "2"},
+        {"url": "new", "source_id": "synthetic-2"},
+        {"url": None, "source_id": "missing-url"},
+    ]
+
+    assert take_unseen(rows, seen) == [rows[1]]
+    assert seen == {"old", "new"}
 
 
 def _l(**kw):
