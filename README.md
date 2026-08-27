@@ -466,8 +466,8 @@ scraper/
 cache/                 (on the `data-<region>` branch, gitignored on main)
   phash_<region>.json.gz  gallery-hash cache, reused run-to-run (auto-pruned)
   rcn_<region>.json.gz  RCN transaction snapshot (refreshed weekly)
-  geo_cache.json        shared-file geocode cache; keys start with the region's
-                        TERYT prefix, so same-named towns cannot cross regions
+  geo_cache.json        shared-file geocode cache; active keys start with the
+                        region's TERYT prefix (retained legacy keys are ignored)
   nol_towns.json        per-region town lists for n-online (slug -> display name)
   nol_archive_<region>.json  last full n-online archive harvest and town bounds
 scripts/

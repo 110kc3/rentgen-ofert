@@ -29,8 +29,9 @@ regionalized scrape ran for 92.1 minutes, passed all 224 offline tests before
 portal work, validated 30,763 unique properties from 51,890 raw rows (119.3
 MiB), staged only the 76 allowed Śląskie paths and refreshed `data-slaskie`.
 Its n-online path remained current-only (10,871 rows / 581 pages), the archive
-cache retained the same SHA-256, and the new geo cache contains 11,675
-TERYT-scoped `24|…` keys.
+cache retained the same SHA-256, and geo wrote 500 new TERYT-scoped `24|…`
+keys. The shared file also retained 11,175 pre-P1 unprefixed keys, which the
+regional lookup path deliberately ignores.
 
 ### P0 evidence now accepted
 
@@ -1006,8 +1007,9 @@ refresh). Now:
 - [x] **Region = directory** from day one: `site/data/slaskie/{listings.json,
       history.json.gz, archive.json, meta.json, rcnstats.json, stats.json}`,
       caches `cache/phash_<region>.json` + `cache/rcn_<region>.json.gz`
-      (`geo_cache.json` stays a shared file, but every key now includes the
-      regional TERYT prefix). Dashboard + Statystyki read `data/<region>/` from
+      (`geo_cache.json` stays a shared file; every new/used production key
+      includes the regional TERYT prefix, while retained pre-P1 keys are inert).
+      Dashboard + Statystyki read `data/<region>/` from
       stable `region/<slug>/` pages; legacy `?region=` links redirect.
 - [x] **`history.json` gzipped** (~8-10x smaller; only the pipeline reads it;
       pre-gzip plain file picked up once as a fallback). Deploy strips it from

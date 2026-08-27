@@ -124,9 +124,11 @@ Morizon substantially overlap and are merged.
   triggered a successful Pages deploy.
 - **The regional product succeeded live.** P1 scrape `33082048365` refreshed
   only `data-slaskie`; its archive cache retained the forced-refresh SHA-256
-  and its 11,675 geo entries all use the `24|…` scope. Direct and automatic
-  deploys exposed one published region, stable canonical paths and valid
-  JSON-LD while keeping Małopolskie `noindex`/data-less and unknown slugs 404.
+  and its 500 new geo entries use the `24|…` scope. The shared cache retained
+  11,175 pre-P1 unprefixed entries, but production lookup ignores them. Direct
+  and automatic deploys exposed one published region, stable canonical paths
+  and valid JSON-LD while keeping Małopolskie `noindex`/data-less and unknown
+  slugs 404.
 
 ### Runtime and scheduling capacity
 
