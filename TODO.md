@@ -1,32 +1,35 @@
 # TODO — rentgen-ofert
 
 > Keep this file and `README.md` updated after each change.
-> Last updated: 2026-08-24
+> Last updated: 2026-08-27
 
-## Current (2026-08-24) — P0.2/P0.3 accepted; bound n-online and gate the scrape
+## Current (2026-08-27) — P0 complete; regional product implemented
 
-The request-policy recovery from `5b936ac` is published and accepted. The push
-run plus two consecutive schedules all succeeded and deployed. The scheduled
-runs `32658518259` (153 min) and `32700052454` (168 min) kept **16,267** and
-**16,280** Otodom listings respectively. Both logged 263/263 successful Otodom
-requests with no refusal; both made exactly one OLX page-one request, stopped
-in about three seconds on HTTP 403, and published the source as `blocked`.
-P0.2 and P0.3 are therefore complete, not “local and awaiting validation.”
+The corrected Śląskie baseline is published and stable. Five runs on main SHA
+`701795e` rejected cross-category clones, duplicate cards within a portal result
+page and promoted cards from another voivodeship, including the explicit
+forced/following archive sequence:
 
-The latest run published **31,196** current properties from 52,168 current raw
-rows. Its remaining repeatable bottleneck is n-online: 1,701 pages and about
-76.5 minutes to serve 58,831 unique records, of which **47,922 (81.5%) were
-archived** and 10,909 current. Katowice flats alone walked to page 200; schema
-v2 preserved `capped_partitions: ["katowice"]`, but the human warning still
-hid that fact behind `flat/60 towns`.
+| Run | Trigger | Scrape runtime | Unique / raw | Otodom | n-online current | Deploy |
+|---|---|---:|---:|---:|---:|---|
+| `32967543284` | push | 90.0 min | 30,862 / 51,937 | 15,921 | 10,864 | `32976169826` |
+| `33004188553` | manual | about 89 min | 30,794 / 51,880 | 15,876 | 10,860 | `33011950180` |
+| `33007455916` | schedule | 85.5 min | 30,761 / 51,883 | 15,875 | 10,862 | `33018656594` |
+| `33047120282` | forced archive | 177.4 min | 30,781 / 51,906 | 15,887 | 10,901 | `33060020329` |
+| `33072698054` | active-only follow-up | 79.6 min | 30,684 / 51,754 | 15,866 | 10,826 | `33079583960` |
 
-### Implemented in this slice (P0.4 + P0.6)
+All five made 263/263 successful Otodom requests with no refusal. The old
+16.3k count included out-of-scope promoted/cloned records; **15.8–15.9k is the
+approved evidence-backed regional floor**, not a regression. OLX made one
+bounded HTTP-403 probe and remained explicitly `blocked`.
+
+### P0 evidence now accepted
 
 - **The twice-daily n-online path is current-only.** The portal orders current
-  offers before its archive. A bounded live probe confirmed Katowice pages
-  1–46 were current and pages 47 onward archived; the new walk stops after two
-  consecutive archive-only pages. The end-to-end one-town smoke kept all 1,534
-  current flats and stopped after 48 pages instead of reaching page 200.
+  offers before its archive and the walk stops after two consecutive
+  archive-only pages. Four corrected active runs retained 10.83–10.86k current
+  offers in 581–582 pages; the phase took 20.5–23.5 minutes, well below the
+  40-minute gate, and published compact per-town stop diagnostics.
 - **Archive harvesting has its own cadence and cache.** `RENTGEN_NOL_ARCHIVE`
   is `auto` (default, seven days), `force`, or `skip`; the cadence is adjustable
   with `RENTGEN_NOL_ARCHIVE_DAYS`. A per-region
@@ -34,6 +37,16 @@ hid that fact behind `flat/60 towns`.
   harvest capped/failed. The first run bootstraps it from the last full
   `meta.json`, so rollout does not immediately repeat the 1,700-page walk.
   Full refreshes still return archived ads to the durable history store.
+- **The forced archive path is measured.** Run `33047120282` refreshed the
+  n-online cache on 2026-08-27: 47,754 archived and 10,901 current rows in
+  1,817 pages. The n-online phase took 75.3 minutes; Katowice flats were the
+  sole capped partition and no town failed. The whole scrape took 177.4
+  minutes, validated 119.4 MiB and deployed in `33060020329`.
+- **The following active path did not inherit archive work.** Explicit `skip`
+  run `33072698054` used 581 pages and 20.5 minutes for 10,826 current rows,
+  reported zero current-run archive rows, and retained the 2026-08-27 / 47,754
+  cache with the exact same Git blob and SHA-256. Its 79.6-minute scrape,
+  119.0-MiB validator, branch push and deploy `33079583960` all passed.
 - **Town coverage is explicit.** Each type publishes compact per-town request,
   live/archive, new-unique and stop statistics. Coverage summaries name capped
   and failed towns, and warnings now say `capped partition(s): katowice`.
@@ -47,23 +60,46 @@ hid that fact behind `flat/60 towns`.
   A failure prevents the data-branch push.
 - **Phase timings are data, not log archaeology.** `meta.json.runtime` records
   each source plus photo/history/delist/RCN/geo/write and total seconds.
-- Verification: **199/199** offline tests, Python compilation, JavaScript
-  syntax checks and `git diff --check` pass.
+- **Photo splitting is not needed on warm Śląskie.** Four corrected active runs
+  processed every correctness candidate in roughly 32–74 seconds with no
+  budget exhaustion. That is safely below the 60-minute P0.5 gate; a separate
+  history-priority queue remains a cold-region optimisation, not a rollout
+  blocker.
+- **Every publication was protected.** The offline gate preceded portal work,
+  the generated-data validator checked all 71 JSON files and 118.4–119.4 MiB,
+  and the regional branch push and Pages deployment succeeded after each run.
+
+### Regional implementation in this worktree
+
+- `site/regions.json` is the single schema-1 catalog for all 16 official
+  voivodeships: canonical slug, Polish forms, TERYT, enabled/cadence, optional
+  anchor/districts and an explicit slug for each region-wide portal. Runtime
+  code no longer carries a second slug/TERYT/label map.
+- The deploy generates `/` as a national picker and stable
+  `region/<slug>/` + `region/<slug>/stats/` pages from the data branches that
+  were actually overlaid and enabled. Counts, freshness, health and served
+  bytes feed the picker and `data/regions.json`; metadata, JSON-LD, sitemap and
+  `llms.txt` include published regions only. Setting `enabled: false` removes
+  only that region's copy from the Pages artifact while leaving its recoverable
+  data branch and every sibling untouched. Unpublished/unknown slugs explain
+  themselves.
+- Browser filter and map state is keyed by region. Stable app/stats links and
+  legacy redirects preserve shared filters, including old Śląskie `?f=` links.
+- Regional branch staging and deploy overlay now use one tested helper. A real
+  temporary-git two-region fixture proves that phash/RCN/archive caches do not
+  cross branches, sibling deployed data survives, and stale shards disappear.
+- UUG geocoding selects the candidate matching the catalog TERYT prefix and
+  scopes cache keys by that prefix. Same-named places in different regions can
+  no longer reuse the wrong centroid.
+- Verification currently covers **224 offline tests**, including catalog,
+  generator, navigation, two-region storage and ambiguous-geocoder regressions.
 
 ### Next
 
-1. Inspect the push-triggered workflow. Confirm the offline-test step finishes
-   before `Scrape listings`, the generated-data validator finishes before the branch
-   push, and the job summary contains source health, phase times and bytes.
-2. Inspect two consecutive scheduled active-only runs. Accept P0.4 only if
-   n-online retains its ~10.9k current floor, names every problematic town and
-   finishes within 40 minutes. Confirm the archive cache date/count remains
-   visible while current-run `archived` is zero.
-3. Manually run `nol_archive=force` once to validate the full-harvest path and
-   cache refresh, then confirm the following active run returns to the bounded
-   path. Accept P0.6 when both validators have protected real publications.
-4. Reassess P0.5 against the new active-only photo input; do not schedule a
-   second region until the full P0 gate is recorded in `POLAND_ROLLOUT.md`.
+1. Publish the locally verified P1 implementation and inspect both
+   the direct Pages deployment and the push-triggered scrape/deployment.
+2. Only after that evidence is recorded, enable and manually run one disposable
+   `malopolskie` pilot. Do not add it to cron or create a 16-region matrix.
 
 ## Superseded (2026-08-13) — stop before region two and repair the template
 
@@ -948,14 +984,16 @@ every fix below is covered by `tests/test_bugfixes.py` (90 tests total).
 Data + caches no longer live in main's git history (`history.json` was 83 MB
 and marching toward GitHub's 100 MB hard limit at ~40 MB of new history per
 refresh). Now:
-- [x] **Orphan `data` branch**, force-pushed as a SINGLE commit per run,
-      holds `site/data/<region>/**` + `cache/**`. Main carries code only.
+- [x] **Orphan `data-<region>` branch**, force-pushed as a SINGLE commit per
+      run, holds exactly that region's data/per-region caches plus the two
+      intentional shared-file caches. Main carries code only. The pre-split
+      `data` branch remains a deploy/seed fallback.
 - [x] **Region = directory** from day one: `site/data/slaskie/{listings.json,
       history.json.gz, archive.json, meta.json, rcnstats.json, stats.json}`,
       caches `cache/phash_<region>.json` + `cache/rcn_<region>.json.gz`
-      (`geo_cache.json` stays shared — a town geocoded once serves every
-      region). Dashboard + Statystyki read `data/<region>/` (`?region=`,
-      default slaskie). Adding a voivodeship = a matrix entry, no layout work.
+      (`geo_cache.json` stays a shared file, but every key now includes the
+      regional TERYT prefix). Dashboard + Statystyki read `data/<region>/` from
+      stable `region/<slug>/` pages; legacy `?region=` links redirect.
 - [x] **`history.json` gzipped** (~8-10x smaller; only the pipeline reads it;
       pre-gzip plain file picked up once as a fallback). Deploy strips it from
       the Pages artifact.
@@ -1210,10 +1248,8 @@ region's listing count:
 
 ### Krok 1 — layout: region = build unit  ✅ DONE 2026-07-11
 - `site/data/<region>/…` + per-region caches (`cache/phash_<region>.json`,
-  `cache/rcn_<region>.json.gz`); dashboard + stats read `data/<region>/` via
-  `?region=`. TERYT map for RCN already covers all 16 regions.
-- Still open from this step: root `index.html` is not yet a region picker with
-  per-region counts (single region, so nothing to pick between).
+  `cache/rcn_<region>.json.gz`). P1 completed the canonical 16-region catalog,
+  stable dashboard/stats paths and deploy-derived root picker on 2026-08-27.
 
 ### Krok 2 — CI
 - Matrix over regions with `max-parallel: 1–2` and staggered crons (each

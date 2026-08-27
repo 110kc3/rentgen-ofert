@@ -9,40 +9,24 @@ const HIST_LABEL = { relisted: "Wystawione ponownie", dropped: "Z obniżką", rc
 const MARKET_LABEL = { secondary: "Rynek wtórny", primary: "Inwestycje (rynek pierwotny)" };
 const inArchive = () => state.history === "sold" || state.history === "sold_rcn";
 
-// data lives per voivodeship in data/<region>/ (see TODO.md "storage switch");
-// ?region=malopolskie switches once more regions are scraped. Declared here
-// because the per-region config below reads it — `const` has no hoisting, so
-// moving this back down puts REGION in the temporal dead zone and the page
-// dies on load.
-const REGION = ((new URLSearchParams(location.search).get("region") || "slaskie")
-  .replace(/[^a-z-]/g, "")) || "slaskie";
+// Stable pages use /region/<slug>/. The query fallback keeps pre-P1 bookmarks
+// working while every data fetch remains scoped to one sibling directory.
+const REGION = RentgenRegion.fromLocation(location, "listings");
 const DATA = `data/${REGION}`;
 
 // ---- per-region dashboard config -------------------------------------------
-// Adding a voivodeship = adding an entry here. `anchor` is the city the optional
-// radius filter measures from (omit it and the control hides itself); `gen` is
-// the Polish genitive for the label ("od Gliwic"). `districts` maps neighbourhood
-// names that portals sometimes return in the locality field onto their parent
-// city, so they don't become separate towns in the filter list.
-// KNOWN LIMITATION: district names are not unique across Poland ("Śródmieście"
-// exists in most cities), so this fold is only safe while one region is live.
-// Keying it on district+city needs a city the portals often don't send.
-const REGION_CONFIG = {
-  slaskie: {
-    label: "woj. śląskie",
-    anchor: { name: "Gliwice", gen: "Gliwic", ll: [50.2945, 18.6714] },
-    districts: [
-      "Śródmieście", "Sośnica", "Trynek", "Łabędy", "Wójtowa Wieś", "Szobiszowice",
-      "Ostropa", "Żerniki", "Brzezinka", "Stare Gliwice", "Wilcze Gardło", "Bojków",
-      "Sikornik", "Zatorze", "Kopernik", "Politechnika", "Obrońców Pokoju",
-      "Ligota Zabrska", "Czechowice", "Baildona", "Sośnica Wschód",
-    ].reduce((m, d) => (m[d] = "Gliwice", m), {}),
-  },
+// Loaded from the deployed derivative of site/regions.json before any regional
+// data. An anchor is optional; without one the distance control stays hidden.
+let CFG = {};
+let ANCHOR = null;
+let DISTRICTS = {};
+const configureRegion = (entry) => {
+  CFG = entry || {};
+  ANCHOR = CFG.anchor || null;
+  DISTRICTS = CFG.districts || {};
 };
-const CFG = REGION_CONFIG[REGION] || {};
-const ANCHOR = CFG.anchor || null;
-const DISTRICTS = CFG.districts || {};
-const anchorLabel = () => (ANCHOR ? (ANCHOR.gen || ANCHOR.name) : "");
+const anchorLabel = () => (ANCHOR
+  ? (ANCHOR.genitive || ANCHOR.name) : "");
 const normLoc = (loc) => (!loc ? null : (DISTRICTS[loc] || loc));
 
 // town -> [lat, lon]: the FALLBACK for the radius filter. Listings now carry
@@ -96,13 +80,13 @@ function haversine(a, b) {
 function distOf(l) {
   if (!ANCHOR || !l) return null;
   if (Array.isArray(l.ll) && l.ll.length === 2) return haversine(ANCHOR.ll, l.ll);
-  const c = TOWN_COORDS[normLoc(l.locality)];
+  const c = REGION === "slaskie" ? TOWN_COORDS[normLoc(l.locality)] : null;
   return c ? haversine(ANCHOR.ll, c) : null;
 }
 
 const state = { all: [], archive: null, type: "all", source: "all", owner: "all", history: "all", market: "all", distance: "all", sort: "newest", localities: [] };
 let locOptions = [];                         // [ [name, count], ... ] sorted by count
-const FILTER_KEY = "rentgen.filters.v2";
+const FILTER_KEY = RentgenRegion.storageKey("rentgen.filters.v2", REGION);
 
 const $ = (sel) => document.querySelector(sel);
 const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) =>
@@ -110,7 +94,58 @@ const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) =>
 const cssEsc = (s) => (window.CSS && CSS.escape) ? CSS.escape(s) : String(s).replace(/[^a-zA-Z0-9_-]/g, "\\$&");
 const apply = () => { persist(); render(); };
 
+function showRegionMessage(title, body) {
+  const controls = document.querySelector(".controls");
+  if (controls) controls.hidden = true;
+  const grid = $("#grid");
+  if (grid) grid.innerHTML = `<div class="empty"><b>${escapeHtml(title)}</b>
+    <p>${escapeHtml(body)}</p><p><a href="./">← wybierz województwo</a></p></div>`;
+}
+
+function wireRegionSelect(entries) {
+  const select = $("#region-select");
+  if (!select) return;
+  select.replaceChildren(...entries.map((entry) => {
+    const option = document.createElement("option");
+    option.value = entry.slug;
+    option.textContent = entry.label + (entry.published ? "" : " — brak danych");
+    option.selected = entry.slug === REGION;
+    return option;
+  }));
+  select.addEventListener("change", () => {
+    location.href = RentgenRegion.pageUrl(
+      select.value, "listings", document.baseURI);
+  });
+}
+
 async function boot() {
+  let regional;
+  try {
+    const response = await fetch("data/regions.json", { cache: "no-store" });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const catalog = await response.json();
+    regional = (catalog.regions || []).find((entry) => entry.slug === REGION);
+    if (!regional) {
+      showRegionMessage("Nieznane województwo",
+        `Slug „${REGION}” nie występuje w katalogu regionów.`);
+      return;
+    }
+    configureRegion(regional);
+    wireRegionSelect(catalog.regions || []);
+    const statsLink = document.querySelector("a.backlink");
+    if (statsLink) statsLink.href = RentgenRegion.pageUrl(
+      REGION, "stats", document.baseURI);
+    if (!regional.published) {
+      showRegionMessage("Dane jeszcze nieopublikowane",
+        `${regional.label} jest skonfigurowane, ale nie ma jeszcze regionalnej bazy ofert.`);
+      return;
+    }
+  } catch (e) {
+    showRegionMessage("Nie udało się wczytać katalogu regionów",
+      "Spróbuj ponownie za chwilę lub wróć do strony głównej.");
+    return;
+  }
+
   try {
     // manifest (tiny, always fresh) carries the content version; the slim
     // index + detail shards are then fetched cacheably under ?v=<hash>.
@@ -141,19 +176,9 @@ async function boot() {
     state.meta = meta;
     renderStats(meta);
   } catch (e) {
-    $("#grid").innerHTML =
-      `<div class="empty">Nie udało się wczytać danych (data/listings.json).</div>`;
+    showRegionMessage("Nie udało się wczytać danych regionu",
+      `Brakuje lub nie można odczytać danych dla ${regional.label}.`);
     return;
-  }
-  if (REGION !== "slaskie") {              // keep the region across page links
-    const a = document.querySelector('a[href="stats.html"]');
-    if (a) a.href = `stats.html?region=${REGION}`;
-    // the static markup is written for śląskie (the only region with an SEO
-    // story today); relabel it for anything else until a region picker exists
-    const lab = CFG.label || REGION;
-    document.title = `Rentgen ofert — ${lab}`;
-    const h1 = document.querySelector("header h1");
-    if (h1) h1.textContent = `Rentgen ofert — ${lab}`;
   }
   applyAnchorUi();
   buildSourceFilter();
@@ -355,10 +380,8 @@ function persist() {
   const snap = snapshot();
   try { localStorage.setItem(FILTER_KEY, JSON.stringify(snap)); } catch (e) {}
   try {
-    const url = isDefault(snap)
-      ? location.pathname
-      : location.pathname + "?f=" + encodeURIComponent(JSON.stringify(snap));
-    history.replaceState(null, "", url);
+    history.replaceState(null, "",
+      RentgenRegion.withFilter(location.href, snap, isDefault(snap)));
   } catch (e) {}
 }
 
@@ -382,7 +405,10 @@ function setSeg(key, val) {
 
 function applySnapshot(s) {
   ["type", "source", "owner", "history", "market"].forEach((k) => setSeg(k, s[k]));
-  if (s.distance != null) { state.distance = s.distance; const d = $("#distance"); if (d) d.value = s.distance; }
+  const distance = RentgenRegion.distanceForRegion(s.distance, Boolean(ANCHOR));
+  state.distance = distance;
+  const distanceSelect = $("#distance");
+  if (distanceSelect) distanceSelect.value = distance;
   if (s.sort != null) { state.sort = s.sort; const so = $("#sort"); if (so) so.value = s.sort; }
   state.localities = Array.isArray(s.localities) ? s.localities.slice() : [];
   setVal("min-price", s.minPrice); setVal("max-price", s.maxPrice);
@@ -1202,7 +1228,7 @@ function wirePinButtons() {
 
 // ---- map view (Leaflet + markercluster, lazy-loaded from CDN) ---------------
 
-const MAP_KEY = "rentgen.map.v1";
+const MAP_KEY = RentgenRegion.storageKey("rentgen.map.v1", REGION);
 let lmap = null, lcluster = null, legendCtl = null, leafletLoading = null, mapFitted = false;
 
 // marker color = the card's "vs transakcje RCN" verdict
@@ -1253,7 +1279,9 @@ function ensureLeaflet() {
 
 function initMap() {
   if (lmap) return;
-  lmap = L.map("map").setView([50.3, 19.0], 9);
+  const firstLocated = state.all.find((listing) => Array.isArray(listing.ll));
+  const center = ANCHOR?.ll || firstLocated?.ll || [52.1, 19.4];
+  lmap = L.map("map").setView(center, ANCHOR ? 9 : 7);
   L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 19,
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',

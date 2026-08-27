@@ -6,7 +6,8 @@ venv/
 .DS_Store
 *.log
 
-# scraped data + caches live on the orphan `data` branch, never on main
-# (see TODO.md "storage switch"); locally they sit here untracked
+# scraped data + caches live on orphan `data-<region>` branches, never on main
+# (the pre-split `data` branch is only a fallback); locally they sit untracked
 site/data/
+site/region/
 cache/

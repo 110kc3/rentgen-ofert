@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <base href="../../">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{LISTING_TITLE}}</title>
+  <meta name="description" content="{{LISTING_DESCRIPTION}}">
+  {{ROBOTS_META}}
+  <link rel="canonical" href="{{LISTING_URL}}">
+  <!-- Machine-readable twins. meta.json is the small summary (counts, freshness);
+       the full offer index and the rest are listed as DataDownload nodes in
+       the Dataset JSON-LD below. -->
+  <link rel="alternate" type="text/markdown" href="https://110kc3.github.io/rentgen-ofert/llms.txt" title="llms.txt">
+  <link rel="alternate" type="application/json" href="{{DATA_URL}}/meta.json" title="Podsumowanie danych (JSON)">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="{{LISTING_TITLE}}">
+  <meta property="og:description" content="{{LISTING_DESCRIPTION}}">
+  <meta property="og:url" content="{{LISTING_URL}}">
+  <meta property="og:site_name" content="Rentgen ofert">
+  <meta property="og:locale" content="pl_PL">
+  <meta property="og:image" content="https://110kc3.github.io/rentgen-ofert/og.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="{{LISTING_TITLE}}">
+  <meta name="twitter:description" content="{{LISTING_DESCRIPTION}}">
+  <meta name="twitter:image" content="https://110kc3.github.io/rentgen-ofert/og.png">
+  <!-- jsonld:start -->
+  <script type="application/ld+json">{}</script>
+<!-- jsonld:end -->
+  <link rel="stylesheet" href="styles.css?v=9">
+</head>
+<body>
+  <header>
+    <h1>{{LISTING_TITLE}}</h1>
+    <div class="sub">Domy i mieszkania na sprzedaż z portali ogłoszeniowych — całe {{REGION_LABEL}} w jednym miejscu, bez duplikatów.
+    <a class="backlink" href="region/{{REGION_SLUG}}/stats/">📊 Statystyki rynku</a>
+    <label class="region-nav">Region <select id="region-select" aria-label="Wybierz województwo"></select></label></div>
+    <div class="stats" id="stats"></div>
+    <!-- summary:start -->
+    <p class="sub" id="data-summary">Podsumowanie regionalnej bazy jest generowane podczas wdrożenia.</p>
+    <noscript><p class="sub">Lista ofert wymaga JavaScriptu. Surowe dane (JSON):
+    <a href="data/{{REGION_SLUG}}/meta.json">meta.json</a>, <a href="data/{{REGION_SLUG}}/stats.json">stats.json</a>,
+    <a href="data/{{REGION_SLUG}}/rcnstats.json">rcnstats.json</a> — pełny katalog w <a href="llms.txt">llms.txt</a>.</p></noscript>
+<!-- summary:end -->
+  </header>
+
+  <div class="controls">
+    <div class="group">
+      <div class="seg" data-key="type">
+        <button data-val="all" class="active">Wszystko</button>
+        <button data-val="house">Domy</button>
+        <button data-val="flat">Mieszkania</button>
+      </div>
+    </div>
+    <div class="group">
+      <div class="seg" data-key="source" id="source-seg"></div>
+    </div>
+    <div class="group"><label>Miejscowość</label>
+      <div class="ms" id="loc-ms">
+        <button type="button" class="ms-btn" id="loc-btn">Wszystkie</button>
+        <div class="ms-pop" id="loc-pop" hidden>
+          <input type="search" id="loc-search" placeholder="szukaj miejscowości…" autocomplete="off">
+          <div class="ms-list" id="loc-list"></div>
+          <div class="ms-foot"><button type="button" id="loc-clear">wyczyść wybór</button></div>
+        </div>
+      </div>
+    </div>
+    <div class="group">
+      <div class="seg" data-key="owner">
+        <button data-val="all" class="active">Każdy</button>
+        <button data-val="private">Prywatne</button>
+        <button data-val="agency">Biura</button>
+      </div>
+    </div>
+    <div class="group">
+      <div class="seg" data-key="history">
+        <button data-val="all" class="active">Wszystkie</button>
+        <button data-val="relisted">Wystawione ponownie</button>
+        <button data-val="dropped">Z obniżką</button>
+        <button data-val="rcn">Z danymi RCN</button>
+        <button data-val="sold">Archiwum<span class="segcount" id="cnt-sold"></span></button>
+        <button data-val="sold_rcn">Sprzedane wg RCN<span class="segcount" id="cnt-sold-rcn"></span></button>
+      </div>
+    </div>
+    <div class="group">
+      <div class="seg" data-key="market">
+        <button data-val="all" class="active">Oba rynki</button>
+        <button data-val="secondary">Wtórny</button>
+        <button data-val="primary">Inwestycje</button>
+      </div>
+    </div>
+    <div class="group" id="distance-group"><label id="distance-label">Odległość od {{ANCHOR_GENITIVE}} (orientacyjnie)</label>
+      <select id="distance">
+        <option value="all">całe województwo</option>
+        <option value="5">≤ 5 km</option>
+        <option value="10">≤ 10 km</option>
+        <option value="15">≤ 15 km</option>
+        <option value="20">≤ 20 km</option>
+        <option value="30">≤ 30 km</option>
+        <option value="40">≤ 40 km</option>
+      </select>
+    </div>
+    <div class="group"><label>Cena</label>
+      <input class="num" id="min-price" type="number" placeholder="od" min="0" step="10000">
+      <input class="num" id="max-price" type="number" placeholder="do" min="0" step="10000">
+    </div>
+    <div class="group"><label>m²</label>
+      <input class="num" id="min-area" type="number" placeholder="od" min="0">
+      <input class="num" id="max-area" type="number" placeholder="do" min="0">
+    </div>
+    <div class="group"><label>Pokoje od</label>
+      <input class="num" id="min-rooms" type="number" placeholder="np. 2" min="0" style="width:70px">
+    </div>
+    <div class="group">
+      <input class="txt" id="q" type="search" placeholder="szukaj: dzielnica, tytuł…">
+    </div>
+    <div class="spacer"></div>
+    <div class="group">
+      <button type="button" id="map-btn" class="mapbtn" title="pokaż oferty na mapie">🗺 Mapa</button>
+    </div>
+    <div class="group"><label>Sortuj</label>
+      <select id="sort">
+        <option value="newest">Najnowsze</option>
+        <option value="discount">Największa obniżka</option>
+        <option value="vsrcn">Cena vs transakcje RCN ↑</option>
+        <option value="price_asc">Cena ↑</option>
+        <option value="price_desc">Cena ↓</option>
+        <option value="ppm_asc">zł/m² ↑</option>
+        <option value="area_desc">Powierzchnia ↓</option>
+      </select>
+    </div>
+    <div class="group" id="count" style="color:var(--muted);font-size:13px"></div>
+  </div>
+
+  <main>
+    <div class="chips" id="chips" hidden></div>
+    <div id="map" hidden></div>
+    <div class="grid" id="grid"></div>
+  </main>
+
+  <footer>
+    rentgen-ofert · obsługiwane portale: Otodom, OLX, Gratka, Morizon i n-online · {{REGION_LABEL}} · odświeżane automatycznie przez GitHub Actions
+  </footer>
+
+  <script src="region-context.js?v=1"></script>
+  <script src="app.js?v=21"></script>
+</body>
+</html>

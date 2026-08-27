@@ -1,33 +1,19 @@
-# Rentgen ofert — woj. śląskie
+# Rentgen ofert — Poland regional property data
 
-> Aggregated dashboard of every house/flat sale listing in the Śląskie voivodeship,
-> Poland — attempts up to five configured portals (Otodom, OLX, Gratka, Morizon,
-> nieruchomości-online) and reports blocked sources explicitly; listings are
-> de-duplicated by photo hash, with price history and real
-> notarial transaction prices (RCN). Personal, non-commercial project; listings link
-> back to the source portals. Page content is in Polish.
+> Regional dashboards aggregating house and flat sale listings in Poland.
+> Listings are de-duplicated, carry price history, and may be matched to
+> notarial RCN sale prices. Page content is in Polish.
 
-## Pages
+## Start here
 
-- https://110kc3.github.io/rentgen-ofert/ — listing browser (JavaScript app; the served HTML carries a no-JS data summary)
-- https://110kc3.github.io/rentgen-ofert/stats.html — market statistics: asking vs notarial (RCN) prices, supply, discounts
+- https://110kc3.github.io/rentgen-ofert/ — national region picker
+- https://110kc3.github.io/rentgen-ofert/data/regions.json — deployed region catalog with live counts, freshness, health and byte size
+- https://110kc3.github.io/rentgen-ofert/sitemap.xml — published regional pages
 
-## Machine-readable data (JSON, refreshed twice daily at ~06:00 and ~18:00 UTC)
-
-Start with meta.json — counts and freshness in one small file.
-
-- https://110kc3.github.io/rentgen-ofert/data/slaskie/meta.json — dataset counts, per-source/per-type breakdown, last update
-- https://110kc3.github.io/rentgen-ofert/data/slaskie/stats.json — market statistics feeding stats.html
-- https://110kc3.github.io/rentgen-ofert/data/slaskie/rcnstats.json — notarial-transaction (RCN) benchmarks per town
-- https://110kc3.github.io/rentgen-ofert/data/slaskie/index.json — slim grid index of every current listing (duży plik, ~13 MB)
-- https://110kc3.github.io/rentgen-ofert/data/slaskie/manifest.json — data version + shard count
-- https://110kc3.github.io/rentgen-ofert/data/slaskie/d/00.json … d/63.json — lazy detail shards (64 files; shard = listing id hash, see manifest.json)
-- https://110kc3.github.io/rentgen-ofert/data/slaskie/archive.json — delisted offers
-- Sitemap: https://110kc3.github.io/rentgen-ofert/sitemap.xml
-
-Current: 18 259 listings (11 794 flats, 6465 houses), updated 2026-07-13.
+The deployment generator replaces this fallback with a complete entry for
+every region that actually has `site/data/<region>/meta.json`.
 
 ## Notes
 
-- Source & pipeline: https://github.com/110kc3/rentgen-ofert
-- Data has informational character; the source portals and notarial registers are authoritative.
+- Source and pipeline: https://github.com/110kc3/rentgen-ofert
+- Data has informational character; source portals and public registers are authoritative.

@@ -3,74 +3,29 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Statystyki rynku — Rentgen ofert, woj. śląskie</title>
-  <meta name="description" content="Ceny ofertowe vs realne ceny transakcyjne (RCN), podaż, obniżki i czas sprzedaży — domy i mieszkania w woj. śląskim.">
-  <link rel="canonical" href="https://110kc3.github.io/rentgen-ofert/stats.html">
+  <meta name="robots" content="noindex">
+  <meta http-equiv="refresh" content="1; url=region/slaskie/stats/">
+  <title>Przenoszenie do statystyk — Rentgen ofert</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
-  <meta property="og:type" content="website">
-  <meta property="og:title" content="Statystyki rynku — Rentgen ofert, woj. śląskie">
-  <meta property="og:description" content="Ceny ofertowe vs realne ceny transakcyjne (RCN), podaż, obniżki i czas sprzedaży — domy i mieszkania w woj. śląskim.">
-  <meta property="og:url" content="https://110kc3.github.io/rentgen-ofert/stats.html">
-  <meta property="og:site_name" content="Rentgen ofert">
-  <meta property="og:locale" content="pl_PL">
-  <meta property="og:image" content="https://110kc3.github.io/rentgen-ofert/og.png">
-  <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Statystyki rynku — Rentgen ofert, woj. śląskie">
-  <meta name="twitter:description" content="Ceny ofertowe vs realne ceny transakcyjne (RCN), podaż i ruch tygodniowy.">
-  <meta name="twitter:image" content="https://110kc3.github.io/rentgen-ofert/og.png">
-  <link rel="stylesheet" href="styles.css?v=8">
-  <link rel="stylesheet" href="stats.css?v=1">
+  <link rel="stylesheet" href="styles.css?v=9">
 </head>
 <body>
-  <header>
-    <h1>Statystyki rynku — woj. śląskie</h1>
-    <div class="sub">Ceny ofertowe z portali vs realne ceny z aktów notarialnych (RCN), podaż i ruch tygodniowy.
-      <a class="backlink" href="index.html">← wróć do ofert</a></div>
-    <div class="stats" id="stats"></div>
-    <!-- summary:start -->
-    <p class="sub" id="data-summary">Baza RCN: <b>34 128</b> rekordów transakcji,
-    2259 dopasowanych do ofert, benchmarki dla 64 miejscowości.
-    Aktualizacja: 13 lipca 2026.</p>
-    <noscript><p class="sub">Wykresy wymagają JavaScriptu. Surowe dane (JSON):
-    <a href="data/slaskie/stats.json">stats.json</a>, <a href="data/slaskie/rcnstats.json">rcnstats.json</a>,
-    <a href="data/slaskie/meta.json">meta.json</a>.</p></noscript>
-<!-- summary:end -->
-  </header>
-
-  <div class="controls">
-    <div class="group"><label>Miejscowość</label>
-      <select id="town"><option value="">Całe województwo</option></select>
-    </div>
-    <div class="group">
-      <div class="seg" data-key="type">
-        <button data-val="flat" class="active">Mieszkania</button>
-        <button data-val="house">Domy</button>
-      </div>
-    </div>
-    <div class="group"><label>Zakres</label>
-      <div class="seg" data-key="range">
-        <button data-val="24">2 lata</button>
-        <button data-val="60" class="active">5 lat</button>
-        <button data-val="all">max</button>
-      </div>
-    </div>
-  </div>
-
-  <main>
-    <div class="tiles" id="tiles"></div>
-    <div class="charts">
-      <section class="chartcard" id="c-prices"></section>
-      <section class="chartcard" id="c-supply"></section>
-      <section class="chartcard" id="c-flow"></section>
-      <section class="chartcard" id="c-dom"></section>
-    </div>
+  <main class="redirect-card">
+    <h1>Przenoszenie do statystyk</h1>
+    <p><a id="legacy-target" href="region/slaskie/stats/">Otwórz statystyki woj. śląskiego</a></p>
   </main>
-
-  <footer>
-    rentgen-ofert · oferty: Otodom, OLX, Gratka, Morizon, n-online · transakcje: RCN/GUGiK (akty notarialne) ·
-    serie ofertowe budują się od pierwszego uruchomienia narzędzia
-  </footer>
-
-  <script src="stats.js?v=1"></script>
+  <script>
+    (() => {
+      const current = new URL(location.href);
+      const requested = current.searchParams.get("region") || "slaskie";
+      const slug = /^[a-z]+(?:-[a-z]+)*$/.test(requested) ? requested : "slaskie";
+      current.searchParams.delete("region");
+      const target = new URL(`region/${slug}/stats/`, document.baseURI);
+      target.search = current.search;
+      target.hash = current.hash;
+      document.querySelector("#legacy-target").href = target.href;
+      location.replace(target);
+    })();
+  </script>
 </body>
 </html>

@@ -2,6 +2,7 @@
 <html lang="pl">
 <head>
   <meta charset="utf-8">
+  <base href="/rentgen-ofert/">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Nie znaleziono strony — Rentgen ofert</title>
   <meta name="robots" content="noindex">
@@ -27,13 +28,33 @@
 </head>
 <body>
   <div class="card">
-    <div class="code">Błąd 404</div>
-    <h1>Nie znaleziono strony</h1>
-    <p>Ten adres nie istnieje. Wszystkie oferty i statystyki znajdziesz na stronie głównej.</p>
+    <div class="code" id="code">Błąd 404</div>
+    <h1 id="title">Nie znaleziono strony</h1>
+    <p id="message">Ten adres nie istnieje. Wybierz dostępne województwo z katalogu.</p>
     <nav>
-      <a href="./">Oferty</a>
-      <a href="stats.html">Statystyki rynku</a>
+      <a href="./">Wybierz województwo</a>
+      <a href="region/slaskie/">Woj. śląskie</a>
     </nav>
   </div>
+  <script>
+    (() => {
+      const match = location.pathname.match(/\/region\/([a-z]+(?:-[a-z]+)*)/);
+      if (!match) return;
+      fetch("data/regions.json", { cache: "no-store" }).then((response) => response.json())
+        .then((catalog) => {
+          const region = (catalog.regions || []).find((entry) => entry.slug === match[1]);
+          if (region) {
+            document.querySelector("#code").textContent = "Region bez publikacji";
+            document.querySelector("#title").textContent = "Dane jeszcze niedostępne";
+            document.querySelector("#message").textContent =
+              `${region.label} jest skonfigurowane, ale regionalna baza nie została jeszcze opublikowana.`;
+          } else {
+            document.querySelector("#title").textContent = "Nieznane województwo";
+            document.querySelector("#message").textContent =
+              `Slug „${match[1]}” nie występuje w katalogu regionów.`;
+          }
+        }).catch(() => {});
+    })();
+  </script>
 </body>
 </html>

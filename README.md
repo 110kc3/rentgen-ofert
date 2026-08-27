@@ -1,15 +1,17 @@
 # rentgen-ofert
 
-A Śląskie-first house and flat *sale* listing aggregator, designed to grow to
-all 16 Polish voivodeships. It attempts **Otodom**, **OLX**, **gratka**,
+A regional house and flat *sale* listing aggregator, Śląskie-first and designed
+to grow deliberately to all 16 Polish voivodeships. It attempts **Otodom**, **OLX**, **gratka**,
 **Morizon** and **nieruchomości-online**, de-duplicates what the portals serve,
 and presents it on one searchable page. No application server: a GitHub Actions
 job scrapes, writes static JSON, and GitHub Pages displays it.
 
 Portal blocking and serving caps mean “all listings” is a target, not a current
-guarantee. The published 2026-08-24 dataset has 31,196 current properties from
-four contributing sources. OLX is blocked with HTTP 403; Otodom's 16.3k floor
-has recovered, although its flat root remains partial at the 200-page cap.
+guarantee. The published 2026-08-27 dataset has 30,684 current properties from
+four contributing sources. OLX is blocked with HTTP 403; after rejecting
+cross-category clones and promoted cards from other voivodeships, Otodom's
+evidence-backed regional floor is about 15.9k and its flat root remains
+explicitly partial at the 200-page cap.
 
 ```
 GitHub Actions (cron) → python -m scraper.main → site/data/<region>/*.json
@@ -21,37 +23,49 @@ never in main's git history — main stays a few MB of code while a region's
 branch is force-pushed fresh each run (the price history lives *inside*
 `history.json.gz`, so old git versions of it carry no information). One branch
 per region because a shared one is what a second region would break: Śląskie
-alone is currently ~169 MB including caches and pipeline-only history, and
+alone is currently ~189 MB including caches and pipeline-only history, and
 every job would fetch, and force-push over, all of everyone's. A deploy overlays
 every `data-*` branch (plus the pre-split shared `data` branch, still read so
 the split needed no flag day).
 
 ## Poland rollout status
 
-As of 2026-08-24, **1 of 16 voivodeships is published**. Region-scoped output,
-all 16 RCN/TERYT mappings and per-region data branches are implemented; the
-`data-slaskie` branch has been created, refreshed and deployed successfully.
+As of 2026-08-27, **1 of 16 voivodeships is published**. One canonical catalog
+now owns every region's label, TERYT prefix, enabled state, cadence, optional
+anchor and explicit per-portal slug. The deployed product is region-aware: `/`
+is generated as a national picker, published regions get stable
+`region/<slug>/` and `region/<slug>/stats/` pages, browser state is scoped by
+region, and discovery metadata is generated from complete, enabled data
+actually overlaid. Disabling a catalog entry suppresses its scrape and its
+artifact copy without deleting the recoverable data branch or a sibling.
 
-The next step is not a 16-region CI matrix. The latest two completed warm
-Śląskie jobs completed in 153 and 168 minutes. Otodom recovered to 16,267 and
-16,280 kept listings with all 263 unbanded searches succeeding, while an OLX
-page-one 403 caused exactly one portal-wide probe in each run. P0.2 and P0.3
-are therefore accepted from production evidence. The P0.4/P0.6 slice
-now bounds n-online's current crawl separately from its weekly archive harvest,
-adds town-level diagnostics and archive state, and puts 199 offline tests plus
-a generated-data validator in front of publication. Live scheduled-run
-validation remains. The audited status, evidence, decisions, acceptance
-gates and P0–P5 task order are
+The corrected warm Śląskie runs `32967543284`, `33004188553` and `33007455916`
+completed in 90.0, about 89, and 85.5 minutes. Their bounded n-online phases
+took about 21.6–23.5 minutes and retained 10.86k current listings; every run
+passed the pre-request offline gate, generated-data validator, single-region
+branch push and Pages deploy. OLX still makes one bounded HTTP-403 probe. This
+accepts the warm P0 runtime and publication gate. Forced archive run
+`33047120282` then refreshed 47,754 archived n-online rows in 1,817 pages,
+named Katowice flats as its sole capped partition, had no failed towns and
+finished the whole scrape in 177.4 minutes. Active-only follow-up
+`33072698054` then finished in 79.6 minutes; n-online used 581 current-only
+pages in 20.5 minutes and left the freshly dated archive cache byte-for-byte
+unchanged. This closes the P0 archive-isolation gate. Exact evidence and the
+rollout decision are recorded in
+[`POLAND_ROLLOUT.md`](POLAND_ROLLOUT.md). The next step is still not a
+16-region schedule: a single manual disposable pilot comes before any matrix.
+The audited status, evidence, decisions, acceptance gates and P0–P5 task order are
 in [`POLAND_ROLLOUT.md`](POLAND_ROLLOUT.md). `TODO.md` remains the detailed
 development diary.
 
 ## What it does
 
-- Searches **domy** and **mieszkania** *na sprzedaż* across the **whole Śląskie
-  voivodeship** (Katowice, Gliwice, Częstochowa, Bielsko-Biała, Rybnik, …) on up
-  to five portals — a region-level search on Otodom/OLX/gratka/Morizon and
-  per-city sub-domains on nieruchomości-online. Set `RENTGEN_REGION` to target a
-  different voivodeship, but no second region is production-validated yet.
+- Searches **domy** and **mieszkania** *na sprzedaż* across the selected whole
+  voivodeship (currently published: Śląskie — Katowice, Gliwice, Częstochowa,
+  Bielsko-Biała, Rybnik, …) on up to five portals — a region-level search on
+  Otodom/OLX/gratka/Morizon and per-city sub-domains on
+  nieruchomości-online. `RENTGEN_REGION` must name an entry in
+  `site/regions.json`; no second region is production-validated yet.
   Every listing keeps its **town (locality)**, and the dashboard has a searchable
   **town multi-select** filter.
 - Keeps archived / sold listings (e.g. nieruchomości-online *Ogłoszenie archiwalne*)
@@ -125,8 +139,9 @@ development diary.
   `partial`, `blocked` or `unknown`, independently of process success. The
   dashboard therefore keeps a source that returned no listings visible and
   distinguishes a clean `0` from `blokada` or `brak danych`. Schema v2 has run
-  successfully in production through 2026-08-24; the latest output reports
-  Gratka healthy, Morizon/Otodom/n-online partial and OLX blocked. The
+  successfully in production through 2026-08-27; the latest completed active
+  output reports Gratka/n-online healthy, Morizon/Otodom partial and OLX
+  blocked. The
   served/kept split remains important: each scraper filters
   while parsing (otodom drops INVESTMENT
   bundles, OLX drops ads syndicated from Otodom), and comparing kept-against-
@@ -163,8 +178,12 @@ development diary.
   experiment only *after* that baseline is already collected, so a failed band
   cannot halve the published source again. Each Otodom run logs elapsed time,
   successful page requests and the first refusal. Two scheduled runs on
-  2026-08-23 and 2026-08-24 restored 16.3k listings with 263/263 successful
-  unbanded searches, satisfying P0.2; see `POLAND_ROLLOUT.md`.
+  2026-08-23 and 2026-08-24 restored 16.3k rows with 263/263 successful
+  unbanded searches. Later correctness fixes showed that count included
+  cross-category clones, repeated portal cards and promoted cards outside the
+  region; three corrected runs on 2026-08-26 kept 15.8–15.9k valid Śląskie
+  rows with the same 263/263 request shape, establishing the approved P0.2
+  floor. See `POLAND_ROLLOUT.md`.
 - **Empty views explain themselves.** When a filter combination returns
   nothing, the dashboard re-runs the filter with each dimension relaxed and
   offers the ones that would bring results back ("Miejscowość: Gliwice — 43"),
@@ -176,12 +195,15 @@ development diary.
   on demand), with markers colored by the listing's price vs local RCN
   transactions (green = below, red = above). Coordinates come from GUGiK's
   free UUG geocoder via `scraper/geo.py` — unique town/street names are
-  resolved once into a committed cache (`cache/geo_cache.json`), towns first,
+  resolved into a committed cache (`cache/geo_cache.json`), towns first,
   streets improving over runs (`RENTGEN_GEO_MAX` lookups per run,
   `RENTGEN_GEO=0` to skip). Street-precise pins are exact; town-precise ones
-  are scattered ≤400 m around the centroid and marked "≈" in the popup.
-- **Statystyki page (`stats.html`).** A separate market dashboard fed by
-  `scraper/marketstats.py` -> `site/data/stats.json` (~32 KB): median asking
+  are scattered ≤400 m around the centroid and marked "≈" in the popup. UUG
+  can return several same-named places; the scraper selects the result whose
+  TERYT starts with the selected region's prefix and includes that prefix in
+  the cache key, so one region's centroid cannot leak into another.
+- **Regional Statystyki page (`region/<slug>/stats/`).** A separate market dashboard fed by
+  `scraper/marketstats.py` -> `site/data/<region>/stats.json`: median asking
   zł/m² (weekly, from the tool's own observations) charted against **median
   transacted zł/m² from notarial deeds** (monthly since 2018, wtórny +
   pierwotny) — per town or voivodeship-wide; active supply per week; new /
@@ -232,7 +254,8 @@ development diary.
   merged property. ~8 700 fetches a run, handed back to a budget that was
   starving 9 177–18 296 listings.
 - Dashboard: filter by **town** (searchable multi-select), type / source / private
-  vs agency / price / area / rooms, optional distance-from-Gliwice, full-text search,
+  vs agency / price / area / rooms, optional distance from the catalog anchor
+  (Gliwice in Śląskie), full-text search,
   and sort by newest, biggest discount, **price vs RCN transactions**, price, zł/m²
   or area — as a card grid or on the **map**. Active filters show as removable chips
   with one-click reset, and your selection is remembered (saved locally and encoded
@@ -257,7 +280,8 @@ CI too. The cache stores its 256-bit hashes base64-packed inside a gzip (v1 wrot
 78-character decimal strings in plain JSON and reached 62.9 MB for one region,
 past GitHub's 50 MB warning; a v1 file is migrated on read).
 
-Dashboard URL: `https://<your-username>.github.io/rentgen-ofert/`.
+Picker URL: `https://<your-username>.github.io/rentgen-ofert/`; a published
+dashboard lives at `.../rentgen-ofert/region/<slug>/`.
 
 > First push blocked by a `.git/index.lock`? Delete that file and commit again
 > (a stale lock was left behind — see TODO.md).
@@ -270,12 +294,13 @@ scrape, push it back as a fresh single commit:
 
 ```bash
 REGION=slaskie
-git fetch origin data-$REGION && git checkout FETCH_HEAD -- site/data cache && git reset -q
-python -m scraper.main                                   # ~minutes with warm caches
+git fetch origin data-$REGION
+git checkout FETCH_HEAD -- "site/data/$REGION"
+git checkout FETCH_HEAD -- cache || true
+git reset -q
+RENTGEN_REGION="$REGION" python -m scraper.main          # ~minutes with warm caches
 git checkout --orphan data-local && git rm -r --cached -q . \
-  && git add -f site/data/$REGION cache/geo_cache.json cache/nol_towns.json \
-       cache/nol_archive_$REGION.json \
-       cache/phash_$REGION.json.gz cache/rcn_$REGION.json.gz \
+  && python -m scripts.region_storage stage "$REGION" \
   && git commit -m "data: local scrape" \
   && git push --force origin HEAD:data-$REGION && git checkout -
 ```
@@ -295,11 +320,13 @@ coverage block and runtime summary before anything is pushed.
 ```bash
 pip install -r scraper/requirements.txt   # requests + beautifulsoup4 + Pillow
 python -m scraper.main                     # scrape -> site/data/slaskie/{manifest,index,d/*,...}.json
+node scripts/update-summary.mjs            # build the picker + stable regional pages
 python -m http.server 8000 -d site         # then open http://localhost:8000
 ```
 
-Open it through that local server, **not** by double-clicking `index.html` —
-browsers block the data `fetch()` over `file://`.
+Open the picker at `http://localhost:8000/` or Śląskie directly at
+`http://localhost:8000/region/slaskie/`. Use the local server, **not** a
+double-clicked HTML file — browsers block data `fetch()` over `file://`.
 
 Scrape less while testing (otherwise it pulls every page of every portal):
 
@@ -392,16 +419,18 @@ shard mismatches, missing coverage health, or missing runtime diagnostics.
 
 ## Customise
 
-- **Region** — set `RENTGEN_REGION` (a voivodeship slug). The scrapers, caches,
-  data dir and RCN pull are all region-driven; nieruchomości-online (which has
-  no region-wide search) derives its town list from the other portals' results
-  and caches it in `cache/nol_towns.json`. For the dashboard, add an entry to
-  `REGION_CONFIG` in `site/app.js` — the label and the optional
-  distance-from-anchor filter; a region without an anchor city simply hides that
-  control. **Read [`POLAND_ROLLOUT.md`](POLAND_ROLLOUT.md) first**: source
-  coverage, runtime, regional URLs/navigation and hosting all have gates before
-  a second region is scheduled. For rentals or other scopes, edit the `SEARCH`
-  URLs in each `scraper/<portal>.py`.
+- **Region** — select an existing entry in `site/regions.json`, then set
+  `RENTGEN_REGION` to its canonical slug. That one catalog owns the Polish
+  labels, TERYT prefix, enabled/cadence state, optional distance anchor and each
+  portal's explicit path slug. The scrapers, caches, data directory, RCN pull,
+  generated picker/pages and browser state all consume it. A region without an
+  anchor simply hides the distance control. Nieruchomości-online (which has no
+  region-wide search) derives and caches a region-keyed town list in
+  `cache/nol_towns.json`. **Read
+  [`POLAND_ROLLOUT.md`](POLAND_ROLLOUT.md) first**: source coverage, cold runtime
+  and hosting still gate a second production region. For rentals or other
+  scopes, change the product/search model separately; do not overload a region
+  entry.
 - **Add a portal** — write a module exposing `scrape(max_pages, delay, ...)`
   that returns the shared listing dict (see the docstring in
   `scraper/normalize.py`) and add it to `SOURCES` in `scraper/main.py`.
@@ -423,7 +452,8 @@ scraper/
   rcnstats.py    deed zł/m² benchmarks + ask-vs-sold gap + per-town register
                  freshness (stale powiats) -> rcnstats.json
   marketstats.py weekly/monthly market time series -> stats.json (Statystyki page)
-  geo.py         UUG geocoding of towns/streets + EPSG:2180 -> WGS84 (map view)
+  geo.py         TERYT-selected UUG geocoding + EPSG:2180 -> WGS84 (map view)
+  regions.py     validates/serves the canonical 16-region catalog
   uldk.py        address -> canonical street + cadastral parcel (UUG + ULDK)
   rcncheck.py    manual RCN lookup / --pin; overrides.py  hand-pinned addresses
   main.py        runs every source, photo-checks look-alikes, writes site/data/*.json
@@ -431,24 +461,29 @@ scraper/
 cache/                 (on the `data-<region>` branch, gitignored on main)
   phash_<region>.json.gz  gallery-hash cache, reused run-to-run (auto-pruned)
   rcn_<region>.json.gz  RCN transaction snapshot (refreshed weekly)
-  geo_cache.json        geocode cache (town/street -> lat,lon). One of the two
-                        cache files copied onto every region's branch, so it
-                        forks per region: a town on a border is looked up once
-                        by each neighbour, which is cheaper than sharing state
-                        between jobs that force-push
+  geo_cache.json        shared-file geocode cache; keys start with the region's
+                        TERYT prefix, so same-named towns cannot cross regions
   nol_towns.json        per-region town lists for n-online (slug -> display name)
   nol_archive_<region>.json  last full n-online archive harvest and town bounds
 scripts/
   validate_data.py      publication gate for generated regional payloads
+  region_storage.py     exact per-region branch staging + sibling-safe overlay
+  update-summary.mjs    national picker/catalog, regional page and discovery generator
+  templates/            regional listing + statistics HTML templates
 site/
-  index.html  app.js  styles.css        listings dashboard + map view (GitHub Pages)
-  stats.html  stats.js  stats.css       Statystyki market dashboard (SVG charts)
+  index.html                         national picker shell (filled at deploy)
+  regions.json                       canonical 16-region catalog
+  app.js  stats.js  region-context.js regional data/navigation/state clients
+  styles.css  stats.css              dashboard, picker, map and SVG chart styles
+  region/<slug>/                    generated stable listing/statistics pages
   data/<region>/  manifest.json (content version) + index.json (slim grid) +
                   d/NN.json (lazy detail shards, see scraper/payload.py),
                   history.json.gz, archive.json, meta.json, rcnstats.json,
                   stats.json   (generated each run; on the `data-<region>` branch —
-                  one directory per voivodeship, ?region= to view)
-tests/         parser, crawl-boundary, payload, history, RCN, stats and geo tests
+                  one directory per voivodeship)
+  data/regions.json                  deploy-derived counts/freshness/health/size
+tests/         parser, crawl-boundary, payload, history, RCN, geo, site-generation
+               and two-region storage-isolation tests
 .github/workflows/   update.yml (cron scrape) + deploy.yml (Pages publish)
 POLAND_ROLLOUT.md  current nationwide status, gates and ordered task plan
 TODO.md        detailed development diary + other pending work

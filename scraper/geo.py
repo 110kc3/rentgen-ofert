@@ -4,6 +4,9 @@ Portals give a locality and sometimes a street — no coordinates. We geocode
 the *unique* locality / locality+street strings through the free UUG service
 (the same one rcncheck/uldk use), convert EPSG:2180 -> WGS84 in pure Python,
 and keep a committed cache (``cache/geo_cache.json``) so CI never re-asks.
+UUG can return several identically named places across Poland.  Results are
+therefore selected by the region's two-digit TERYT prefix and cache keys carry
+that prefix too; a cached Sosnowiec from Lubelskie can never leak into Śląskie.
 Each run does at most ``max_new`` fresh lookups: town names first (one lookup
 covers hundreds of listings), then streets by how many listings need them —
 so the map is town-accurate immediately and street-accurate over time.
@@ -83,9 +86,11 @@ def save(path, cache):
     os.replace(tmp, p)
 
 
-def _key(locality, street=None):
+def _key(locality, street=None, teryt_prefix=None):
     k = _fold(locality)
-    return f"{k}|{_fold(street)}" if street else k
+    if street:
+        k = f"{k}|{_fold(street)}"
+    return f"{teryt_prefix}|{k}" if teryt_prefix else k
 
 
 def _stale(entry, today):
@@ -99,29 +104,52 @@ def _stale(entry, today):
     return age >= RETRY_DAYS
 
 
-def _lookup(session, locality, street, today):
+def _lookup(session, locality, street, today, teryt_prefix=None):
     """One UUG call -> cache entry. Point precision: street when UUG actually
-    matched the street, town when it fell back to the city centroid."""
+    matched the street, town when it fell back to the city centroid.
+
+    ``GetAddress`` numbers all candidates under ``results``.  Candidate 1 is
+    merely the service's first textual match, not necessarily the requested
+    voivodeship, so choose by the canonical TERYT prefix before using a point.
+    """
     addr = f"{locality}, {street}" if street else locality
     try:
         r = session.get(UUG, params={"request": "GetAddress", "address": addr},
                         headers=HEADERS, timeout=20)
         r.raise_for_status()
-        res = (r.json().get("results") or {}).get("1")
+        results = r.json().get("results") or {}
     except Exception:
         return None                       # transient -> don't cache
+    if isinstance(results, dict):
+        candidates = list(results.values())
+    elif isinstance(results, list):
+        candidates = results
+    else:
+        candidates = []
+    candidates = [candidate for candidate in candidates
+                  if isinstance(candidate, dict)]
+    if teryt_prefix:
+        candidates = [candidate for candidate in candidates
+                      if str(candidate.get("teryt") or "").startswith(
+                          str(teryt_prefix))]
+    res = candidates[0] if candidates else None
     if not res:
         return {"ll": None, "d": today}
     lat, lon = to_wgs84(float(res["x"]), float(res["y"]))
-    return {"ll": [lat, lon],
-            "p": "s" if street and res.get("street") else "t",
-            "d": today}
+    entry = {"ll": [lat, lon],
+             "p": "s" if street and res.get("street") else "t",
+             "d": today}
+    if res.get("teryt") is not None:
+        entry["teryt"] = str(res["teryt"])
+    return entry
 
 
 def attach(listings, cache, session, today=None, max_new=500, delay=DELAY,
-           log=print):
+           log=print, teryt_prefix=None):
     """Set ll/llp on listings in place; grow the cache within ``max_new``.
 
+    Production callers pass the canonical two-digit ``teryt_prefix``; omitting
+    it is retained only for standalone/backwards-compatible use.
     Returns (new_lookups, located_listings)."""
     import time
     today = today or dt.date.today().isoformat()
@@ -133,11 +161,11 @@ def attach(listings, cache, session, today=None, max_new=500, delay=DELAY,
         loc = (l.get("locality") or "").strip()
         if not loc or not _fold(loc):
             continue
-        towns[_key(loc)] += 1
-        raw.setdefault(_key(loc), (loc, None))
+        towns[_key(loc, teryt_prefix=teryt_prefix)] += 1
+        raw.setdefault(_key(loc, teryt_prefix=teryt_prefix), (loc, None))
         st = (l.get("street") or "").strip()
         if st and _fold(st):
-            k = _key(loc, st)
+            k = _key(loc, st, teryt_prefix)
             streets[k] += 1
             raw.setdefault(k, (loc, st))
 
@@ -150,7 +178,8 @@ def attach(listings, cache, session, today=None, max_new=500, delay=DELAY,
         e = cache.get(k)
         if e is not None and not _stale(e, today):
             continue
-        entry = _lookup(session, *raw[k], today)
+        entry = _lookup(session, *raw[k], today,
+                        teryt_prefix=teryt_prefix)
         if entry is None:
             continue
         cache[k] = entry
@@ -165,9 +194,9 @@ def attach(listings, cache, session, today=None, max_new=500, delay=DELAY,
         st = (l.get("street") or "").strip()
         hit = None
         if st:
-            hit = cache.get(_key(loc, st))
+            hit = cache.get(_key(loc, st, teryt_prefix))
         if not hit or hit.get("ll") is None:
-            hit = cache.get(_key(loc))
+            hit = cache.get(_key(loc, teryt_prefix=teryt_prefix))
         if hit and hit.get("ll") is not None:
             l["ll"] = hit["ll"]
             l["llp"] = hit.get("p", "t")

@@ -15,14 +15,16 @@ import requests
 
 from . import bands, coverage
 from .normalize import otodom_rooms, region_slug, take_unseen, to_int
+from .regions import portal_slug
 
 BASE = "https://www.otodom.pl"
-# Whole-voivodeship search by default. Override with RENTGEN_REGION (an Otodom
-# region slug such as "slaskie" or "malopolskie").
+# Whole-voivodeship search by default. RENTGEN_REGION is the canonical catalog
+# slug; Otodom's independently configured path slug is resolved below.
 REGION = os.environ.get("RENTGEN_REGION", "slaskie")
+PORTAL_REGION = portal_slug(REGION, "otodom")
 SEARCH = {
-    "house": f"/pl/wyniki/sprzedaz/dom/{REGION}",
-    "flat": f"/pl/wyniki/sprzedaz/mieszkanie/{REGION}",
+    "house": f"/pl/wyniki/sprzedaz/dom/{PORTAL_REGION}",
+    "flat": f"/pl/wyniki/sprzedaz/mieszkanie/{PORTAL_REGION}",
 }
 HEADERS = {
     "User-Agent": (

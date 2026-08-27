@@ -1,78 +1,86 @@
 # Whole-Poland rollout: status and next tasks
 
-> Audited: 2026-08-24 after the 09:55 UTC deployment; P0.4/P0.6 implementation
-> update. Production is current through run `32700052454`. P0.1–P0.3 are
-> live-validated. The P0.4/P0.6 implementation passes the offline suite but has
-> not yet protected a production publication.
+> Audited: 2026-08-27. Production is current through active-only follow-up
+> `33072698054` and deploy `33079583960`. It retained the cache written by
+> forced archive run `33047120282`, closing the last P0 subgate. P0.1–P0.6 are
+> complete. The P1 regional product is implemented and fixture-validated in
+> this worktree.
 > This is the current source of truth for the nationwide rollout. `TODO.md`
 > retains the detailed development diary and older measurements.
 
 ## Executive status
 
-**The regional foundation works, but the project is not ready to start a
-16-voivodeship rollout.** Śląskie is the only published region. Per-region data
-branches have been proven in production, but source completeness, run capacity,
-the regional user experience, scheduling and nationwide hosting are not ready.
+**Śląskie is now a trustworthy warm template and the product is genuinely
+region-aware, but the project is still not ready for a 16-voivodeship
+schedule.** Śląskie is the only published region. The next rollout action is
+one disposable manual Małopolskie pilot; capacity and nationwide hosting still
+need evidence before any matrix.
 
 | Area | Status | Evidence / gap |
 |---|---|---|
-| Region-scoped scraper output and caches | Ready | `site/data/<region>`, `phash_<region>` and `rcn_<region>` are implemented. |
-| All 16 RCN/TERYT mappings | Ready in code | `scraper/main.py` contains all 16 voivodeships; only Śląskie has run end to end. |
+| Region-scoped scraper output and caches | Ready | `site/data/<region>`, regional caches and exact branch staging are implemented. |
+| Canonical 16-region configuration | Ready in code | `site/regions.json` is validated and owns Polish forms, TERYT, cadence, anchor and explicit portal slugs; only Śląskie has run end to end. |
 | One data branch per region | Proven | `data-slaskie` was created and has been refreshed successfully. |
-| Deploy overlay for multiple region branches | Proven for one branch | The live deploy overlays `data-slaskie`; a second branch has not been exercised. |
-| Portal coverage | Recovery proven; n-online validation pending | Otodom is back above 16k in three runs, OLX's one-probe blocked policy is proven, and n-online still caps Katowice flats in production. P0.4 separates its current and archive walks. |
+| Deploy overlay for multiple region branches | Fixture-proven, live for one | A real temporary-git two-region test proves sibling preservation and stale-shard removal; production still overlays only `data-slaskie`. |
+| Portal coverage | P0 gate met | Corrected Otodom floor is 15.8–15.9k, OLX's one-probe blocked policy is proven, and active n-online retains 10.83–10.86k in 20.5–23.5 min. |
 | Coverage KPI | Proven in production | Schema v2 has published repeatedly: bounded percentages, explicit missing partitions and healthy/partial/blocked source states all survive real runs. |
-| Per-region runtime | Gate met; optimisation pending | The latest two scheduled jobs took 153 and 168 minutes. Both are under 180, but n-online still consumes 74–77 minutes; the bounded path needs remeasurement. |
-| Region picker and durable regional URLs | Not ready | There is no picker; changing filters removes `?region=`, and saved filters are shared across regions. |
-| Per-region metadata / OG / sitemap / llms.txt | Not ready | The generator and committed HTML are Śląskie-only. |
+| Per-region runtime | Warm gate met | Four corrected active scrapes took 79.6–90.0 min, below both the 180-minute gate and preferred 150-minute target. |
+| Region picker and durable regional URLs | Implemented; live check pending | National picker, stable regional paths, region-scoped state, legacy redirects and useful unpublished/unknown responses are fixture-tested. |
+| Per-region metadata / OG / sitemap / llms.txt | Implemented; live check pending | Deploy generates these only for data-backed published regions. |
 | CI region matrix / cadence | Not implemented | The workflow still schedules Śląskie twice daily and accepts other regions only by manual input. |
-| Nationwide data hosting | Not decided | One incomplete region already serves about 106 MB; GitHub Pages has a published-site limit of 1 GB. |
+| Nationwide data hosting | Not decided | One incomplete region already serves 119.0 MiB; GitHub Pages has a published-site limit of 1 GB. |
 
-**Rollout decision:** do not add a scheduled second region yet. First complete
-the P0 stability gate below. A manual, disposable pilot is the next region
-action after that gate—not a 16-region matrix.
+**Rollout decision:** do not add a scheduled second region. Publish P1, then
+enable `malopolskie` only long enough for a manual disposable pilot—not a
+16-region matrix.
 
 ## Production snapshot
 
 ### Repository and deployment
 
-- The latest production-validated main baseline is `5b936ac` (`fix: harden
-  scraper service request handling`). This slice adds the P0.4/P0.6 n-online,
-  CI gate, validator, regression-test and documentation work described below.
+- The production-validated main baseline is `701795e` (`fix: keep portal
+  results inside the selected region`), following `60bea36` (cross-category
+  duplicate rejection) and `53ce632` (within-page portal clone rejection).
+  This worktree adds the P1 catalog, regional UI/generator, storage isolation
+  and TERYT-selected geocoding described below.
 - The [live site](https://110kc3.github.io/rentgen-ofert/) and
   [live `data/slaskie/meta.json`](https://110kc3.github.io/rentgen-ofert/data/slaskie/meta.json)
   both return HTTP 200.
-- [Deploy run 32714057309](https://github.com/110kc3/rentgen-ofert/actions/runs/32714057309)
-  published the latest successful scrape; the site and `meta.json` both return
-  HTTP 200 as of this audit.
-- Latest published data: **2026-08-24 09:54 UTC**, **31,196** current unique
-  properties from **52,168** current raw listings.
+- [Deploy run 33079583960](https://github.com/110kc3/rentgen-ofert/actions/runs/33079583960)
+  published the latest completed active-only scrape; the site and
+  `meta.json` both return HTTP 200 as of this audit.
+- Latest completed data: **2026-08-27 13:57 UTC**, **30,684** current unique
+  properties from **51,754** current raw listings.
 - Published data comes from four sources in that run, not five: Otodom, Gratka,
   Morizon and nieruchomości-online. OLX contributed zero.
-- The suite now contains **199** offline tests; all **199 pass**. The
-  published workflow still predates P0.6 and therefore did not run them; this
-  worktree adds the pre-request gate and post-generation validator.
+- The production workflow ran **206 offline tests before portal work** and its
+  post-generation validator protected the publication. The P1 worktree now
+  has **224 passing offline tests**.
 
 ### Latest completed validation runs
 
-P0.2/P0.3 have now passed their requested consecutive scheduled runs:
+Four corrected active runs and the explicit forced-archive run all passed their
+gates and deployed:
 
-| Run | Trigger | Actual job time | Result | Published properties |
+| Run | Trigger | Scrape runtime | Result | Unique / raw |
 |---|---|---:|---|---:|
-| [32658518259](https://github.com/110kc3/rentgen-ofert/actions/runs/32658518259) | schedule | 153 min | success; P0.2/P0.3 | 31,213 |
-| [32700052454](https://github.com/110kc3/rentgen-ofert/actions/runs/32700052454) | schedule | 168 min | success; P0.2/P0.3 | 31,196 |
+| [32967543284](https://github.com/110kc3/rentgen-ofert/actions/runs/32967543284) | push | 90.0 min | success; deploy `32976169826` | 30,862 / 51,937 |
+| [33004188553](https://github.com/110kc3/rentgen-ofert/actions/runs/33004188553) | manual | about 89 min | success; deploy `33011950180` | 30,794 / 51,880 |
+| [33007455916](https://github.com/110kc3/rentgen-ofert/actions/runs/33007455916) | schedule | 85.5 min | success; deploy `33018656594` | 30,761 / 51,883 |
+| [33047120282](https://github.com/110kc3/rentgen-ofert/actions/runs/33047120282) | forced archive | 177.4 min | success; deploy `33060020329` | 30,781 / 51,906 |
+| [33072698054](https://github.com/110kc3/rentgen-ofert/actions/runs/33072698054) | active-only follow-up | 79.6 min | success; deploy `33079583960` | 30,684 / 51,754 |
 
 ### Latest source health
 
-These are the published schema-v2 `meta.json` values from run `32700052454`:
+These are the published schema-v2 values from active-only run `33072698054`:
 
 | Source | Current kept listings | Reported search state | Assessment |
 |---|---:|---|---|
-| Otodom | 16,280 | `partial`, 72.7%; flat root stops at page 200/251 | Safe floor restored; all 263 application requests succeeded with no refusal. |
+| Otodom | 15,866 | `partial`, 71.6%; flat root stops at page 200/252 | Correct regional floor; all 263 application requests succeeded with no refusal. |
 | OLX | 0 | `blocked`, one real root row, HTTP 403 | Runner/IP block; one probe ends the portal in about three seconds. |
-| Gratka | 12,489 | `healthy`, 99.9% | Full useful coverage in the current accounting model. |
-| Morizon | 12,490 | `partial`, bounded 100% against a lower-bound total | Useful and mostly twinned with Gratka; partial because the total is a lower bound. |
-| nieruchomości-online | 10,909 current | `partial`; 58,831 served including 47,922 archived; Katowice flats capped | Valuable, but 81.5% of its full twice-daily walk is archive inventory. |
+| Gratka | 12,530 | `healthy`, 100.0% | Full useful coverage in the current accounting model. |
+| Morizon | 12,532 | `partial`, bounded against a lower-bound total | Useful and mostly twinned with Gratka; partial because the total is a lower bound. |
+| nieruchomości-online | 10,826 current | `healthy`; 581 current-only pages; 47,754 archived rows cached from 2026-08-27 | The cache is byte-identical to the forced refresh; this run served no archive rows into its current result. |
 
 The published unique count is lower than the source sum because Gratka and
 Morizon substantially overlap and are merged.
@@ -83,44 +91,61 @@ Morizon substantially overlap and are merged.
   old shared `data` branch, created `data-slaskie`, and the next run fetched and
   force-refreshed it. The site deployed the new data successfully.
 - **The delist change succeeded.** The phase fell from 27–44 minutes in bad
-  runs to **37 seconds** and **42 seconds** for 300 checks.
+  runs to tens of seconds on the corrected warm path.
 - **Schema v2 works live.** Percentages stay bounded, Otodom's page-200 cap is
   explicit, OLX is blocked rather than a clean zero, and Gratka is independently
   healthy.
-- **The warm photo backlog has converged.** The latest two runs completed the
-  phase in 71 and 65 seconds; the latest reused 91,496 cache entries, skipped
-  8,155 known twins and reported no budget-exhausted records. P0.5's priority
-  should be reassessed, though its correctness/history scheduling split is not
-  implemented.
-- **The Otodom recovery succeeded.** The push plus both scheduled runs restored
-  **16,308 / 16,267 / 16,280** kept listings. Each made 263/263 successful
-  application requests with no refusal. P0.2 is accepted; experimental bands
-  remain explicitly opt-in and additive.
-- **The OLX policy succeeded.** All three runs made one house page-one probe,
+- **The bounded n-online path succeeded.** Four active runs kept
+  **10,864 / 10,860 / 10,862 / 10,826** current rows in 581–582 pages and
+  20.5–23.5 minutes, while retaining the cached archive date/count in coverage.
+  That is far below the 40-minute gate.
+- **The forced n-online path succeeded.** Run `33047120282` served 58,655
+  unique rows in 1,817 pages: 10,901 current and 47,754 archived. Its n-online
+  phase took 75.3 minutes, the whole scrape took 177.4 minutes, Katowice flats
+  were the sole cap, and no town failed. Following run `33072698054` then used
+  `current-only` mode, reported zero archive rows, and left the archive cache's
+  Git blob and SHA-256 byte-identical. Its n-online phase took 20.5 minutes.
+- **The warm photo backlog has converged.** Four corrected active runs completed
+  all correctness candidates in roughly 32–74 seconds with no budget
+  exhaustion. P0.5 is closed by measurement; a split remains optional for a
+  cold-region backlog.
+- **The corrected Otodom recovery succeeded.** Duplicate-category cards,
+  repeated portal clones and promoted cards from other voivodeships had
+  inflated the earlier 16.3k count. After rejecting them, all three runs kept
+  **15,921 / 15,876 / 15,875** valid regional rows with 263/263 successful
+  requests and no refusal. P0.2 therefore approves 15.8–15.9k as its explicit
+  evidence-backed floor; the forced/follow-up runs retained 15,887/15,866 with
+  the same request shape, and experimental bands remain opt-in and additive.
+- **The OLX policy succeeded.** All five runs made one house page-one probe,
   received HTTP 403, stopped in seconds, skipped the flat request synthetically
   and published one issue with source health `blocked`. P0.3 is accepted.
+- **The publication gate succeeded.** Every corrected/forced/following run
+  executed the offline suite before scraping, validated 71 generated JSON
+  files and 118.4–119.4 MiB before pushing, refreshed only `data-slaskie`, and
+  triggered a successful Pages deploy.
 
 ### Runtime and scheduling capacity
 
-Approximate phase times from the latest two scheduled validation logs:
+Representative phase times from the latest active-only run `33072698054`:
 
-| Phase | Run 326585 | Run 327000 |
-|---|---:|---:|
-| Otodom | 13.2 min | 14.2 min |
-| OLX (blocked) | 0.1 min | 0.1 min |
-| Gratka | 19.1 min | 23.2 min |
-| Morizon | 21.3 min | 23.9 min |
-| nieruchomości-online | 74.5 min | 76.5 min |
-| Photo hashing | 1.2 min | 1.1 min |
-| Remaining history, delist, RCN, geo and write work | about 23.8 min | about 29.3 min |
-| **Whole job** | **153 min** | **168 min** |
+| Phase | Time |
+|---|---:|
+| Otodom | 10.2 min |
+| OLX (blocked) | 0.1 min |
+| Gratka | 18.3 min |
+| Morizon | 19.7 min |
+| nieruchomości-online | 20.5 min |
+| Photo hashing | 1.0 min |
+| History preparation/update | 6.8 min |
+| Delist + RCN + geo + write | 3.1 min |
+| **Whole scrape** | **79.6 min** |
 
-At the latest 160.5-minute average, one daily sweep of 16 Śląskie-sized regions
-would need about **42.8 runner-hours per day**, or **21.4 hours** at
-`max-parallel: 2`. That fits arithmetically but has almost no operational
-headroom, assumes every cold region converges like Śląskie, and conflicts with
-the runner-IP blocking already visible on Otodom and OLX. A matrix is still not
-justified before the P0 source and cold-region gates.
+At the corrected roughly 86.0-minute active average, one daily sweep of 16
+Śląskie-sized regions would need about **22.9 runner-hours per day**, or
+**11.5 hours** at `max-parallel: 2`. That is arithmetic, not an operating plan:
+cold caches, different inventories and portal blocking remain unmeasured, and
+parallel regions can worsen shared runner-IP pressure. A matrix is still not
+justified before the manual pilot and capacity gate.
 
 The capacity gate should be **at most 180 minutes per warm region**, with a
 preferred target of **150 minutes** for headroom, before a two-wide daily
@@ -133,13 +158,13 @@ Current `data-slaskie` branch contents:
 
 | Part | Size |
 |---|---:|
-| Whole per-region branch | 168.6 MB |
-| `site/data/slaskie` including pipeline-only history | 137.0 MB |
-| Pipeline-only `history.json.gz` removed before deploy | 30.6 MB |
-| **Approximate data actually served for Śląskie** | **106.4 MB** |
-| Caches on the branch | 31.5 MB |
-| `index.json` alone | 19.2 MB |
-| `archive.json` alone | 11.2 MB |
+| Whole per-region branch | 189.4 MB |
+| `site/data/slaskie` including pipeline-only history | 157.4 MB |
+| Pipeline-only `history.json.gz` removed before deploy | 32.6 MB |
+| **Data actually served for Śląskie** | **124.8 MB / 119.0 MiB** |
+| Caches on the branch | 31.9 MB |
+| `index.json` alone | 24.0 MB |
+| `archive.json` alone | 11.7 MB |
 
 GitHub currently documents a **1 GB published-site limit**, a 10-minute deploy
 timeout and a soft 100 GB/month bandwidth limit: [GitHub Pages limits](https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits).
@@ -152,37 +177,36 @@ before full coverage and archive growth, leaving too little safety margin for
 the final architecture. A hosting decision and migration rehearsal belongs
 before region four, not after the artifact approaches the limit.
 
-## Audit findings that were missing from the old plan
+## Audit findings and their disposition
 
-1. **`?region=` is not durable.** `app.js` reads it on boot, but every filter
-   persistence call rebuilds the URL from `location.pathname` plus `?f=` and
-   drops the region. Reloading or sharing then returns to Śląskie.
-2. **Saved filters leak between regions.** The localStorage key is global, so a
-   Śląskie town selection can produce an empty view when another region opens.
-3. **The regional UI is only a partial fallback.** Only Śląskie exists in
-   `REGION_CONFIG` and `REGION_LABEL`; unknown regions show a raw slug, lose
-   the anchor control, and retain multiple Śląskie-only static strings.
-4. **Discovery metadata is single-region.** `scripts/update-summary.mjs`
-   deliberately picks Śląskie and hardcodes its titles/descriptions. The root
-   page, stats page, OG card, JSON-LD, canonical links, sitemap, footer and
-   `llms.txt` do not represent multiple regions.
+1. **The old `?region=` state was not durable. Resolved in P1.** Stable regional
+   paths are canonical, filter updates preserve other query/hash state, and
+   legacy `?region=` plus implicit-Śląskie `?f=` shares redirect safely.
+2. **Saved filters leaked between regions. Resolved in P1.** Filter and map
+   localStorage keys now include the canonical region slug.
+3. **The regional UI was a partial fallback. Resolved in P1.** The browser
+   consumes a deploy-derived view of the canonical catalog, including optional
+   anchors/districts; unknown and unpublished regions get useful responses.
+4. **Discovery metadata was single-region. Resolved in P1.** The root picker,
+   stable regional pages, canonical/OG metadata, Dataset JSON-LD, sitemap and
+   `llms.txt` are regenerated from the branches actually overlaid.
 5. **The old published coverage percentages could not gate rollout.** Schema v1
    combined an unbanded parent with overlapping child bands; failed bands could
    disappear from the denominator and lower-bound totals could exceed 100%.
    P0.1 is now proven live: parent-owned totals, unique-ID unions, bounded
    percentages and explicit failed leaves all appear in the published output.
-6. **n-online is no longer “the portal that is never truncated.”** Its latest
-   flat crawl hit the per-town page cap. P0.1 separated current and archived
-   counts; P0.4 now publishes per-town diagnostics and stops the
-   normal path at a confirmed archive boundary. Scheduled timing is pending.
-7. **No automated test gate protected the expensive scrape.** The published
-   workflow installs only runtime dependencies and starts scraping immediately.
-   The P0.6 workflow runs all 199 offline tests first.
-8. **A green workflow currently means “some data published,” not “the region
-   is healthy.”** P0.1 now emits `healthy`, `partial`, `blocked` and `unknown`
-   separately from process success and exposes them in the dashboard. The local
-   P0.6 validator now checks the generated dataset and writes a job summary;
-   live enforcement evidence is pending.
+6. **n-online is not “the portal that is never truncated.” Resolved for the
+   warm path.** P0.4 publishes per-town diagnostics, stops the normal path at a
+   confirmed archive boundary and completes in 20.5–23.5 minutes. The measured
+   forced archive walk took 75.3 minutes, named Katowice flats as its sole cap
+   and reported no failed towns; the immediate current-only follow-up retained
+   its cache byte-for-byte.
+7. **No automated test gate protected the expensive scrape. Resolved in P0.6.**
+   Production runs execute the fixture-only suite before portal requests.
+8. **A green workflow meant only “some data published.” Resolved in P0.1/P0.6.**
+   Health remains separate from process success, and the generated-data
+   validator blocks malformed/incomplete publications while writing the source,
+   runtime and byte summary operators need.
 
 ## Decisions for the next implementation round
 
@@ -194,8 +218,9 @@ before region four, not after the artifact approaches the limit.
   can actually reach it.
 - Keep Otodom's restored full baseline as the default. Any subdivision
   experiment remains explicitly opt-in and additive.
-- Build one canonical region catalog and generate the Python, frontend and
-  discovery views from it; do not maintain separate handwritten label maps.
+- Keep the canonical region catalog as the only slug/TERYT/Polish-form/portal
+  map; scraper, frontend, branch tooling and discovery consume it directly or
+  through the generated browser derivative.
 - Use GitHub Pages for the application shell, but plan to put nationwide data
   in versioned, CORS-enabled object storage (R2 or another S3-compatible store).
   Compact the JSON either way because it also improves first load.
@@ -211,9 +236,9 @@ before region four, not after the artifact approaches the limit.
 
 No second scheduled region is added in this phase.
 
-**Current pick-up point:** P0.1–P0.3 are complete and live-validated. Inspect
-the P0.4/P0.6 push-triggered run, two bounded active runs and one forced archive
-refresh, then judge their acceptance gates.
+**Current pick-up point:** P0 is complete and live-validated, including the
+forced/following archive sequence. Publish P1, then proceed to exactly one
+manual pilot.
 
 - [x] **P0.1 Redesign the coverage model and region health result.**
   - Record parent inventory total once per source/type.
@@ -234,9 +259,9 @@ refresh, then judge their acceptance gates.
     partitions; bounds `pct` to 0–100; separates n-online current/archive; and
     emits source/type/region health. The dashboard keeps zero-result sources in
     its filter and labels a clean `0`, `blokada`, `brak danych` or partial state.
-  - **Verification:** repeated production runs through 2026-08-24 publish
-    bounded percentages and the expected source/type health. The suite is
-    now **199/199** after the P0.4/P0.6 regression cases.
+  - **Verification:** repeated production runs through 2026-08-26 publish
+    bounded percentages and the expected source/type health. Production ran
+    206 tests before scraping; P1 brings the local suite to **224/224**.
 
 - [x] **P0.2 Restore and re-measure Otodom.**
   - Remove the unproven “~320-page budget” assumption from behavior and docs.
@@ -254,6 +279,12 @@ refresh, then judge their acceptance gates.
   - **Accepted 2026-08-24:** scheduled runs `32658518259` and `32700052454`
     kept 16,267/16,280 listings; both logged 263/263 successful requests and no
     refusal. The preceding push run kept 16,308 with the same request shape.
+  - **Corrected floor approved 2026-08-26:** those counts included category
+    clones, repeated result-page cards and promoted cards from other regions.
+    Runs `32967543284`, `33004188553` and `33007455916` rejected them and kept
+    15,921/15,876/15,875 valid Śląskie rows, again with 263/263 successful
+    requests and no refusal. The acceptance rule explicitly permits this new
+    evidence-backed floor.
 
 - [x] **P0.3 Settle the OLX runner policy.**
   - On a first-request 403, stop the whole portal for that run without cooldown,
@@ -272,7 +303,7 @@ refresh, then judge their acceptance gates.
     request, stopped in about three seconds and published one `blocked: 403`
     issue while explaining the skipped type synthetically.
 
-- [ ] **P0.4 Bound n-online and separate archive harvesting.**
+- [x] **P0.4 Bound n-online and separate archive harvesting.**
   - Identify which towns hit 200 pages instead of hiding them in a two-row
     aggregate.
   - Avoid walking tens of thousands of archive records twice daily merely to
@@ -286,10 +317,24 @@ refresh, then judge their acceptance gates.
     bootstraps the first cache marker. Per-town request/live/archive/new/stop
     diagnostics flow into schema v2, and warnings name capped/failed towns.
     A live Katowice-flat smoke kept 1,534 current offers and stopped after 48
-    pages (46 current + two archive-boundary pages) instead of page 200. The
-    whole-region ≤40-minute and count-floor gates still require scheduled runs.
+    pages (46 current + two archive-boundary pages) instead of page 200.
+  - **Warm path accepted 2026-08-26:** three corrected runs kept
+    10,864/10,860/10,862 current offers, used 582 pages, finished in
+    21.6–23.5 minutes and retained archive cache `2026-08-24 / 47,922` in the
+    coverage summary.
+  - **Forced path accepted 2026-08-27:** run `33047120282` refreshed 47,754
+    archived rows, retained 10,901 current rows and walked 1,817 pages in 75.3
+    minutes. Katowice flats were the sole capped town/type and no town failed;
+    the complete scrape stayed inside the 180-minute ceiling at 177.4 minutes,
+    validated 119.4 MiB and deployed successfully.
+  - **Following active path accepted 2026-08-27:** explicit `skip` run
+    `33072698054` kept 10,826 current rows in 581 pages and 20.5 minutes,
+    reported zero archive rows, and retained the exact 2026-08-27 / 47,754
+    cache blob and SHA-256. The full scrape took 79.6 minutes, validated 119.0
+    MiB, refreshed only `data-slaskie`, deployed in `33079583960`, and its live
+    `meta.json` matched the branch.
 
-- [ ] **P0.5 Split photo work into correctness-critical and history backlog.**
+- [x] **P0.5 Keep photo correctness work within the warm publication budget.**
   - Process current cross-source size collisions first because they determine
     today’s dedupe result.
   - Use remaining budget for unique-listing fingerprints needed only for future
@@ -298,47 +343,77 @@ refresh, then judge their acceptance gates.
   - **Accept when:** all correctness-critical candidates are processed, the
     phase is at most 60 minutes on a warm region, and history-only backlog never
     blocks publishing.
-  - **Reassess before coding:** the two latest warm runs completed all photo
-    work in 74/50 seconds with no budget exhaustion because the cache converged.
-    The requested priority split is still architecturally useful for cold
-    regions, but it is no longer the current Śląskie runtime blocker.
+  - **Accepted by measurement:** four corrected active runs completed
+    every correctness candidate in roughly 32–74 seconds with no budget
+    exhaustion. A separate history-only queue would add complexity without
+    changing the warm gate; retain it as a cold-pilot optimisation if that
+    pilot exposes a backlog.
 
-- [ ] **P0.6 Add a cheap CI quality gate and run summary.**
+- [x] **P0.6 Add a cheap CI quality gate and run summary.**
   - Run all offline tests before any network work.
   - Validate every generated JSON file and manifest/shard count.
   - Publish one concise per-phase/per-source summary, including output bytes.
   - **Accept when:** a parser/unit failure spends no portal requests and a green
     job exposes health, runtime, counts, coverage and size without log mining.
   - **Implemented 2026-08-24:** CI installs the test requirements and
-    runs 199 fixture-only tests before `Scrape listings`. The pipeline records
+    runs the fixture-only suite before `Scrape listings`. The pipeline records
     phase timings in `meta.json`; a post-scrape/pre-push validator parses every
     JSON/JSON.GZ file, checks count/hash/shards/meta/coverage invariants and adds
-    source, phase and byte tables to `$GITHUB_STEP_SUMMARY`. Acceptance remains
-    open until it protects real workflow publications.
+    source, phase and byte tables to `$GITHUB_STEP_SUMMARY`.
+  - **Accepted 2026-08-26:** all three corrected runs passed 206 offline tests
+    before portal work, validated 71 files and 118.4–118.5 MiB before the branch
+    push, and deployed successfully.
+  - **Reconfirmed 2026-08-27:** the forced/following pair ran the same 206-test
+    pre-request gate, validated 119.4/119.0 MiB and both deployed successfully.
 
 **P0 exit gate:** two consecutive warm Śląskie runs publish without a silent
 source regression, finish within 180 minutes (150 preferred), expose truthful
 health/coverage, and retain the expected data branch/deploy behavior.
 
+**P0 exit accepted 2026-08-27:** four active runs finished in 79.6–90.0 minutes
+with stable corrected source floors and the required gate/branch/deploy chain.
+The forced refresh stayed within 180 minutes, and its following active run
+proved that archive work remained isolated behind the retained cache.
+
 ### P1 — make the product genuinely region-aware
 
-- [ ] **P1.1 Add one canonical 16-region catalog.** Include slug, Polish label,
+- [x] **P1.1 Add one canonical 16-region catalog.** Include slug, Polish label,
   TERYT prefix, enabled state, cadence and optional anchor. Validate portal
   slugs rather than assuming all four portals share them.
-- [ ] **P1.2 Fix regional navigation and state.** Preserve `region` when filters
+  - **Implemented 2026-08-27:** `site/regions.json` is schema-validated as the
+    exact 16 official TERYT prefixes; scraper URL roots, RCN/geo, frontend and
+    locality-label parsing consume it without a second production mapping.
+- [x] **P1.2 Fix regional navigation and state.** Preserve `region` when filters
   update the URL, scope localStorage by region, keep all app/stats links in the
   selected region, and give invalid/unpublished slugs a useful response.
-- [ ] **P1.3 Build a national root picker from deployed data.** Generate a small
+  - **Implemented 2026-08-27:** stable paths win over legacy query state;
+    filter/map storage keys are regional, legacy links retain filters and
+    unknown/unpublished slugs explain themselves.
+- [x] **P1.3 Build a national root picker from deployed data.** Generate a small
   catalog containing count, updated time, health and data size for every
   published region. Do not hardcode counts in the UI.
-- [ ] **P1.4 Generate real regional pages/discovery.** Prefer stable paths such
+  - **Implemented 2026-08-27:** deploy-derived `data/regions.json` and `/` use
+    only enabled, complete overlaid data for publication state, counts,
+    freshness, health, contributing sources and served bytes. `enabled: false`
+    is a tested artifact-only kill switch; the branch remains recoverable and
+    sibling data remains published.
+- [x] **P1.4 Generate real regional pages/discovery.** Prefer stable paths such
   as `region/<slug>/` and `region/<slug>/stats/` over query-only SEO. Generate
   canonical, title, description, OG, Dataset JSON-LD, sitemap and `llms.txt`
   entries for each published region; make `/` the Poland picker.
-- [ ] **P1.5 Verify branch/cache isolation with two fixture regions.** A region
+  - **Implemented 2026-08-27:** deploy regenerates listing/stats pages for all
+    configured slugs, marks unpublished pages `noindex`, and exposes discovery
+    entries only for published data.
+- [x] **P1.5 Verify branch/cache isolation with two fixture regions.** A region
   refresh must not carry another region’s phash/RCN cache or remove its
   deployed data. Shared cache files may intentionally fork, but this should be
   documented and tested.
+  - **Implemented 2026-08-27:** one helper stages an exact regional allowlist
+    and replaces one deploy tree only after verifying it exists. Temporary-git
+    tests use Śląskie plus Małopolskie to prove cache/index isolation, sibling
+    preservation, missing-tree safety and stale-shard removal. Shared
+    `geo_cache.json`/`nol_towns.json` are intentional forks; geo keys carry the
+    regional TERYT prefix.
 
 ### P2 — pilot one new region manually
 

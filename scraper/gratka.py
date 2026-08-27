@@ -17,13 +17,15 @@ from bs4 import BeautifulSoup
 
 from . import bands, coverage
 from .normalize import location_parts, stated_total, take_unseen, to_float, to_int
+from .regions import portal_slug
 
 BASE = "https://gratka.pl"
 # Whole-voivodeship search by default; override with RENTGEN_REGION.
 REGION = os.environ.get("RENTGEN_REGION", "slaskie")
+PORTAL_REGION = portal_slug(REGION, "gratka")
 SEARCH = {
-    "house": [f"https://gratka.pl/nieruchomosci/domy/{REGION}"],
-    "flat": [f"https://gratka.pl/nieruchomosci/mieszkania/{REGION}"],
+    "house": [f"https://gratka.pl/nieruchomosci/domy/{PORTAL_REGION}"],
+    "flat": [f"https://gratka.pl/nieruchomosci/mieszkania/{PORTAL_REGION}"],
 }
 HEADERS = {
     "User-Agent": (

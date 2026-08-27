@@ -158,6 +158,7 @@ def test_olx_state_regex_survives_escaped_quotes():
 
 def test_location_parts_strips_any_voivodeship():
     assert location_parts("Krowodrza, Kraków, małopolskie") == ["Krowodrza", "Kraków"]
+    assert location_parts("Krowodrza, Kraków, woj. małopolskie") == ["Krowodrza", "Kraków"]
     assert location_parts("Żerniki, Gliwice, śląskie") == ["Żerniki", "Gliwice"]
     assert gratka._locality("Krowodrza, Kraków, małopolskie") == "Kraków"
     assert gratka._district("Krowodrza, Kraków, małopolskie") == "Krowodrza"

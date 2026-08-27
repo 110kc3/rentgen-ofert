@@ -5,11 +5,8 @@
 
 const PLN = new Intl.NumberFormat("pl-PL");
 // data lives per voivodeship in data/<region>/ — same convention as app.js
-const REGION = ((new URLSearchParams(location.search).get("region") || "slaskie")
-  .replace(/[^a-z-]/g, "")) || "slaskie";
+const REGION = RentgenRegion.fromLocation(location, "stats");
 const DATA = `data/${REGION}`;
-// keep in sync with REGION_CONFIG[...].label in app.js (this page needs only the name)
-const REGION_LABEL = { slaskie: "woj. śląskie" };
 const $ = (sel) => document.querySelector(sel);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -20,7 +17,56 @@ const NAME = { ask: "oferty (cena ofertowa)", rcnW: "transakcje RCN — wtórny"
 
 const state = { data: null, gap: null, town: "", type: "flat", range: "60" };
 
+function showRegionMessage(title, body) {
+  const controls = document.querySelector(".controls");
+  if (controls) controls.hidden = true;
+  $("main").innerHTML = `<div class="empty"><b>${esc(title)}</b>
+    <p>${esc(body)}</p><p><a href="./">← wybierz województwo</a></p></div>`;
+}
+
+function wireRegionSelect(entries) {
+  const select = $("#region-select");
+  if (!select) return;
+  select.replaceChildren(...entries.map((entry) => {
+    const option = document.createElement("option");
+    option.value = entry.slug;
+    option.textContent = entry.label + (entry.published ? "" : " — brak danych");
+    option.selected = entry.slug === REGION;
+    return option;
+  }));
+  select.addEventListener("change", () => {
+    location.href = RentgenRegion.pageUrl(
+      select.value, "stats", document.baseURI);
+  });
+}
+
 async function boot() {
+  let regional;
+  try {
+    const response = await fetch("data/regions.json", { cache: "no-store" });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const catalog = await response.json();
+    regional = (catalog.regions || []).find((entry) => entry.slug === REGION);
+    if (!regional) {
+      showRegionMessage("Nieznane województwo",
+        `Slug „${REGION}” nie występuje w katalogu regionów.`);
+      return;
+    }
+    wireRegionSelect(catalog.regions || []);
+    const listingLink = document.querySelector("a.backlink");
+    if (listingLink) listingLink.href = RentgenRegion.pageUrl(
+      REGION, "listings", document.baseURI);
+    if (!regional.published) {
+      showRegionMessage("Statystyki jeszcze nieopublikowane",
+        `${regional.label} jest skonfigurowane, ale nie ma jeszcze regionalnej bazy.`);
+      return;
+    }
+  } catch (e) {
+    showRegionMessage("Nie udało się wczytać katalogu regionów",
+      "Spróbuj ponownie za chwilę lub wróć do strony głównej.");
+    return;
+  }
+
   try {
     const [data, rcnstats] = await Promise.all([
       fetch(`${DATA}/stats.json`, { cache: "no-store" }).then((r) => r.json()),
@@ -32,18 +78,9 @@ async function boot() {
     // there, which looks like "no transactions" unless we say otherwise
     state.stale = (rcnstats && rcnstats.stale) || [];
   } catch (e) {
-    $("main").innerHTML = `<div class="empty">Nie udało się wczytać danych (data/stats.json).</div>`;
+    showRegionMessage("Nie udało się wczytać statystyk regionu",
+      `Brakuje lub nie można odczytać danych dla ${regional.label}.`);
     return;
-  }
-  if (REGION !== "slaskie") {              // keep the region across page links
-    const a = document.querySelector('a[href="index.html"]');
-    if (a) a.href = `index.html?region=${REGION}`;
-    // static markup is written for śląskie; relabel for any other region
-    // (REGION_LABEL mirrors REGION_CONFIG[...].label in app.js)
-    const lab = REGION_LABEL[REGION] || REGION;
-    document.title = `Statystyki rynku — Rentgen ofert, ${lab}`;
-    const h1 = document.querySelector("header h1");
-    if (h1) h1.textContent = `Statystyki rynku — ${lab}`;
   }
   $("#stats").innerHTML = `dane z ${esc(state.data.built || "—")} · oferty tygodniowo (od startu narzędzia) · akty notarialne miesięcznie (RCN/GUGiK)`;
   const towns = Object.keys(state.data.weekly.towns || {});

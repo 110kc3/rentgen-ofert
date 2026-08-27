@@ -19,9 +19,11 @@ import requests
 
 from . import bands, coverage
 from .normalize import olx_rooms, take_unseen, to_float, to_int
+from .regions import portal_slug
 
 # Whole-voivodeship search by default; override with RENTGEN_REGION.
 REGION = os.environ.get("RENTGEN_REGION", "slaskie")
+PORTAL_REGION = portal_slug(REGION, "olx")
 PATHS = {"house": "domy", "flat": "mieszkania"}
 
 
@@ -34,7 +36,7 @@ def search_url(typ: str, where: str) -> str:
     return f"https://www.olx.pl/nieruchomosci/{PATHS[typ]}/sprzedaz/{where}/"
 
 
-SEARCH = {typ: search_url(typ, REGION) for typ in PATHS}
+SEARCH = {typ: search_url(typ, PORTAL_REGION) for typ in PATHS}
 
 # OLX stops paginating long before it runs out of ads — the region search dies
 # at page 25 whatever `totalPages` claims. That is not our cap and no amount of

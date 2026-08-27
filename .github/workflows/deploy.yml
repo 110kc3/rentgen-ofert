@@ -10,7 +10,12 @@ on:
   workflow_dispatch: {}
   push:
     branches: [main]
-    paths: ["site/**"]
+    paths:
+      - "site/**"
+      - "scripts/update-summary.mjs"
+      - "scripts/templates/**"
+      - "scripts/region_storage.py"
+      - ".github/workflows/deploy.yml"
   workflow_run:
     workflows: ["Update listings"]
     types: [completed]
@@ -42,6 +47,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: main            # workflow_run checks out the triggering sha; we want fresh main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate regional catalog
+        run: python -m scraper.regions
       - name: Overlay data from the per-region data branches
         # site/data/ lives on orphan branches, not on main — a deploy is main's
         # site/ plus EVERY region's data. One branch per region (`data-<region>`)
@@ -60,24 +70,17 @@ jobs:
           for ref in $(git for-each-ref --format='%(refname:lstrip=3)' \
                        'refs/remotes/origin/data-*'); do
             region="${ref#data-}"
-            # Look before wiping. The wipe is there so a run that emits fewer
-            # detail shards than the last one leaves no surplus behind for the
-            # site to fetch — but a branch without this region's directory (a
-            # first run that died before writing) would then delete the copy
-            # the shared branch just supplied and publish nothing at all.
-            if ! git cat-file -e "origin/$ref:site/data/$region" 2>/dev/null; then
-              echo "$ref carries no site/data/$region — leaving what we have"
-              continue
-            fi
-            rm -rf "site/data/$region"
-            git checkout "origin/$ref" -- "site/data/$region"
-            echo "overlaid $region from $ref"
+            # The helper verifies the catalog slug, checks before replacing,
+            # and touches only this directory. Its fixture test proves a
+            # sibling region survives both overlay and missing-data cases.
+            python -m scripts.region_storage overlay "origin/$ref" "$region"
           done
           test -d site/data || { echo "::error::no data on any branch"; exit 1; }
           rm -f site/data/*/history.json.gz   # pipeline-only store, not served
-      # Bakes fresh counts into the artifact's no-JS summary, Dataset JSON-LD,
-      # sitemap lastmod and llms.txt — no commit to main (ubuntu runners ship Node).
-      - name: Render no-JS summary + agent-discovery files
+      # Builds the national picker and stable regional pages, then bakes live
+      # counts into their summaries, Dataset JSON-LD, sitemap, regions.json and
+      # llms.txt — no commit to main (ubuntu runners ship Node).
+      - name: Render national + regional pages and discovery files
         run: node scripts/update-summary.mjs
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

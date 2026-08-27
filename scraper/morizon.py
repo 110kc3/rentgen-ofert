@@ -14,13 +14,15 @@ from bs4 import BeautifulSoup
 
 from . import bands, coverage, photomatch
 from .normalize import location_parts, stated_total, take_unseen, to_float, to_int
+from .regions import portal_slug
 
 BASE = "https://www.morizon.pl"
 # Whole-voivodeship search by default; override with RENTGEN_REGION.
 REGION = os.environ.get("RENTGEN_REGION", "slaskie")
+PORTAL_REGION = portal_slug(REGION, "morizon")
 SEARCH = {
-    "house": [f"https://www.morizon.pl/domy/{REGION}/"],
-    "flat": [f"https://www.morizon.pl/mieszkania/{REGION}/"],
+    "house": [f"https://www.morizon.pl/domy/{PORTAL_REGION}/"],
+    "flat": [f"https://www.morizon.pl/mieszkania/{PORTAL_REGION}/"],
 }
 HEADERS = {
     "User-Agent": (

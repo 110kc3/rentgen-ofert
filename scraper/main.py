@@ -41,16 +41,22 @@ import sys
 import time
 
 from . import cache as phcache
-from . import coverage, delist, geo, gratka, history, marketstats, morizon, net, nieruchomosci_online, olx, otodom, overrides, payload, photomatch, rcn, rcnstats
+from . import (
+    coverage, delist, geo, gratka, history, marketstats, morizon, net,
+    nieruchomosci_online, olx, otodom, overrides, payload, photomatch, rcn,
+    rcnstats, regions,
+)
 from .normalize import dedupe, link_same_size, link_twins, require_unique_urls
 
 # Region = the unit of everything (data dir, caches, RCN snapshot). Output goes
 # to site/data/<region>/ and per-region cache files so more voivodeships can be
-# added side by side; the geocode cache is shared (a town looked up once serves
-# every region). All of it lives on the orphan `data` branch, NOT in main's
-# history (see TODO.md "storage switch").
+# added side by side; the geocode cache file is shared but every key carries a
+# TERYT prefix, so same-named places remain region-safe. All of it lives on the
+# region's orphan `data-<region>` branch, NOT in main's history (see TODO.md
+# "storage switch").
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 REGION = os.environ.get("RENTGEN_REGION", "slaskie")
+REGION_CONFIG = regions.get_region(REGION)
 DATA_DIR = ROOT / "site" / "data" / REGION
 CACHE_DIR = ROOT / "cache"
 CACHE_PATH = CACHE_DIR / f"phash_{REGION}.json.gz"
@@ -66,16 +72,6 @@ SOURCES = (
     ("morizon", morizon),
     ("nieruchomosci-online", nieruchomosci_online),
 )
-
-# voivodeship slug -> TERYT prefix (for the RCN transaction pull)
-TERYT = {
-    "dolnoslaskie": "02", "kujawsko-pomorskie": "04", "lubelskie": "06",
-    "lubuskie": "08", "lodzkie": "10", "malopolskie": "12", "mazowieckie": "14",
-    "opolskie": "16", "podkarpackie": "18", "podlaskie": "20", "pomorskie": "22",
-    "slaskie": "24", "swietokrzyskie": "26", "warminsko-mazurskie": "28",
-    "wielkopolskie": "30", "zachodniopomorskie": "32",
-}
-
 
 def run() -> int:
     run_started = time.monotonic()
@@ -283,17 +279,14 @@ def run() -> int:
     snap = None
     rcn_started = time.monotonic()
     if rcn_mode != "0":
-        teryt = TERYT.get(REGION)
-        if teryt:
-            snap = rcn.refresh(RCN_CACHE, http, teryt_prefix=teryt, today=today,
-                               force=(rcn_mode == "force"))
-            if snap:
-                rcn.match(records, snap)
-                # town/size-bucket deed benchmarks + ask-vs-sold gap for the
-                # dashboard's "cena vs transakcje RCN" comparison
-                rcn_stats = rcnstats.build(snap, records, today)
-        else:
-            print(f"RCN: no TERYT mapping for region '{REGION}', skipping")
+        teryt = REGION_CONFIG["teryt"]
+        snap = rcn.refresh(RCN_CACHE, http, teryt_prefix=teryt, today=today,
+                           force=(rcn_mode == "force"))
+        if snap:
+            rcn.match(records, snap)
+            # town/size-bucket deed benchmarks + ask-vs-sold gap for the
+            # dashboard's "cena vs transakcje RCN" comparison
+            rcn_stats = rcnstats.build(snap, records, today)
     history.reenrich(listings)   # always: also drops the transient _rec links
     phase_seconds["rcn"] = round(time.monotonic() - rcn_started, 1)
 
@@ -304,7 +297,8 @@ def run() -> int:
         gc = geo.load(GEO_CACHE)
         _, geocoded = geo.attach(
             listings, gc, session=http, today=today,
-            max_new=int(os.environ.get("RENTGEN_GEO_MAX", "500")))
+            max_new=int(os.environ.get("RENTGEN_GEO_MAX", "500")),
+            teryt_prefix=REGION_CONFIG["teryt"])
         geo.save(GEO_CACHE, gc)
     phase_seconds["geo"] = round(time.monotonic() - geo_started, 1)
 

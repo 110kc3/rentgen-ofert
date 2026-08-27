@@ -3,146 +3,66 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Rentgen ofert — woj. śląskie</title>
-  <meta name="description" content="Wszystkie oferty sprzedaży domów i mieszkań w województwie śląskim (Otodom, OLX, Gratka, Morizon, n-online) w jednym miejscu.">
+  <title>Rentgen ofert — domy i mieszkania w Polsce</title>
+  <meta name="description" content="Wybierz województwo i przeglądaj zagregowane oferty sprzedaży domów i mieszkań bez duplikatów, z historią cen i danymi RCN.">
   <link rel="canonical" href="https://110kc3.github.io/rentgen-ofert/">
-  <!-- Machine-readable twins. meta.json is the small summary (counts, freshness);
-       the full 13 MB offer index and the rest are listed as DataDownload nodes in
-       the Dataset JSON-LD below. -->
   <link rel="alternate" type="text/markdown" href="https://110kc3.github.io/rentgen-ofert/llms.txt" title="llms.txt">
-  <link rel="alternate" type="application/json" href="https://110kc3.github.io/rentgen-ofert/data/slaskie/meta.json" title="Podsumowanie danych (JSON)">
+  <link rel="alternate" type="application/json" href="https://110kc3.github.io/rentgen-ofert/data/regions.json" title="Katalog regionów (JSON)">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="Rentgen ofert — woj. śląskie">
-  <meta property="og:description" content="Domy i mieszkania na sprzedaż z portali ogłoszeniowych — całe województwo śląskie w jednym miejscu, bez duplikatów, z historią cen i cenami RCN.">
+  <meta property="og:title" content="Rentgen ofert — domy i mieszkania w Polsce">
+  <meta property="og:description" content="Regionalne bazy ofert sprzedaży nieruchomości bez duplikatów, z historią cen i danymi transakcyjnymi RCN.">
   <meta property="og:url" content="https://110kc3.github.io/rentgen-ofert/">
   <meta property="og:site_name" content="Rentgen ofert">
   <meta property="og:locale" content="pl_PL">
   <meta property="og:image" content="https://110kc3.github.io/rentgen-ofert/og.png">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Rentgen ofert — woj. śląskie">
-  <meta name="twitter:description" content="Domy i mieszkania na sprzedaż z portali ogłoszeniowych — całe województwo śląskie w jednym miejscu, bez duplikatów.">
+  <meta name="twitter:title" content="Rentgen ofert — domy i mieszkania w Polsce">
+  <meta name="twitter:description" content="Wybierz województwo i przejrzyj oferty bez duplikatów, z historią cen i danymi RCN.">
   <meta name="twitter:image" content="https://110kc3.github.io/rentgen-ofert/og.png">
   <!-- jsonld:start -->
-  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","name":"Rentgen ofert — woj. śląskie","url":"https://110kc3.github.io/rentgen-ofert/","inLanguage":"pl","description":"Wszystkie oferty sprzedaży domów i mieszkań w województwie śląskim (Otodom, OLX, Gratka, Morizon, n-online) w jednym miejscu, bez duplikatów, z historią cen i cenami transakcyjnymi RCN."},{"@type":"Dataset","name":"Oferty sprzedaży domów i mieszkań — woj. śląskie","description":"18 259 aktualnych ofert z wielu portali, odświeżane dwa razy dziennie; historia cen i dopasowania do transakcji notarialnych (RCN).","url":"https://110kc3.github.io/rentgen-ofert/","inLanguage":"pl","dateModified":"2026-07-13T12:20:13+00:00","isAccessibleForFree":true,"distribution":[{"@type":"DataDownload","encodingFormat":"application/json","contentUrl":"https://110kc3.github.io/rentgen-ofert/data/slaskie/meta.json"},{"@type":"DataDownload","encodingFormat":"application/json","contentUrl":"https://110kc3.github.io/rentgen-ofert/data/slaskie/stats.json"},{"@type":"DataDownload","encodingFormat":"application/json","contentUrl":"https://110kc3.github.io/rentgen-ofert/data/slaskie/rcnstats.json"},{"@type":"DataDownload","encodingFormat":"application/json","contentUrl":"https://110kc3.github.io/rentgen-ofert/data/slaskie/index.json","contentSize":"13 MB"},{"@type":"DataDownload","encodingFormat":"application/json","contentUrl":"https://110kc3.github.io/rentgen-ofert/data/slaskie/manifest.json"},{"@type":"DataDownload","encodingFormat":"application/json","contentUrl":"https://110kc3.github.io/rentgen-ofert/data/slaskie/archive.json","contentSize":"2 MB"}]}]}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"Rentgen ofert","url":"https://110kc3.github.io/rentgen-ofert/","inLanguage":"pl"}</script>
 <!-- jsonld:end -->
-  <link rel="stylesheet" href="styles.css?v=8">
+  <link rel="stylesheet" href="styles.css?v=9">
 </head>
-<body>
-  <header>
-    <h1>Rentgen ofert — woj. śląskie</h1>
-    <div class="sub">Domy i mieszkania na sprzedaż z portali ogłoszeniowych — całe województwo śląskie w jednym miejscu, bez duplikatów.
-    <a class="backlink" href="stats.html">📊 Statystyki rynku</a></div>
-    <div class="stats" id="stats"></div>
-    <!-- summary:start -->
-    <p class="sub" id="data-summary">W bazie: <b>18 259</b> ofert
-    (11 794 mieszkań, 6465 domów) z wielu portali,
-    5729 wystawionych ponownie, 2259 dopasowanych do
-    transakcji notarialnych (RCN). Aktualizacja: 13 lipca 2026.</p>
-    <noscript><p class="sub">Lista ofert wymaga JavaScriptu. Surowe dane (JSON):
-    <a href="data/slaskie/meta.json">meta.json</a>, <a href="data/slaskie/stats.json">stats.json</a>,
-    <a href="data/slaskie/rcnstats.json">rcnstats.json</a> — pełny katalog w <a href="llms.txt">llms.txt</a>.</p></noscript>
-<!-- summary:end -->
+<body class="picker-page">
+  <header class="picker-head">
+    <p class="eyebrow">Rentgen ofert</p>
+    <h1>Domy i mieszkania w Polsce</h1>
+    <p class="picker-lead">Wybierz województwo. Każda opublikowana baza łączy oferty z portali, usuwa duplikaty i pokazuje historię cen oraz dane transakcyjne RCN.</p>
   </header>
 
-  <div class="controls">
-    <div class="group">
-      <div class="seg" data-key="type">
-        <button data-val="all" class="active">Wszystko</button>
-        <button data-val="house">Domy</button>
-        <button data-val="flat">Mieszkania</button>
-      </div>
-    </div>
-    <div class="group">
-      <div class="seg" data-key="source" id="source-seg"></div>
-    </div>
-    <div class="group"><label>Miejscowość</label>
-      <div class="ms" id="loc-ms">
-        <button type="button" class="ms-btn" id="loc-btn">Wszystkie</button>
-        <div class="ms-pop" id="loc-pop" hidden>
-          <input type="search" id="loc-search" placeholder="szukaj miejscowości…" autocomplete="off">
-          <div class="ms-list" id="loc-list"></div>
-          <div class="ms-foot"><button type="button" id="loc-clear">wyczyść wybór</button></div>
-        </div>
-      </div>
-    </div>
-    <div class="group">
-      <div class="seg" data-key="owner">
-        <button data-val="all" class="active">Każdy</button>
-        <button data-val="private">Prywatne</button>
-        <button data-val="agency">Biura</button>
-      </div>
-    </div>
-    <div class="group">
-      <div class="seg" data-key="history">
-        <button data-val="all" class="active">Wszystkie</button>
-        <button data-val="relisted">Wystawione ponownie</button>
-        <button data-val="dropped">Z obniżką</button>
-        <button data-val="rcn">Z danymi RCN</button>
-        <button data-val="sold">Archiwum<span class="segcount" id="cnt-sold"></span></button>
-        <button data-val="sold_rcn">Sprzedane wg RCN<span class="segcount" id="cnt-sold-rcn"></span></button>
-      </div>
-    </div>
-    <div class="group">
-      <div class="seg" data-key="market">
-        <button data-val="all" class="active">Oba rynki</button>
-        <button data-val="secondary">Wtórny</button>
-        <button data-val="primary">Inwestycje</button>
-      </div>
-    </div>
-    <div class="group" id="distance-group"><label id="distance-label">Odległość od Gliwic (orientacyjnie)</label>
-      <select id="distance">
-        <option value="all">całe województwo</option>
-        <option value="5">≤ 5 km</option>
-        <option value="10">≤ 10 km</option>
-        <option value="15">≤ 15 km</option>
-        <option value="20">≤ 20 km</option>
-        <option value="30">≤ 30 km</option>
-        <option value="40">≤ 40 km</option>
-      </select>
-    </div>
-    <div class="group"><label>Cena</label>
-      <input class="num" id="min-price" type="number" placeholder="od" min="0" step="10000">
-      <input class="num" id="max-price" type="number" placeholder="do" min="0" step="10000">
-    </div>
-    <div class="group"><label>m²</label>
-      <input class="num" id="min-area" type="number" placeholder="od" min="0">
-      <input class="num" id="max-area" type="number" placeholder="do" min="0">
-    </div>
-    <div class="group"><label>Pokoje od</label>
-      <input class="num" id="min-rooms" type="number" placeholder="np. 2" min="0" style="width:70px">
-    </div>
-    <div class="group">
-      <input class="txt" id="q" type="search" placeholder="szukaj: dzielnica, tytuł…">
-    </div>
-    <div class="spacer"></div>
-    <div class="group">
-      <button type="button" id="map-btn" class="mapbtn" title="pokaż oferty na mapie">🗺 Mapa</button>
-    </div>
-    <div class="group"><label>Sortuj</label>
-      <select id="sort">
-        <option value="newest">Najnowsze</option>
-        <option value="discount">Największa obniżka</option>
-        <option value="vsrcn">Cena vs transakcje RCN ↑</option>
-        <option value="price_asc">Cena ↑</option>
-        <option value="price_desc">Cena ↓</option>
-        <option value="ppm_asc">zł/m² ↑</option>
-        <option value="area_desc">Powierzchnia ↓</option>
-      </select>
-    </div>
-    <div class="group" id="count" style="color:var(--muted);font-size:13px"></div>
-  </div>
-
-  <main>
-    <div class="chips" id="chips" hidden></div>
-    <div id="map" hidden></div>
-    <div class="grid" id="grid"></div>
+  <main class="picker-main">
+    <!-- regions:start -->
+    <section class="region-section">
+      <h2>Dostępne województwa</h2>
+      <p class="empty-warn">Katalog danych pojawi się po najbliższym wdrożeniu.</p>
+    </section>
+<!-- regions:end -->
   </main>
 
   <footer>
-    rentgen-ofert · obsługiwane portale: Otodom, OLX, Gratka, Morizon i n-online · całe woj. śląskie · odświeżane automatycznie przez GitHub Actions
+    rentgen-ofert · osobisty, niekomercyjny agregator · źródłowe portale i rejestry pozostają źródłem nadrzędnym
   </footer>
 
-  <script src="app.js?v=20"></script>
+  <script>
+    // Backwards compatibility for links shared before stable regional paths.
+    (() => {
+      const current = new URL(location.href);
+      const requested = current.searchParams.get("region");
+      // Before stable paths, ordinary Śląskie shares carried only ?f= because
+      // the default region was implicit. Keep those links useful while a plain
+      // unfiltered root remains the national picker.
+      const legacyDefault = !requested && current.searchParams.has("f");
+      if (!legacyDefault
+          && (!requested || !/^[a-z]+(?:-[a-z]+)*$/.test(requested))) return;
+      const slug = legacyDefault ? "slaskie" : requested;
+      current.searchParams.delete("region");
+      const target = new URL(`region/${slug}/`, document.baseURI);
+      target.search = current.search;
+      target.hash = current.hash;
+      location.replace(target);
+    })();
+  </script>
 </body>
 </html>

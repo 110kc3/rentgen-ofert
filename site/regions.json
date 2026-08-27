@@ -1,0 +1,274 @@
+{
+  "schema": 1,
+  "default": "slaskie",
+  "regions": [
+    {
+      "slug": "dolnoslaskie",
+      "label": "woj. dolnośląskie",
+      "adjective": "dolnośląskie",
+      "locative": "dolnośląskim",
+      "teryt": "02",
+      "enabled": false,
+      "cadence": "manual",
+      "portals": {
+        "otodom": "dolnoslaskie",
+        "olx": "dolnoslaskie",
+        "gratka": "dolnoslaskie",
+        "morizon": "dolnoslaskie"
+      }
+    },
+    {
+      "slug": "kujawsko-pomorskie",
+      "label": "woj. kujawsko-pomorskie",
+      "adjective": "kujawsko-pomorskie",
+      "locative": "kujawsko-pomorskim",
+      "teryt": "04",
+      "enabled": false,
+      "cadence": "manual",
+      "portals": {
+        "otodom": "kujawsko-pomorskie",
+        "olx": "kujawsko-pomorskie",
+        "gratka": "kujawsko-pomorskie",
+        "morizon": "kujawsko-pomorskie"
+      }
+    },
+    {
+      "slug": "lubelskie",
+      "label": "woj. lubelskie",
+      "adjective": "lubelskie",
+      "locative": "lubelskim",
+      "teryt": "06",
+      "enabled": false,
+      "cadence": "manual",
+      "portals": {
+        "otodom": "lubelskie",
+        "olx": "lubelskie",
+        "gratka": "lubelskie",
+        "morizon": "lubelskie"
+      }
+    },
+    {
+      "slug": "lubuskie",
+      "label": "woj. lubuskie",
+      "adjective": "lubuskie",
+      "locative": "lubuskim",
+      "teryt": "08",
+      "enabled": false,
+      "cadence": "manual",
+      "portals": {
+        "otodom": "lubuskie",
+        "olx": "lubuskie",
+        "gratka": "lubuskie",
+        "morizon": "lubuskie"
+      }
+    },
+    {
+      "slug": "lodzkie",
+      "label": "woj. łódzkie",
+      "adjective": "łódzkie",
+      "locative": "łódzkim",
+      "teryt": "10",
+      "enabled": false,
+      "cadence": "manual",
+      "portals": {
+        "otodom": "lodzkie",
+        "olx": "lodzkie",
+        "gratka": "lodzkie",
+        "morizon": "lodzkie"
+      }
+    },
+    {
+      "slug": "malopolskie",
+      "label": "woj. małopolskie",
+      "adjective": "małopolskie",
+      "locative": "małopolskim",
+      "teryt": "12",
+      "enabled": false,
+      "cadence": "manual",
+      "portals": {
+        "otodom": "malopolskie",
+        "olx": "malopolskie",
+        "gratka": "malopolskie",
+        "morizon": "malopolskie"
+      }
+    },
+    {
+      "slug": "mazowieckie",
+      "label": "woj. mazowieckie",
+      "adjective": "mazowieckie",
+      "locative": "mazowieckim",
+      "teryt": "14",
+      "enabled": false,
+      "cadence": "manual",
+      "portals": {
+        "otodom": "mazowieckie",
+        "olx": "mazowieckie",
+        "gratka": "mazowieckie",
+        "morizon": "mazowieckie"
+      }
+    },
+    {
+      "slug": "opolskie",
+      "label": "woj. opolskie",
+      "adjective": "opolskie",
+      "locative": "opolskim",
+      "teryt": "16",
+      "enabled": false,
+      "cadence": "manual",
+      "portals": {
+        "otodom": "opolskie",
+        "olx": "opolskie",
+        "gratka": "opolskie",
+        "morizon": "opolskie"
+      }
+    },
+    {
+      "slug": "podkarpackie",
+      "label": "woj. podkarpackie",
+      "adjective": "podkarpackie",
+      "locative": "podkarpackim",
+      "teryt": "18",
+      "enabled": false,
+      "cadence": "manual",
+      "portals": {
+        "otodom": "podkarpackie",
+        "olx": "podkarpackie",
+        "gratka": "podkarpackie",
+        "morizon": "podkarpackie"
+      }
+    },
+    {
+      "slug": "podlaskie",
+      "label": "woj. podlaskie",
+      "adjective": "podlaskie",
+      "locative": "podlaskim",
+      "teryt": "20",
+      "enabled": false,
+      "cadence": "manual",
+      "portals": {
+        "otodom": "podlaskie",
+        "olx": "podlaskie",
+        "gratka": "podlaskie",
+        "morizon": "podlaskie"
+      }
+    },
+    {
+      "slug": "pomorskie",
+      "label": "woj. pomorskie",
+      "adjective": "pomorskie",
+      "locative": "pomorskim",
+      "teryt": "22",
+      "enabled": false,
+      "cadence": "manual",
+      "portals": {
+        "otodom": "pomorskie",
+        "olx": "pomorskie",
+        "gratka": "pomorskie",
+        "morizon": "pomorskie"
+      }
+    },
+    {
+      "slug": "slaskie",
+      "label": "woj. śląskie",
+      "adjective": "śląskie",
+      "locative": "śląskim",
+      "teryt": "24",
+      "enabled": true,
+      "cadence": "twice_daily",
+      "portals": {
+        "otodom": "slaskie",
+        "olx": "slaskie",
+        "gratka": "slaskie",
+        "morizon": "slaskie"
+      },
+      "anchor": {
+        "name": "Gliwice",
+        "genitive": "Gliwic",
+        "ll": [50.2945, 18.6714]
+      },
+      "districts": {
+        "Śródmieście": "Gliwice",
+        "Sośnica": "Gliwice",
+        "Trynek": "Gliwice",
+        "Łabędy": "Gliwice",
+        "Wójtowa Wieś": "Gliwice",
+        "Szobiszowice": "Gliwice",
+        "Ostropa": "Gliwice",
+        "Żerniki": "Gliwice",
+        "Brzezinka": "Gliwice",
+        "Stare Gliwice": "Gliwice",
+        "Wilcze Gardło": "Gliwice",
+        "Bojków": "Gliwice",
+        "Sikornik": "Gliwice",
+        "Zatorze": "Gliwice",
+        "Kopernik": "Gliwice",
+        "Politechnika": "Gliwice",
+        "Obrońców Pokoju": "Gliwice",
+        "Ligota Zabrska": "Gliwice",
+        "Czechowice": "Gliwice",
+        "Baildona": "Gliwice",
+        "Sośnica Wschód": "Gliwice"
+      }
+    },
+    {
+      "slug": "swietokrzyskie",
+      "label": "woj. świętokrzyskie",
+      "adjective": "świętokrzyskie",
+      "locative": "świętokrzyskim",
+      "teryt": "26",
+      "enabled": false,
+      "cadence": "manual",
+      "portals": {
+        "otodom": "swietokrzyskie",
+        "olx": "swietokrzyskie",
+        "gratka": "swietokrzyskie",
+        "morizon": "swietokrzyskie"
+      }
+    },
+    {
+      "slug": "warminsko-mazurskie",
+      "label": "woj. warmińsko-mazurskie",
+      "adjective": "warmińsko-mazurskie",
+      "locative": "warmińsko-mazurskim",
+      "teryt": "28",
+      "enabled": false,
+      "cadence": "manual",
+      "portals": {
+        "otodom": "warminsko-mazurskie",
+        "olx": "warminsko-mazurskie",
+        "gratka": "warminsko-mazurskie",
+        "morizon": "warminsko-mazurskie"
+      }
+    },
+    {
+      "slug": "wielkopolskie",
+      "label": "woj. wielkopolskie",
+      "adjective": "wielkopolskie",
+      "locative": "wielkopolskim",
+      "teryt": "30",
+      "enabled": false,
+      "cadence": "manual",
+      "portals": {
+        "otodom": "wielkopolskie",
+        "olx": "wielkopolskie",
+        "gratka": "wielkopolskie",
+        "morizon": "wielkopolskie"
+      }
+    },
+    {
+      "slug": "zachodniopomorskie",
+      "label": "woj. zachodniopomorskie",
+      "adjective": "zachodniopomorskie",
+      "locative": "zachodniopomorskim",
+      "teryt": "32",
+      "enabled": false,
+      "cadence": "manual",
+      "portals": {
+        "otodom": "zachodniopomorskie",
+        "olx": "zachodniopomorskie",
+        "gratka": "zachodniopomorskie",
+        "morizon": "zachodniopomorskie"
+      }
+    }
+  ]
+}

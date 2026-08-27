@@ -28,6 +28,8 @@ import re
 import unicodedata
 from collections import defaultdict
 
+from .regions import catalog
+
 OTODOM_ROOMS = {
     "ONE": 1, "TWO": 2, "THREE": 3, "FOUR": 4, "FIVE": 5,
     "SIX": 6, "SEVEN": 7, "EIGHT": 8, "NINE": 9, "TEN": 10,
@@ -39,13 +41,14 @@ OLX_ROOMS = {
 SOURCE_RANK = {"otodom": 0, "nieruchomosci-online": 1, "gratka": 2, "olx": 3,
                "morizon": 4}
 
-# gratka/morizon breadcrumbs end with the voivodeship — strip it whatever the
-# scraped region is (was a hardcoded `.replace("śląskie", "")`)
-VOIVODESHIPS = frozenset({
-    "dolnośląskie", "kujawsko-pomorskie", "lubelskie", "lubuskie", "łódzkie",
-    "małopolskie", "mazowieckie", "opolskie", "podkarpackie", "podlaskie",
-    "pomorskie", "śląskie", "świętokrzyskie", "warmińsko-mazurskie",
-    "wielkopolskie", "zachodniopomorskie"})
+# Gratka/Morizon breadcrumbs end with the voivodeship. Derive every accepted
+# spelling from the canonical catalog so adding or correcting a Polish label
+# cannot leave parsing with a second handwritten 16-region list.
+VOIVODESHIPS = frozenset(
+    value.lower()
+    for entry in catalog()["regions"]
+    for value in (entry["adjective"], entry["label"])
+)
 
 
 def region_slug(value):
