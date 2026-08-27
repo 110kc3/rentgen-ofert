@@ -7,7 +7,7 @@ and presents it on one searchable page. No application server: a GitHub Actions
 job scrapes, writes static JSON, and GitHub Pages displays it.
 
 Portal blocking and serving caps mean “all listings” is a target, not a current
-guarantee. The published 2026-08-27 dataset has 30,684 current properties from
+guarantee. The published 2026-08-27 dataset has 30,763 current properties from
 four contributing sources. OLX is blocked with HTTP 403; after rejecting
 cross-category clones and promoted cards from other voivodeships, Otodom's
 evidence-backed regional floor is about 15.9k and its flat root remains
@@ -54,6 +54,11 @@ unchanged. This closes the P0 archive-isolation gate. Exact evidence and the
 rollout decision are recorded in
 [`POLAND_ROLLOUT.md`](POLAND_ROLLOUT.md). The next step is still not a
 16-region schedule: a single manual disposable pilot comes before any matrix.
+P1 commit `4131f03` is also production-proven: direct deploy `33082048338`,
+regionalized scrape `33082048365` and automatic deploy `33090688420` all
+succeeded. The scrape passed all 224 offline tests, refreshed only
+`data-slaskie`, and the live picker, stable paths, unpublished/unknown routes
+and discovery metadata passed their HTTP/semantic checks.
 The audited status, evidence, decisions, acceptance gates and P0–P5 task order are
 in [`POLAND_ROLLOUT.md`](POLAND_ROLLOUT.md). `TODO.md` remains the detailed
 development diary.

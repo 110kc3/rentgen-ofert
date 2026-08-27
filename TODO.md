@@ -3,7 +3,7 @@
 > Keep this file and `README.md` updated after each change.
 > Last updated: 2026-08-27
 
-## Current (2026-08-27) — P0 complete; regional product implemented
+## Current (2026-08-27) — P0 complete; P1 live; P2 pilot queued
 
 The corrected Śląskie baseline is published and stable. Five runs on main SHA
 `701795e` rejected cross-category clones, duplicate cards within a portal result
@@ -22,6 +22,15 @@ All five made 263/263 successful Otodom requests with no refusal. The old
 16.3k count included out-of-scope promoted/cloned records; **15.8–15.9k is the
 approved evidence-backed regional floor**, not a regression. OLX made one
 bounded HTTP-403 probe and remained explicitly `blocked`.
+
+P1 commit `4131f03` then passed direct deploy `33082048338`, the complete
+push-triggered scrape `33082048365` and automatic deploy `33090688420`. The
+regionalized scrape ran for 92.1 minutes, passed all 224 offline tests before
+portal work, validated 30,763 unique properties from 51,890 raw rows (119.3
+MiB), staged only the 76 allowed Śląskie paths and refreshed `data-slaskie`.
+Its n-online path remained current-only (10,871 rows / 581 pages), the archive
+cache retained the same SHA-256, and the new geo cache contains 11,675
+TERYT-scoped `24|…` keys.
 
 ### P0 evidence now accepted
 
@@ -69,7 +78,7 @@ bounded HTTP-403 probe and remained explicitly `blocked`.
   the generated-data validator checked all 71 JSON files and 118.4–119.4 MiB,
   and the regional branch push and Pages deployment succeeded after each run.
 
-### Regional implementation in this worktree
+### Regional product now live
 
 - `site/regions.json` is the single schema-1 catalog for all 16 official
   voivodeships: canonical slug, Polish forms, TERYT, enabled/cadence, optional
@@ -93,13 +102,19 @@ bounded HTTP-403 probe and remained explicitly `blocked`.
   no longer reuse the wrong centroid.
 - Verification currently covers **224 offline tests**, including catalog,
   generator, navigation, two-region storage and ambiguous-geocoder regressions.
+- Production checks after `33090688420` proved the national picker, stable
+  listing/statistics paths, canonical and JSON-LD metadata, sitemap and
+  `llms.txt`. Valid unpublished regions return a useful `noindex` page without
+  exposing a data tree; unknown regions return 404.
 
 ### Next
 
-1. Publish the locally verified P1 implementation and inspect both
-   the direct Pages deployment and the push-triggered scrape/deployment.
-2. Only after that evidence is recorded, enable and manually run one disposable
-   `malopolskie` pilot. Do not add it to cron or create a 16-region matrix.
+1. Let the routine serialized Śląskie run `33098667425` complete.
+2. Cold Małopolskie pilot `33098785162` is queued behind it from manual-only
+   commit `18afb78`; validate its isolated branch and two-region deployment.
+3. Run one warm Małopolskie pass, then disable the disposable pilot and prove
+   Śląskie stayed unchanged. Do not add Małopolskie to cron or create a
+   16-region matrix.
 
 ## Superseded (2026-08-13) — stop before region two and repair the template
 

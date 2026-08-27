@@ -1,10 +1,10 @@
 # Whole-Poland rollout: status and next tasks
 
-> Audited: 2026-08-27. Production is current through active-only follow-up
-> `33072698054` and deploy `33079583960`. It retained the cache written by
-> forced archive run `33047120282`, closing the last P0 subgate. P0.1–P0.6 are
-> complete. The P1 regional product is implemented and fixture-validated in
-> this worktree.
+> Audited: 2026-08-27. Production is current through regionalized scrape
+> `33082048365` and deploy `33090688420`; direct P1 deploy `33082048338` also
+> passed. P0.1–P0.6 and P1.1–P1.5 are complete and production-validated. One
+> manual-only Małopolskie pilot is now queued as `33098785162` behind the
+> routine serialized Śląskie run; it has not been added to cron.
 > This is the current source of truth for the nationwide rollout. `TODO.md`
 > retains the detailed development diary and older measurements.
 
@@ -19,47 +19,45 @@ need evidence before any matrix.
 | Area | Status | Evidence / gap |
 |---|---|---|
 | Region-scoped scraper output and caches | Ready | `site/data/<region>`, regional caches and exact branch staging are implemented. |
-| Canonical 16-region configuration | Ready in code | `site/regions.json` is validated and owns Polish forms, TERYT, cadence, anchor and explicit portal slugs; only Śląskie has run end to end. |
+| Canonical 16-region configuration | Proven live | `site/regions.json` is validated and owns Polish forms, TERYT, cadence, anchor and explicit portal slugs; the complete Śląskie path ran end to end. |
 | One data branch per region | Proven | `data-slaskie` was created and has been refreshed successfully. |
-| Deploy overlay for multiple region branches | Fixture-proven, live for one | A real temporary-git two-region test proves sibling preservation and stale-shard removal; production still overlays only `data-slaskie`. |
-| Portal coverage | P0 gate met | Corrected Otodom floor is 15.8–15.9k, OLX's one-probe blocked policy is proven, and active n-online retains 10.83–10.86k in 20.5–23.5 min. |
+| Deploy overlay for multiple region branches | Fixture-proven, live for one | A real temporary-git two-region test proves sibling preservation and stale-shard removal; production currently has data only for `data-slaskie`. |
+| Portal coverage | P0 gate met | Corrected Otodom floor is 15.8–15.9k, OLX's one-probe blocked policy is proven, and active n-online retains 10.83–10.87k in 20.5–23.9 min. |
 | Coverage KPI | Proven in production | Schema v2 has published repeatedly: bounded percentages, explicit missing partitions and healthy/partial/blocked source states all survive real runs. |
-| Per-region runtime | Warm gate met | Four corrected active scrapes took 79.6–90.0 min, below both the 180-minute gate and preferred 150-minute target. |
-| Region picker and durable regional URLs | Implemented; live check pending | National picker, stable regional paths, region-scoped state, legacy redirects and useful unpublished/unknown responses are fixture-tested. |
-| Per-region metadata / OG / sitemap / llms.txt | Implemented; live check pending | Deploy generates these only for data-backed published regions. |
+| Per-region runtime | Warm gate met | Five corrected active scrapes took 79.6–92.1 min, below both the 180-minute gate and preferred 150-minute target. |
+| Region picker and durable regional URLs | Proven live | National picker, stable regional paths, region-scoped state, legacy redirects and unpublished/unknown responses passed production checks. |
+| Per-region metadata / OG / sitemap / llms.txt | Proven live | Canonical/JSON-LD documents parse and discovery contains only data-backed published regions. |
 | CI region matrix / cadence | Not implemented | The workflow still schedules Śląskie twice daily and accepts other regions only by manual input. |
-| Nationwide data hosting | Not decided | One incomplete region already serves 119.0 MiB; GitHub Pages has a published-site limit of 1 GB. |
+| Nationwide data hosting | Not decided | One incomplete region already serves 119.3 MiB; GitHub Pages has a published-site limit of 1 GB. |
 
-**Rollout decision:** do not add a scheduled second region. Publish P1, then
-enable `malopolskie` only long enough for a manual disposable pilot—not a
+**Rollout decision:** do not add a scheduled second region. P1 is live;
+`malopolskie` is enabled only long enough for a manual disposable pilot—not a
 16-region matrix.
 
 ## Production snapshot
 
 ### Repository and deployment
 
-- The production-validated main baseline is `701795e` (`fix: keep portal
-  results inside the selected region`), following `60bea36` (cross-category
-  duplicate rejection) and `53ce632` (within-page portal clone rejection).
-  This worktree adds the P1 catalog, regional UI/generator, storage isolation
-  and TERYT-selected geocoding described below.
+- The production-validated regional architecture is `4131f03` (`feat: build
+  regional catalog and stable pages`), on top of `701795e` (regional-boundary
+  enforcement), `60bea36` (cross-category duplicate rejection) and `53ce632`
+  (within-page portal clone rejection).
 - The [live site](https://110kc3.github.io/rentgen-ofert/) and
   [live `data/slaskie/meta.json`](https://110kc3.github.io/rentgen-ofert/data/slaskie/meta.json)
   both return HTTP 200.
-- [Deploy run 33079583960](https://github.com/110kc3/rentgen-ofert/actions/runs/33079583960)
-  published the latest completed active-only scrape; the site and
+- [Deploy run 33090688420](https://github.com/110kc3/rentgen-ofert/actions/runs/33090688420)
+  published the latest completed regionalized scrape; the site and
   `meta.json` both return HTTP 200 as of this audit.
-- Latest completed data: **2026-08-27 13:57 UTC**, **30,684** current unique
-  properties from **51,754** current raw listings.
+- Latest completed data: **2026-08-27 15:57 UTC**, **30,763** current unique
+  properties from **51,890** current raw listings.
 - Published data comes from four sources in that run, not five: Otodom, Gratka,
   Morizon and nieruchomości-online. OLX contributed zero.
-- The production workflow ran **206 offline tests before portal work** and its
-  post-generation validator protected the publication. The P1 worktree now
-  has **224 passing offline tests**.
+- The production workflow ran **224 offline tests before portal work** and its
+  post-generation validator protected the publication.
 
 ### Latest completed validation runs
 
-Four corrected active runs and the explicit forced-archive run all passed their
+Five corrected active runs and the explicit forced-archive run all passed their
 gates and deployed:
 
 | Run | Trigger | Scrape runtime | Result | Unique / raw |
@@ -69,18 +67,19 @@ gates and deployed:
 | [33007455916](https://github.com/110kc3/rentgen-ofert/actions/runs/33007455916) | schedule | 85.5 min | success; deploy `33018656594` | 30,761 / 51,883 |
 | [33047120282](https://github.com/110kc3/rentgen-ofert/actions/runs/33047120282) | forced archive | 177.4 min | success; deploy `33060020329` | 30,781 / 51,906 |
 | [33072698054](https://github.com/110kc3/rentgen-ofert/actions/runs/33072698054) | active-only follow-up | 79.6 min | success; deploy `33079583960` | 30,684 / 51,754 |
+| [33082048365](https://github.com/110kc3/rentgen-ofert/actions/runs/33082048365) | P1 push | 92.1 min | success; deploy `33090688420` | 30,763 / 51,890 |
 
 ### Latest source health
 
-These are the published schema-v2 values from active-only run `33072698054`:
+These are the published schema-v2 values from regionalized run `33082048365`:
 
 | Source | Current kept listings | Reported search state | Assessment |
 |---|---:|---|---|
-| Otodom | 15,866 | `partial`, 71.6%; flat root stops at page 200/252 | Correct regional floor; all 263 application requests succeeded with no refusal. |
+| Otodom | 15,930 | `partial`, 71.9%; flat root stops at page 200/252 | Correct regional floor; all 263 application requests succeeded with no refusal. |
 | OLX | 0 | `blocked`, one real root row, HTTP 403 | Runner/IP block; one probe ends the portal in about three seconds. |
-| Gratka | 12,530 | `healthy`, 100.0% | Full useful coverage in the current accounting model. |
-| Morizon | 12,532 | `partial`, bounded against a lower-bound total | Useful and mostly twinned with Gratka; partial because the total is a lower bound. |
-| nieruchomości-online | 10,826 current | `healthy`; 581 current-only pages; 47,754 archived rows cached from 2026-08-27 | The cache is byte-identical to the forced refresh; this run served no archive rows into its current result. |
+| Gratka | 12,544 | `healthy`, 100.0% | Full useful coverage in the current accounting model. |
+| Morizon | 12,545 | `partial`, bounded against a lower-bound total | Useful and mostly twinned with Gratka; partial because the total is a lower bound. |
+| nieruchomości-online | 10,871 current | `healthy`; 581 current-only pages; 47,754 archived rows cached from 2026-08-27 | The cache retained the forced-refresh SHA-256; this run served no archive rows into its current result. |
 
 The published unique count is lower than the source sum because Gratka and
 Morizon substantially overlap and are merged.
@@ -123,6 +122,11 @@ Morizon substantially overlap and are merged.
   executed the offline suite before scraping, validated 71 generated JSON
   files and 118.4–119.4 MiB before pushing, refreshed only `data-slaskie`, and
   triggered a successful Pages deploy.
+- **The regional product succeeded live.** P1 scrape `33082048365` refreshed
+  only `data-slaskie`; its archive cache retained the forced-refresh SHA-256
+  and its 11,675 geo entries all use the `24|…` scope. Direct and automatic
+  deploys exposed one published region, stable canonical paths and valid
+  JSON-LD while keeping Małopolskie `noindex`/data-less and unknown slugs 404.
 
 ### Runtime and scheduling capacity
 
@@ -414,6 +418,11 @@ proved that archive work remained isolated behind the retained cache.
     preservation, missing-tree safety and stale-shard removal. Shared
     `geo_cache.json`/`nol_towns.json` are intentional forks; geo keys carry the
     regional TERYT prefix.
+
+**P1 exit accepted 2026-08-27:** commit `4131f03`, direct deploy `33082048338`,
+scrape `33082048365` and automatic deploy `33090688420` all passed. The live
+picker/routes/discovery checks and regional branch/cache audit matched the
+fixture invariants, so the one-region production path is safe for P2.
 
 ### P2 — pilot one new region manually
 
