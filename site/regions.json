@@ -83,7 +83,7 @@
       "adjective": "małopolskie",
       "locative": "małopolskim",
       "teryt": "12",
-      "enabled": false,
+      "enabled": true,
       "cadence": "manual",
       "portals": {
         "otodom": "malopolskie",

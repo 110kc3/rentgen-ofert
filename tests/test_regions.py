@@ -30,7 +30,9 @@ def test_production_catalog_has_all_official_regions_and_one_default():
     assert actual == OFFICIAL
     assert document["default"] == "slaskie"
     assert [entry["slug"] for entry in document["regions"]
-            if entry["enabled"]] == ["slaskie"]
+            if entry["enabled"]] == ["malopolskie", "slaskie"]
+    assert regions.get_region("malopolskie", document)["cadence"] == "manual"
+    assert regions.get_region("slaskie", document)["cadence"] == "twice_daily"
 
 
 def test_every_portal_slug_is_explicit_and_used_by_search_roots():
@@ -70,5 +72,7 @@ def test_wrong_teryt_mapping_and_unknown_region_are_rejected(tmp_path):
 def test_workflow_gate_accepts_only_enabled_region(capsys):
     assert regions.main(["--region", "slaskie", "--require-enabled"]) == 0
     assert "TERYT 24" in capsys.readouterr().out
+    assert regions.main(["--region", "malopolskie", "--require-enabled"]) == 0
+    assert "TERYT 12" in capsys.readouterr().out
     with pytest.raises(SystemExit):
-        regions.main(["--region", "malopolskie", "--require-enabled"])
+        regions.main(["--region", "mazowieckie", "--require-enabled"])
