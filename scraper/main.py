@@ -17,6 +17,10 @@ Environment overrides (optional):
                         baseline (default 0; repeated 405s made them regress)
     RENTGEN_PHOTOS      "0" to skip photo hashing (disables dedupe-by-photo and
                         relist/price history)
+    RENTGEN_PHOTO_BUDGET_MIN
+                        max minutes spent fetching uncached galleries (default
+                        90; "0" = unlimited). Critical current collisions run
+                        before the age-persisted history-only backlog
     RENTGEN_DELIST_BUDGET_MIN
                         max minutes the delist sweep may spend (default 10,
                         "0" = unlimited); unasked records retry next run
@@ -214,21 +218,53 @@ def run() -> int:
     # only n-online flags `archived`, so a gratka/morizon pair is never left
     # with one half on each side of it. (`dedupe` links again, idempotently —
     # the pairing must also hold when RENTGEN_PHOTOS=0 skips this entirely.)
+    # The fetch queue itself is NOT portal order: current dedupe collisions are
+    # correctness-critical and go first; age-persisted history work uses the
+    # remaining fixed budget (see photomatch.prioritize).
     photo_started = time.monotonic()
     linked = link_twins(raw)
     if linked:
         print(f"  gratka<->morizon twins linked off the search page: {linked}")
 
-    if os.environ.get("RENTGEN_PHOTOS", "1") != "0":
+    photos_enabled = os.environ.get("RENTGEN_PHOTOS", "1") != "0"
+    photo_stats = {"schema": 1, "enabled": photos_enabled, "listings": len(raw)}
+    if photos_enabled:
         print(f"Photo-hashing {len(raw)} listings (dedupe + history) ...")
         pc = phcache.load(CACHE_PATH)
+        photo_queue, critical_urls = photomatch.prioritize(
+            raw, cache=pc, today=today)
+        identified = sum(1 for listing in raw if listing.get("_identified_by"))
+        previous_backlog = phcache.backlog(pc)
+        previous_oldest = min(previous_backlog.values(), default=None)
+        queue_note = (
+            f"; {len(previous_backlog)} previously deferred"
+            + (f" since {previous_oldest}" if previous_oldest else "")
+            if previous_backlog else ""
+        )
+        print(
+            f"  photo queue: {len(critical_urls)} correctness-critical, "
+            f"{len(raw) - len(critical_urls) - identified} history-only"
+            f"{queue_note}"
+        )
         budget_min = float(os.environ.get("RENTGEN_PHOTO_BUDGET_MIN", "90"))
-        photomatch.attach_hashes(raw, session=http, cache=pc, today=today,
-                                 budget_s=budget_min * 60 if budget_min > 0 else None)
+        photo_stats.update(photomatch.attach_hashes(
+            photo_queue, session=http, cache=pc, today=today,
+            budget_s=budget_min * 60 if budget_min > 0 else None,
+            critical_urls=critical_urls,
+        ))
+        deferred_urls = photo_stats.pop("deferred_urls")
+        photo_stats["backlog"] = phcache.update_backlog(
+            pc, deferred_urls, today)
         pruned = phcache.prune(pc, today)
         phcache.save(CACHE_PATH, pc)
         print(f"  phash cache: {len(pc.get('entries', {}))} urls "
               f"({pruned} pruned as stale)")
+        if photo_stats["backlog"]["count"]:
+            print(
+                f"  photo backlog: {photo_stats['backlog']['count']} URLs "
+                f"(oldest {photo_stats['backlog']['oldest']}); "
+                f"{photo_stats['critical_deferred']} correctness-critical"
+            )
     phase_seconds["photos"] = round(time.monotonic() - photo_started, 1)
 
     # Portal-archived ads (n-online flags them) are history evidence, not offers.
@@ -358,6 +394,7 @@ def run() -> int:
         "sold_confirmed": sum(1 for a in archive if a.get("sold")),
         "health": cov_summary["status"],
         "coverage": cov_summary,
+        "photos": photo_stats,
         "runtime": {"seconds": phase_seconds["total"],
                     "phases": phase_seconds},
         "errors": errors,

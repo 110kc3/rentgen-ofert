@@ -10,7 +10,8 @@ Actions job reuses it run-to-run) and self-prunes URLs not seen for
 ``MAX_AGE_DAYS`` so it can't grow without bound:
 
     {"version": 2, "entries": {url: {"h": ["<base64>", ...], "seen": "YYYY-MM-DD",
-                                     "urls": ["https://...", ...]}}}
+                                     "urls": ["https://...", ...]}},
+     "backlog": {url: "YYYY-MM-DD"}}
 
 **Why gzip + base64.** The v1 file wrote each 256-bit dHash as a ~78-character
 decimal string in plain JSON. At 34 137 listings that reached 62.86 MB, past
@@ -34,6 +35,13 @@ listings. A miss is retried ``MISS_RETRIES`` times (a fetch can fail
 transiently) and then believed for ``MISS_RECHECK_DAYS``, so a portal that
 genuinely has no photos for us costs one probe a week instead of one a run,
 and a portal that starts serving them again is picked back up.
+
+**Budget backlog.** A cold region can contain more uncached listings than the
+photo budget can inspect in one run. Deferred URLs live in the top-level
+``backlog`` map with the date they first waited. This is deliberately separate
+from a negative cache entry: "not attempted" must never become "no photos".
+The next run can therefore put older deferred work ahead of fresh ads and
+report backlog age/count instead of emitting one ephemeral log line.
 """
 from __future__ import annotations
 
@@ -202,3 +210,45 @@ def prune(cache, today: str, max_age_days: int = MAX_AGE_DAYS) -> int:
     for u in stale:
         del entries[u]
     return len(stale)
+
+
+def backlog(cache) -> dict:
+    """Return the persisted ``url -> first deferred date`` map.
+
+    Be conservative when reading an older or hand-edited cache: malformed
+    backlog values are ignored rather than making photo hashing fail before it
+    starts. Cache entries themselves remain subject to the stricter loader
+    checks above because corrupt hashes affect identity.
+    """
+    raw = cache.get("backlog") or {}
+    if not isinstance(raw, dict):
+        return {}
+    clean = {}
+    for url, date in raw.items():
+        if not url or not isinstance(date, str) or not date:
+            continue
+        try:
+            dt.date.fromisoformat(date)
+        except ValueError:
+            continue
+        clean[str(url)] = date
+    return clean
+
+
+def update_backlog(cache, deferred_urls, today: str) -> dict:
+    """Replace the budget backlog and return its compact persisted summary.
+
+    URLs that are still deferred retain their original date; attempted,
+    cached, twinned, and vanished URLs drop out. Replacing the map rather than
+    appending to it keeps a regional cache from retaining dead work forever.
+    """
+    previous = backlog(cache)
+    urls = sorted({str(url) for url in deferred_urls if url})
+    current = {url: previous.get(url, today) for url in urls}
+    cache["backlog"] = current
+    oldest = min(current.values(), default=None)
+    return {
+        "count": len(current),
+        "oldest": oldest,
+        "age_days": _days_between(oldest, today) if oldest else 0,
+    }

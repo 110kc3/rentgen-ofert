@@ -45,6 +45,13 @@ def _dataset(tmp_path):
             "seconds": 12.5,
             "phases": {"scrape_otodom": 3.0, "write": 0.5, "total": 12.5},
         },
+        "photos": {
+            "schema": 1, "enabled": True, "listings": 2, "critical": 1,
+            "history_only": 1, "cache_hits": 1, "fetched": 0,
+            "with_photos": 1, "identified": 0, "deferred": 1,
+            "critical_deferred": 0, "history_deferred": 1,
+            "backlog": {"count": 1, "oldest": "2026-08-24", "age_days": 0},
+        },
     }), encoding="utf-8")
     (tmp_path / "archive.json").write_text("[]", encoding="utf-8")
     (tmp_path / "stats.json").write_text("{}", encoding="utf-8")
@@ -63,6 +70,7 @@ def test_generated_dataset_validator_checks_every_payload_part(tmp_path):
     markdown = validate_data.github_summary(summary)
     assert "Dataset:" in markdown and "otodom" in markdown
     assert "scrape_otodom" in markdown and "published" in markdown
+    assert "Photo queue" in markdown and "1 deferred" in markdown
 
 
 def test_generated_dataset_validator_rejects_count_mismatch(tmp_path):
@@ -98,4 +106,16 @@ def test_generated_dataset_validator_requires_pipeline_outputs(tmp_path):
 
     with pytest.raises(validate_data.DataValidationError,
                        match="missing generated file.*history.json.gz"):
+        validate_data.validate_data_dir(root)
+
+
+def test_generated_dataset_validator_rejects_inconsistent_photo_metrics(tmp_path):
+    root = _dataset(tmp_path)
+    meta_path = root / "meta.json"
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    meta["photos"]["critical_deferred"] = 2
+    meta_path.write_text(json.dumps(meta), encoding="utf-8")
+
+    with pytest.raises(validate_data.DataValidationError,
+                       match="critical_deferred exceeds critical"):
         validate_data.validate_data_dir(root)

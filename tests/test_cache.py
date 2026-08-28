@@ -92,3 +92,37 @@ def test_prune_drops_stale_entries_including_negative_ones():
     cache.put(c, "old-miss", [], "2026-06-01")
     assert cache.prune(c, "2026-08-01") == 2
     assert list(c["entries"]) == ["fresh"]
+
+
+# ---- persisted budget backlog ---------------------------------------------
+
+def test_backlog_retains_age_only_for_urls_still_deferred():
+    c = {"version": cache.VERSION, "entries": {},
+         "backlog": {"old": "2026-08-01", "finished": "2026-08-02"}}
+    summary = cache.update_backlog(c, ["old", "new", "old"], "2026-08-05")
+    assert c["backlog"] == {"new": "2026-08-05", "old": "2026-08-01"}
+    assert summary == {"count": 2, "oldest": "2026-08-01", "age_days": 4}
+
+    assert cache.update_backlog(c, [], "2026-08-06") == {
+        "count": 0, "oldest": None, "age_days": 0,
+    }
+    assert c["backlog"] == {}
+
+
+def test_backlog_round_trips_through_the_gzip_cache(tmp_path):
+    path = tmp_path / "phash_malopolskie.json.gz"
+    c = {"version": cache.VERSION, "entries": {}}
+    cache.update_backlog(c, ["https://example.test/ad/1"], "2026-08-01")
+    cache.save(path, c)
+    assert cache.backlog(cache.load(path)) == {
+        "https://example.test/ad/1": "2026-08-01",
+    }
+
+
+def test_malformed_backlog_is_ignored():
+    assert cache.backlog({"backlog": []}) == {}
+    assert cache.backlog({"backlog": {"ok": "2026-08-01", "bad": None,
+                                       "nonsense": "last Tuesday",
+                                       "": "2026-08-02"}}) == {
+        "ok": "2026-08-01",
+    }

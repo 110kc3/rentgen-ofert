@@ -111,6 +111,80 @@ def test_budget_skips_are_not_recorded_as_photo_misses():
     assert pc["entries"] == {}                   # and nothing was learned
 
 
+def test_photo_queue_puts_current_collisions_and_untried_work_first():
+    cached = {"source": "gratka", "type": "flat", "area": 50, "rooms": 2,
+              "price": 500000, "locality": "Kraków", "url": "cached"}
+    same_size = {"source": "otodom", "type": "flat", "area": 50, "rooms": 2,
+                 "price": 510000, "locality": "Tarnów", "url": "same-size"}
+    cross_size = {"source": "nieruchomosci-online", "type": "flat",
+                  "area": 51, "rooms": 2, "price": 500000,
+                  "locality": "Kraków", "url": "cross-size"}
+    old_history = {"source": "otodom", "type": "house", "area": 111,
+                   "price": 700000, "locality": "Bochnia", "url": "old"}
+    fresh_history = {"source": "gratka", "type": "house", "area": 222,
+                     "price": 900000, "locality": "Olkusz", "url": "fresh"}
+    retried_history = {"source": "otodom", "type": "house", "area": 333,
+                       "price": 1100000, "locality": "Nowy Sącz", "url": "retry"}
+    archived = {"source": "nieruchomosci-online", "type": "flat", "area": 44,
+                "price": 400000, "locality": "Kraków", "url": "archived",
+                "archived": True}
+    pc = {"version": cache.VERSION,
+          "entries": {
+              "cached": {"h": [cache.pack(7)], "seen": "2026-08-01"},
+              "retry": {"h": [], "seen": "2026-08-02", "tried": "2026-08-02",
+                        "miss": 1},
+          },
+          "backlog": {"old": "2026-08-01"}}
+
+    ordered, critical = photomatch.prioritize(
+        [retried_history, fresh_history, archived, same_size, old_history,
+         cross_size, cached],
+        cache=pc, today="2026-08-03")
+
+    # Exact-size and same-town/same-price collisions both affect today's
+    # normalization. The positive cache hit is free and leads that queue.
+    assert critical == {"cached", "same-size", "cross-size"}
+    assert [row["url"] for row in ordered[:3]] == [
+        "cached", "cross-size", "same-size",
+    ]
+    # In the history queue, old deferred work beats fresh work, while a prior
+    # empty response is retried only after never-attempted listings.
+    history_order = [row["url"] for row in ordered[3:]]
+    assert history_order[0] == "old"
+    assert history_order[-1] == "retry"
+    assert history_order.index("fresh") < history_order.index("retry")
+
+
+def test_photo_metrics_separate_critical_and_history_deferrals(monkeypatch):
+    ticks = iter([0, 0, 2, 2])
+    monkeypatch.setattr(photomatch.time, "monotonic", lambda: next(ticks))
+    monkeypatch.setattr(photomatch, "listing_hashes",
+                        lambda listing, session: ([7], [listing["url"] + ".jpg"]))
+    listings = [
+        {"source": "gratka", "url": "critical"},
+        {"source": "gratka", "url": "history-1"},
+        {"source": "gratka", "url": "history-2"},
+    ]
+    stats = photomatch.attach_hashes(
+        listings, session=object(), log=lambda *a: None, max_workers=1,
+        budget_s=1, critical_urls={"critical"})
+    assert listings[0]["phashes"] == [7]
+    assert listings[1]["phashes"] == listings[2]["phashes"] == []
+    assert stats == {
+        "listings": 3,
+        "critical": 1,
+        "history_only": 2,
+        "cache_hits": 0,
+        "fetched": 1,
+        "with_photos": 1,
+        "identified": 0,
+        "deferred": 2,
+        "critical_deferred": 0,
+        "history_deferred": 2,
+        "deferred_urls": ["history-1", "history-2"],
+    }
+
+
 # ---- the merge key, end to end ---------------------------------------------
 
 def _mz(**kw):

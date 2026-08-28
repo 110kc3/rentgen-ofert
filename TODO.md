@@ -1,9 +1,9 @@
 # TODO — rentgen-ofert
 
 > Keep this file and `README.md` updated after each change.
-> Last updated: 2026-08-27
+> Last updated: 2026-08-28
 
-## Current (2026-08-27) — P0 complete; P1 live; P2 pilot queued
+## Current (2026-08-28) — P0/P1 live; P2 cold pilot exposed the photo queue
 
 The corrected Śląskie baseline is published and stable. Five runs on main SHA
 `701795e` rejected cross-category clones, duplicate cards within a portal result
@@ -32,6 +32,32 @@ Its n-online path remained current-only (10,871 rows / 581 pages), the archive
 cache retained the same SHA-256, and geo wrote 500 new TERYT-scoped `24|…`
 keys. The shared file also retained 11,175 pre-P1 unprefixed keys, which the
 regional lookup path deliberately ignores.
+
+Cold Małopolskie workflow `33098785162` then ran manually on commit `18afb78`,
+after waiting behind the routine serialized Śląskie scrape. Its 247.6-minute
+job / 246.5-minute scrape passed 224 tests, created only `data-malopolskie` at
+`311f875`, validated 40,811 unique properties from 61,883 current raw rows and
+deployed both regions in `33126428927`. The branch is 98.8 MiB, its regional
+data is 86.4 MiB including pipeline history, and 79.6 MiB is actually served.
+The live picker, regional listing/statistics canonicals, sitemap and data
+catalog all expose both complete enabled trees; Małopolskie remains manual-only.
+
+The cold evidence is useful rather than an exit pass. Portal collection took
+132.3 minutes, RCN's cold `12*` pull 20.5 minutes and the photo phase exhausted
+all 90 minutes: 14,536 listings got hashes, 12,560 Morizon twins needed none,
+and **36,830 were never attempted**. Of 26,922 cache entries, 12,381 are first
+Otodom empty-gallery attempts while 14,378 are successful Gratka hashes; the
+portal-ordered queue reached neither untwinned Morizon nor n-online. The warm
+pass would therefore repeat low-yield work before measuring convergence.
+
+The next code slice fixes that measurement. Current dedupe collisions lead the
+photo queue; within correctness and history queues, free cache hits and
+oldest persisted deferrals lead, never-attempted URLs precede negative-cache
+retries, and the order is stable. Deferred URLs retain their first-wait date in
+the regional phash cache without becoming false photo misses. `meta.photos`,
+the generated-data validator and the GitHub summary now expose critical versus
+history counts, cache/fetch outcomes and critical/backlog deferrals. The local
+offline gate is **230/230**.
 
 ### P0 evidence now accepted
 
@@ -70,11 +96,12 @@ regional lookup path deliberately ignores.
   A failure prevents the data-branch push.
 - **Phase timings are data, not log archaeology.** `meta.json.runtime` records
   each source plus photo/history/delist/RCN/geo/write and total seconds.
-- **Photo splitting is not needed on warm Śląskie.** Four corrected active runs
-  processed every correctness candidate in roughly 32–74 seconds with no
-  budget exhaustion. That is safely below the 60-minute P0.5 gate; a separate
-  history-priority queue remains a cold-region optimisation, not a rollout
-  blocker.
+- **Warm Śląskie needs no extra photo time, but cold regions need ordering.**
+  Four corrected Śląskie runs processed the old queue in roughly 32–74 seconds
+  with no exhaustion. Małopolskie then proved portal order is not a safe cold
+  queue: its full 90 minutes still deferred 36,830 ads. Correctness-first,
+  age-persisted ordering now makes that backlog explicit and convergent without
+  raising the publication budget.
 - **Every publication was protected.** The offline gate preceded portal work,
   the generated-data validator checked all 71 JSON files and 118.4–119.4 MiB,
   and the regional branch push and Pages deployment succeeded after each run.
@@ -101,21 +128,25 @@ regional lookup path deliberately ignores.
 - UUG geocoding selects the candidate matching the catalog TERYT prefix and
   scopes cache keys by that prefix. Same-named places in different regions can
   no longer reuse the wrong centroid.
-- Verification currently covers **224 offline tests**, including catalog,
-  generator, navigation, two-region storage and ambiguous-geocoder regressions.
-- Production checks after `33090688420` proved the national picker, stable
-  listing/statistics paths, canonical and JSON-LD metadata, sitemap and
-  `llms.txt`. Valid unpublished regions return a useful `noindex` page without
-  exposing a data tree; unknown regions return 404.
+- Verification currently covers **230 offline tests**, including catalog,
+  generator, navigation, two-region storage, ambiguous-geocoder and persisted
+  photo-queue regressions.
+- Production checks after `33090688420` proved the one-region product; deploy
+  `33126428927` then proved the live two-region picker, stable
+  listing/statistics canonicals, sitemap and catalog. Valid unpublished regions
+  still return a useful `noindex` page without exposing a data tree; unknown
+  regions return 404.
 
 ### Next
 
-1. Let the routine serialized Śląskie run `33098667425` complete.
-2. Cold Małopolskie pilot `33098785162` is queued behind it from manual-only
-   commit `18afb78`; validate its isolated branch and two-region deployment.
-3. Run one warm Małopolskie pass, then disable the disposable pilot and prove
-   Śląskie stayed unchanged. Do not add Małopolskie to cron or create a
-   16-region matrix.
+1. Let the push-triggered Śląskie validation exercise the new photo metrics;
+   audit it later rather than watching it.
+2. If that baseline holds, dispatch one warm Małopolskie pass with archive work
+   skipped and measure critical completion, backlog convergence, geo and the
+   transient Morizon band failure.
+3. Disable the disposable pilot after that evidence, deploy the one-region
+   artifact and prove the `data-slaskie` ref stayed unchanged. Do not add
+   Małopolskie to cron or create a 16-region matrix.
 
 ## Superseded (2026-08-13) — stop before region two and repair the template
 

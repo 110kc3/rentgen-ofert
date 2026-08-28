@@ -7,10 +7,11 @@ and presents it on one searchable page. No application server: a GitHub Actions
 job scrapes, writes static JSON, and GitHub Pages displays it.
 
 Portal blocking and serving caps mean “all listings” is a target, not a current
-guarantee. The published 2026-08-27 dataset has 30,763 current properties from
-four contributing sources. OLX is blocked with HTTP 403; after rejecting
-cross-category clones and promoted cards from other voivodeships, Otodom's
-evidence-backed regional floor is about 15.9k and its flat root remains
+guarantee. The 2026-08-28 deployment has 30,534 Śląskie and 40,811 Małopolskie
+current properties from four contributing sources; Małopolskie is a temporary
+manual pilot, not a scheduled region. OLX is blocked with HTTP 403; after
+rejecting cross-category clones and promoted cards from other voivodeships,
+Otodom's evidence-backed Śląskie floor is about 15.9k and its flat root remains
 explicitly partial at the 200-page cap.
 
 ```
@@ -30,10 +31,11 @@ the split needed no flag day).
 
 ## Poland rollout status
 
-As of 2026-08-27, **1 of 16 voivodeships is published**. One canonical catalog
-now owns every region's label, TERYT prefix, enabled state, cadence, optional
-anchor and explicit per-portal slug. The deployed product is region-aware: `/`
-is generated as a national picker, published regions get stable
+As of 2026-08-28, **2 of 16 voivodeships are published while the manual
+Małopolskie pilot is active**; only Śląskie is scheduled. One canonical catalog
+owns every region's label, TERYT prefix, enabled state, cadence, optional anchor
+and explicit per-portal slug. The deployed product is region-aware: `/` is
+generated as a national picker, published regions get stable
 `region/<slug>/` and `region/<slug>/stats/` pages, browser state is scoped by
 region, and discovery metadata is generated from complete, enabled data
 actually overlaid. Disabling a catalog entry suppresses its scrape and its
@@ -59,6 +61,15 @@ regionalized scrape `33082048365` and automatic deploy `33090688420` all
 succeeded. The scrape passed all 224 offline tests, refreshed only
 `data-slaskie`, and the live picker, stable paths, unpublished/unknown routes
 and discovery metadata passed their HTTP/semantic checks.
+Cold Małopolskie pilot `33098785162` then passed the same gate, created only
+`data-malopolskie`, and deployed both regions in `33126428927`. It published
+40,811 unique properties from 61,883 current rows (79.6 MiB served), but its
+246.5-minute scrape spent the full 90-minute photo budget and deferred 36,830
+ads. Photo work is now ordered by current dedupe correctness, then persistent
+oldest-first history backlog; never-attempted ads precede repeated empty-gallery
+responses, and `meta.json` plus the CI summary expose each queue and deferral.
+The next gate is still one warm Małopolskie pass, followed by disabling the
+disposable pilot—not a region matrix.
 The audited status, evidence, decisions, acceptance gates and P0–P5 task order are
 in [`POLAND_ROLLOUT.md`](POLAND_ROLLOUT.md). `TODO.md` remains the detailed
 development diary.
@@ -66,11 +77,12 @@ development diary.
 ## What it does
 
 - Searches **domy** and **mieszkania** *na sprzedaż* across the selected whole
-  voivodeship (currently published: Śląskie — Katowice, Gliwice, Częstochowa,
-  Bielsko-Biała, Rybnik, …) on up to five portals — a region-level search on
+  voivodeship (currently published: scheduled Śląskie plus the manual
+  Małopolskie pilot) on up to five portals — a region-level search on
   Otodom/OLX/gratka/Morizon and per-city sub-domains on
   nieruchomości-online. `RENTGEN_REGION` must name an entry in
-  `site/regions.json`; no second region is production-validated yet.
+  `site/regions.json`; Małopolskie has passed its cold run and still needs its
+  warm convergence/disable gate.
   Every listing keeps its **town (locality)**, and the dashboard has a searchable
   **town multi-select** filter.
 - Keeps archived / sold listings (e.g. nieruchomości-online *Ogłoszenie archiwalne*)
@@ -345,7 +357,7 @@ RENTGEN_MAX_PAGES=3 RENTGEN_DELAY=0.3 python -m scraper.main
 | `RENTGEN_MAX_PAGES` | 200 | max result pages per portal per search (was 50, which silently truncated every portal — see *Coverage*) |
 | `RENTGEN_DELAY` | 0.7 | seconds between requests (be polite) |
 | `RENTGEN_PHOTOS` | 1 | photo-match ambiguous listings; `0` skips the detail fetches |
-| `RENTGEN_PHOTO_BUDGET_MIN` | 90 | max minutes of photo fetching per run (`0` = unlimited); skipped listings retry next run |
+| `RENTGEN_PHOTO_BUDGET_MIN` | 90 | max minutes of uncached photo fetching (`0` = unlimited); current dedupe collisions run first, while skipped history work persists oldest-first in the regional cache |
 | `RENTGEN_TYPES` | house,flat | which to scrape; e.g. `house` for houses only |
 | `RENTGEN_BANDS` | 1 | price-band subdivision for supported portals; `0` disables all of it (see *Price bands*) |
 | `RENTGEN_OTODOM_BANDS` | 0 | `1` explicitly tests Otodom bands after its full unbanded baseline; never enabled by default |

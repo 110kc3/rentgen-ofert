@@ -190,6 +190,64 @@ def validate_data_dir(data_dir) -> dict:
     _require(phases.get("total") == runtime["seconds"],
              "meta.runtime.phases.total must match meta.runtime.seconds")
 
+    photos = meta.get("photos")
+    _require(isinstance(photos, dict), "meta.photos must be an object")
+    _require(photos.get("schema") == 1, "meta.photos.schema must be 1")
+    _require(isinstance(photos.get("enabled"), bool),
+             "meta.photos.enabled must be a boolean")
+    _require(isinstance(photos.get("listings"), int)
+             and not isinstance(photos["listings"], bool)
+             and photos["listings"] >= 0,
+             "meta.photos.listings must be a non-negative integer")
+    if photos["enabled"]:
+        count_fields = (
+            "critical", "history_only", "cache_hits", "fetched",
+            "with_photos", "identified", "deferred",
+            "critical_deferred", "history_deferred",
+        )
+        for field in count_fields:
+            value = photos.get(field)
+            _require(isinstance(value, int) and not isinstance(value, bool)
+                     and value >= 0,
+                     f"meta.photos.{field} must be a non-negative integer")
+        _require(
+            photos["critical"] + photos["history_only"]
+            + photos["identified"] == photos["listings"],
+            "meta.photos queue counts do not add up to listings",
+        )
+        _require(
+            photos["cache_hits"] + photos["fetched"]
+            + photos["identified"] + photos["deferred"]
+            == photos["listings"],
+            "meta.photos outcomes do not add up to listings",
+        )
+        _require(photos["critical_deferred"] <= photos["critical"],
+                 "meta.photos.critical_deferred exceeds critical")
+        _require(
+            photos["critical_deferred"] + photos["history_deferred"]
+            == photos["deferred"],
+            "meta.photos deferred counts do not add up",
+        )
+        _require(photos["with_photos"]
+                 <= photos["cache_hits"] + photos["fetched"],
+                 "meta.photos.with_photos exceeds attempted/cache outcomes")
+        backlog = photos.get("backlog")
+        _require(isinstance(backlog, dict),
+                 "meta.photos.backlog must be an object")
+        _require(isinstance(backlog.get("count"), int)
+                 and not isinstance(backlog["count"], bool)
+                 and 0 <= backlog["count"] <= photos["deferred"],
+                 "meta.photos.backlog.count is invalid")
+        _require(isinstance(backlog.get("age_days"), int)
+                 and not isinstance(backlog["age_days"], bool)
+                 and backlog["age_days"] >= 0,
+                 "meta.photos.backlog.age_days must be a non-negative integer")
+        oldest = backlog.get("oldest")
+        _require((backlog["count"] == 0 and oldest is None)
+                 or (backlog["count"] > 0
+                     and isinstance(oldest, str) and oldest),
+                 "meta.photos.backlog.oldest does not match its count")
+
     all_files = [path for path in root.rglob("*") if path.is_file()]
     generated_bytes = sum(path.stat().st_size for path in all_files)
     published_bytes = sum(path.stat().st_size for path in all_files
@@ -205,6 +263,7 @@ def validate_data_dir(data_dir) -> dict:
         "generated_bytes": generated_bytes,
         "published_bytes": published_bytes,
         "runtime": runtime,
+        "photos": photos,
         "sources": sources,
     }
 
@@ -231,6 +290,20 @@ def github_summary(summary: dict) -> str:
     lines.extend(["", "| Phase | Time |", "|---|---:|"])
     for name, seconds in summary["runtime"]["phases"].items():
         lines.append(f"| {name} | {float(seconds):.1f}s |")
+    photos = summary["photos"]
+    if photos["enabled"]:
+        backlog = photos["backlog"]
+        lines.extend([
+            "",
+            (f"**Photo queue:** {photos['critical']:,} correctness-critical · "
+             f"{photos['history_only']:,} history-only · "
+             f"{photos['cache_hits']:,} cache hits · "
+             f"{photos['fetched']:,} fetched · "
+             f"{photos['deferred']:,} deferred "
+             f"({photos['critical_deferred']:,} critical) · "
+             f"backlog {backlog['count']:,}, oldest "
+             f"{backlog['oldest'] or '—'}"),
+        ])
     lines.append("")
     return "\n".join(lines)
 
