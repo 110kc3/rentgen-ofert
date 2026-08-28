@@ -1,11 +1,19 @@
 """Perceptual photo matching to confirm two listings are the same property.
 
-The cover photo alone is unreliable (each portal picks a different one), so we
-fetch each listing's detail page, collect a few gallery image URLs, and compute
-a 256-bit dHash per image. Two listings are "the same" when the closest pair of
-their gallery hashes is within PHOTO_THRESHOLD. On ground-truth cross-portal
-pairs the closest pair scores ~16-27, while different properties score ~115, so
-the threshold has a wide safety margin.
+The cover photo alone has lower recall (each portal can pick a different one),
+so the normal path fetches a listing's detail page, collects a few gallery image
+URLs, and computes a 256-bit dHash per image. Two listings are "the same" when
+the closest pair of their hashes is within PHOTO_THRESHOLD. On ground-truth
+cross-portal pairs the closest pair scores ~16-27, while different properties
+score ~115, so the threshold has a wide safety margin.
+
+A cold region is different: almost every common size collides, and walking
+five-image galleries for tens of thousands of current ads cannot fit the
+publication budget. Uncached correctness-critical ads therefore hash their
+search-card cover first. A matching cover is still positive identity evidence;
+a non-match stays separate instead of falling into the much riskier size/price
+merge. The cache marks this cheaper evidence as ``scope=cover`` so it is not
+mistaken for a complete gallery and can be enriched later for history.
 
 Only used for listings that share an exact size with another (the ambiguous
 ones); everything else never needs a detail fetch.
@@ -173,18 +181,28 @@ def gallery_urls(listing, session) -> list:
         return []
 
 
-def listing_hashes(listing, session) -> tuple:
-    """(hashes, image_urls) for a listing's gallery."""
-    hashes, urls = [], []
-    for url in gallery_urls(listing, session):
+def _hash_urls(image_urls, session) -> tuple:
+    hashes, fetched_urls = [], []
+    for url in image_urls:
         try:
             r = session.get(url, headers=HEADERS, timeout=15)
             r.raise_for_status()
             hashes.append(dhash(r.content))
-            urls.append(url)
+            fetched_urls.append(url)
         except Exception:
             continue
-    return hashes, urls
+    return hashes, fetched_urls
+
+
+def listing_hashes(listing, session) -> tuple:
+    """(hashes, image_urls) for a listing's detail-page gallery."""
+    return _hash_urls(gallery_urls(listing, session), session)
+
+
+def cover_hashes(listing, session) -> tuple:
+    """Hash only the search-card cover for a bounded critical first pass."""
+    image = listing.get("image")
+    return _hash_urls([image] if image else [], session)
 
 
 def prioritize(listings, cache=None, today=None):
@@ -271,7 +289,7 @@ def prioritize(listings, cache=None, today=None):
 
 def attach_hashes(listings, max_workers: int = 8, session=None, log=print,
                   cache=None, today=None, budget_s=None, critical_urls=None):
-    """Fetch galleries and set listing['phashes'] for each given listing.
+    """Fetch photos and set listing['phashes'] for each given listing.
 
     If a ``cache`` dict (see ``scraper.cache``) is given, listings whose URL is
     already cached reuse the stored hashes and skip the detail-page + image
@@ -292,14 +310,21 @@ def attach_hashes(listings, max_workers: int = 8, session=None, log=print,
     id, off the search page (see there).
 
     ``critical_urls`` does not reorder work; pass the result of ``prioritize``.
-    It labels deferred work in the returned metrics so a run can prove whether
-    the correctness queue completed. The return value also carries a private
-    ``deferred_urls`` list for persistence in the regional cache; callers must
-    remove it before publishing the compact metrics.
+    An uncached critical listing with a search-card image hashes that one image
+    instead of walking its full gallery. This is enough to prevent a blind
+    size/price fallback and makes the bounded queue tractable; the cache labels
+    the evidence ``cover`` for later enrichment. Returned metrics distinguish
+    both cache/fetch scopes and critical rows that still yielded no photo.
+
+    Photo requests use a no-retry session by default. A photo is best-effort and
+    comes round next run; inheriting the scraper's 405/429/5xx retry ladder let
+    a handful of in-flight galleries overrun a 90-minute budget by 6.8 minutes.
+    The return value also carries a private ``deferred_urls`` list for cache
+    persistence; callers remove it before publishing the compact metrics.
     """
     from . import net
     from . import cache as cachemod
-    session = session or net.session()
+    session = session or net.probe_session()
     deadline = time.monotonic() + budget_s if budget_s else None
     critical_urls = set(critical_urls or ())
 
@@ -317,14 +342,19 @@ def attach_hashes(listings, max_workers: int = 8, session=None, log=print,
             # that let morizon eat the photo budget.
             cached = cachemod.get(cache, url, today)
             if cached is not None:
-                return (l, cached, cachemod.get_urls(cache, url), "cached")
+                scope = cachemod.get_scope(cache, url)
+                return (l, cached, cachemod.get_urls(cache, url),
+                        f"cached_{scope}")
         if deadline is not None and time.monotonic() > deadline:
             # None, not [] — an ad we never tried must not be written back as a
             # photo miss, or a few budget-starved runs would teach the cache
             # that half the region has no photos
             return (l, None, [], "deferred")
+        if url in critical_urls and l.get("image"):
+            hashes, img_urls = cover_hashes(l, session)
+            return (l, hashes, img_urls, "fetched_cover")
         hashes, img_urls = listing_hashes(l, session)
-        return (l, hashes, img_urls, "fetched")
+        return (l, hashes, img_urls, "fetched_gallery")
 
     results = []
     with ThreadPoolExecutor(max_workers=max_workers) as ex:
@@ -333,16 +363,23 @@ def attach_hashes(listings, max_workers: int = 8, session=None, log=print,
             l["photo_urls"] = img_urls
             results.append((l, hashes, img_urls, outcome))
 
-    hits = sum(1 for _, _, _, outcome in results if outcome == "cached")
+    cover_hits = sum(1 for _, _, _, outcome in results
+                     if outcome == "cached_cover")
+    gallery_hits = sum(1 for _, _, _, outcome in results
+                       if outcome == "cached_gallery")
+    hits = cover_hits + gallery_hits
     if cache is not None and today:
         for l, hashes, img_urls, outcome in results:
             url = l.get("url")
             if not url or hashes is None:
                 continue
-            if outcome == "cached":
+            if outcome.startswith("cached_"):
                 cachemod.touch(cache, url, today)
             else:
-                cachemod.put(cache, url, hashes, today, image_urls=img_urls)
+                cachemod.put(
+                    cache, url, hashes, today, image_urls=img_urls,
+                    scope="cover" if outcome == "fetched_cover" else None,
+                )
     deferred_urls = [
         listing.get("url")
         for listing, _, _, outcome in results
@@ -350,28 +387,47 @@ def attach_hashes(listings, max_workers: int = 8, session=None, log=print,
     ]
     twinned = sum(1 for _, _, _, outcome in results
                   if outcome == "identified")
-    fetched = sum(1 for _, _, _, outcome in results if outcome == "fetched")
+    cover_fetched = sum(1 for _, _, _, outcome in results
+                        if outcome == "fetched_cover")
+    gallery_fetched = sum(1 for _, _, _, outcome in results
+                          if outcome == "fetched_gallery")
+    fetched = cover_fetched + gallery_fetched
     critical_deferred = sum(
         1 for listing, _, _, outcome in results
         if outcome == "deferred" and listing.get("url") in critical_urls
     )
     skipped = sum(1 for _, _, _, outcome in results if outcome == "deferred")
+    critical_with_photos = sum(
+        1 for listing, _, _, _ in results
+        if listing.get("url") in critical_urls and listing.get("phashes")
+    )
     stats = {
         "listings": len(results),
         "critical": len(critical_urls),
         "history_only": max(0, len(results) - len(critical_urls) - twinned),
         "cache_hits": hits,
+        "cover_cache_hits": cover_hits,
+        "gallery_cache_hits": gallery_hits,
         "fetched": fetched,
+        "cover_fetched": cover_fetched,
+        "gallery_fetched": gallery_fetched,
         "with_photos": sum(1 for l in listings if l.get("phashes")),
         "identified": twinned,
         "deferred": skipped,
         "critical_deferred": critical_deferred,
+        "critical_with_photos": critical_with_photos,
+        "critical_without_photos": (
+            len(critical_urls) - critical_deferred - critical_with_photos
+        ),
         "history_deferred": skipped - critical_deferred,
         "deferred_urls": deferred_urls,
     }
     log(f"  photo-hashed {len(results)} ambiguous listings "
         f"({stats['with_photos']} with photos; "
         f"{hits} reused from cache"
+        + (f"; {cover_fetched} cover-only fetched" if cover_fetched else "")
+        + (f"; {stats['critical_without_photos']} critical without photos"
+           if stats["critical_without_photos"] else "")
         + (f"; {twinned} identified by their twin" if twinned else "")
         + (f"; {skipped} skipped, photo budget exhausted" if skipped else "")
         + ")")

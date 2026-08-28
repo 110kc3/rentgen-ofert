@@ -7,9 +7,10 @@ and presents it on one searchable page. No application server: a GitHub Actions
 job scrapes, writes static JSON, and GitHub Pages displays it.
 
 Portal blocking and serving caps mean “all listings” is a target, not a current
-guarantee. The 2026-08-28 deployment has 30,591 Śląskie and 40,811 Małopolskie
-current properties from four contributing sources; Małopolskie is a temporary
-manual pilot, not a scheduled region. OLX is blocked with HTTP 403; after
+guarantee. The latest 2026-08-28 deployment has 30,591 Śląskie and 33,358
+Małopolskie current properties from four contributing sources; Małopolskie is a
+temporary manual pilot whose first warm run missed its runtime/photo gate, not
+a scheduled region. OLX is blocked with HTTP 403; after
 rejecting cross-category clones and promoted cards from other voivodeships,
 Otodom's evidence-backed Śląskie floor is about 15.9k and its flat root remains
 explicitly partial at the 200-page cap.
@@ -71,10 +72,21 @@ responses, and `meta.json` plus the CI summary expose each queue and deferral.
 Śląskie validation run `33135609107` then processed 41,659
 correctness-critical candidates with 43,559 cache hits, only 32 fetches and
 zero deferrals; its photo phase took 17.1 seconds and the complete scrape took
-92.0 minutes. Deploy `33144201326` published that baseline, clearing the new
-queue for one warm Małopolskie measurement.
-The next gate is still one warm Małopolskie pass, followed by disabling the
-disposable pilot—not a region matrix.
+92.0 minutes. Deploy `33144201326` published that baseline. Warm Małopolskie
+run `33161251008` then recovered full Morizon coverage and preserved every
+regional cache boundary, but missed the rollout gate: 203.1 minutes total,
+96.8 minutes in photos and 20,608 correctness-critical ads still deferred.
+Deploy `33174768425` published the mechanically valid data, but green CI is not
+pilot acceptance.
+
+The measured blocker was Otodom's detail pages (HTTP 403) rather than its image
+CDN: a live card image answered HTTP 200. Uncached correctness-critical ads now
+hash that already-scraped cover once, while history-only work keeps full
+galleries. Photo requests do not inherit the scraper's retry ladder, cover
+evidence is distinguished in the cache, and schema-2 metrics validate each
+cover/gallery and critical outcome. The next gate is a push-triggered Śląskie
+baseline followed—only after it finishes—by one corrective manual Małopolskie
+pass. The disposable pilot is not yet accepted and no region matrix is next.
 The audited status, evidence, decisions, acceptance gates and P0–P5 task order are
 in [`POLAND_ROLLOUT.md`](POLAND_ROLLOUT.md). `TODO.md` remains the detailed
 development diary.
@@ -86,16 +98,17 @@ development diary.
   Małopolskie pilot) on up to five portals — a region-level search on
   Otodom/OLX/gratka/Morizon and per-city sub-domains on
   nieruchomości-online. `RENTGEN_REGION` must name an entry in
-  `site/regions.json`; Małopolskie has passed its cold run and still needs its
-  warm convergence/disable gate.
+  `site/regions.json`; Małopolskie has passed its cold run, but its first warm
+  run missed the runtime/critical-completion gate and needs one corrective pass.
   Every listing keeps its **town (locality)**, and the dashboard has a searchable
   **town multi-select** filter.
 - Keeps archived / sold listings (e.g. nieruchomości-online *Ogłoszenie archiwalne*)
   out of the dashboard. Nieruchomości-online's normal crawl stops after the
   active-results boundary; a separate weekly full harvest retains archived
   rows as history evidence without paying that cost on every run (see below).
-- **Relist & price history.** Each run reuses known photo fingerprints and
-  attempts new galleries within a time budget, recording price/date in
+- **Relist & price history.** Each run reuses known photo fingerprints, hashes
+  covers needed for current dedupe first and attempts new history galleries
+  within a time budget, recording price/date in
   `site/data/<region>/history.json.gz`. When an agent re-posts the same flat
   under a new URL, the card is flagged "↻ wystawiane ponownie" with the earlier
   price, and shows "na rynku od …" plus a price trail. History builds forward
@@ -250,14 +263,16 @@ development diary.
 - **Archiwum view.** The dashboard's "Archiwum / sprzedane" filter shows
   properties that left the market, with their last asking price, the RCN sale
   price when matched, and the full timeline (`site/data/<region>/archive.json`).
-- **De-duplicates the same property across portals, including at different prices.**
-  Candidates must share an exact size (type + area, + rooms for flats); then a
-  perceptual hash (dHash) of each listing's **photo gallery** confirms they are
-  the same property before merging — so two different same-size flats, even at
-  the same price, are kept apart. Each card lists every portal with its price and
-  date and **highlights the cheapest**. (Photo checks fetch each ambiguous
-  listing's page, so the scrape does extra requests; set `RENTGEN_PHOTOS=0` to
-  skip them and fall back to a size+price heuristic.)
+- **De-duplicates the same property across portals, including at different
+  prices.** Candidates must share an exact size (type + area, + rooms for
+  flats); then perceptual photo hashes (dHash) confirm identity before merging.
+  An uncached current collision starts with its search-card cover: a match is
+  positive evidence, while a non-match conservatively keeps the ads apart.
+  Full galleries remain the richer history/relist path. This avoids depending
+  on blocked detail pages during cold onboarding without reviving the risky
+  size+price fallback. Each card lists every portal with its price and date and
+  **highlights the cheapest**. Set `RENTGEN_PHOTOS=0` to skip photo checks and
+  deliberately fall back to the size+price heuristic.
 - **gratka ↔ morizon merge by portal id, for free.** The two portals are one
   database behind two frontends, and their CDN proves it: a morizon card's
   thumbnail is a base64-wrapped origin on *gratka's* CDN carrying gratka's own ad
@@ -294,11 +309,12 @@ development diary.
 4. **Actions tab → "Update listings" → Run workflow** to do the first full scrape.
    It then re-runs automatically twice a day (06:00 & 18:00 UTC).
 
-The **first** voivodeship-wide run is heavy (it fetches photo galleries for every
-look-alike listing to de-duplicate them). After that a committed photo-hash cache
-(`cache/phash_<region>.json.gz`) makes repeat runs much faster — each listing's
-photos are hashed once and then reused by URL — and pip downloads are cached in
-CI too. The cache stores its 256-bit hashes base64-packed inside a gzip (v1 wrote
+The **first** voivodeship-wide run is heavy. Current look-alikes hash their card
+covers first; remaining time builds the fuller history-gallery cache. After
+that, the committed photo-hash cache (`cache/phash_<region>.json.gz`) makes
+repeat runs much faster—each result is reused by URL—and pip downloads are
+cached in CI too. Cover-only evidence is marked so it is never mistaken for a
+full gallery. The cache stores its 256-bit hashes base64-packed inside a gzip (v1 wrote
 78-character decimal strings in plain JSON and reached 62.9 MB for one region,
 past GitHub's 50 MB warning; a v1 file is migrated on read).
 
@@ -361,8 +377,8 @@ RENTGEN_MAX_PAGES=3 RENTGEN_DELAY=0.3 python -m scraper.main
 | `RENTGEN_REGION` | slaskie | voivodeship slug to scrape (e.g. `malopolskie`) |
 | `RENTGEN_MAX_PAGES` | 200 | max result pages per portal per search (was 50, which silently truncated every portal — see *Coverage*) |
 | `RENTGEN_DELAY` | 0.7 | seconds between requests (be polite) |
-| `RENTGEN_PHOTOS` | 1 | photo-match ambiguous listings; `0` skips the detail fetches |
-| `RENTGEN_PHOTO_BUDGET_MIN` | 90 | max minutes of uncached photo fetching (`0` = unlimited); current dedupe collisions run first, while skipped history work persists oldest-first in the regional cache |
+| `RENTGEN_PHOTOS` | 1 | photo-match ambiguous listings; `0` skips cover/gallery fetches |
+| `RENTGEN_PHOTO_BUDGET_MIN` | 90 | max minutes of uncached photo fetching (`0` = unlimited); current collisions hash one card cover first, while skipped full-gallery history work persists oldest-first |
 | `RENTGEN_TYPES` | house,flat | which to scrape; e.g. `house` for houses only |
 | `RENTGEN_BANDS` | 1 | price-band subdivision for supported portals; `0` disables all of it (see *Price bands*) |
 | `RENTGEN_OTODOM_BANDS` | 0 | `1` explicitly tests Otodom bands after its full unbanded baseline; never enabled by default |
@@ -467,8 +483,8 @@ scraper/
   coverage.py    non-overlapping completeness accounting + source/region health
   bands.py       price-band subdivision — see past each portal's serving window
   normalize.py   shared schema, value helpers, cross-portal dedupe
-  photomatch.py  perceptual hashing of galleries to confirm same-property merges
-  cache.py       photo-hash cache (URL -> hashes + gallery URLs), reused run-to-run
+  photomatch.py  cover-first/gallery perceptual hashing for same-property evidence
+  cache.py       photo-hash cache (URL -> hashes + image URLs/scope), reused run-to-run
   delist.py      URL-verifies vanished listings before marking them "wycofane"
   rcn.py         RCN (notarial-deed prices) WFS pull + probabilistic sale matching
   rcnstats.py    deed zł/m² benchmarks + ask-vs-sold gap + per-town register

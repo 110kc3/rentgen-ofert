@@ -12,7 +12,7 @@ serve byte-identical `d-gr.cdngr.pl` origins carrying gratka's ad id.
 """
 import pathlib
 
-from scraper import cache, normalize, photomatch
+from scraper import cache, net, normalize, photomatch
 
 FIXTURES = pathlib.Path(__file__).parent / "fixtures"
 
@@ -175,14 +175,100 @@ def test_photo_metrics_separate_critical_and_history_deferrals(monkeypatch):
         "critical": 1,
         "history_only": 2,
         "cache_hits": 0,
+        "cover_cache_hits": 0,
+        "gallery_cache_hits": 0,
         "fetched": 1,
+        "cover_fetched": 0,
+        "gallery_fetched": 1,
         "with_photos": 1,
         "identified": 0,
         "deferred": 2,
         "critical_deferred": 0,
+        "critical_with_photos": 1,
+        "critical_without_photos": 0,
         "history_deferred": 2,
         "deferred_urls": ["history-1", "history-2"],
     }
+
+
+def test_critical_ads_hash_card_covers_while_history_keeps_galleries(monkeypatch):
+    calls = []
+
+    def cover(listing, session):
+        calls.append(("cover", listing["url"], session))
+        return [11], [listing["image"]]
+
+    def gallery(listing, session):
+        calls.append(("gallery", listing["url"], session))
+        return [22], [listing["url"] + ".gallery.jpg"]
+
+    monkeypatch.setattr(photomatch, "cover_hashes", cover)
+    monkeypatch.setattr(photomatch, "listing_hashes", gallery)
+    session = object()
+    pc = {"version": cache.VERSION, "entries": {}}
+    listings = [
+        {"source": "otodom", "url": "critical", "image": "card.jpg"},
+        {"source": "otodom", "url": "history", "image": "other.jpg"},
+    ]
+
+    stats = photomatch.attach_hashes(
+        listings, session=session, cache=pc, today="2026-08-28",
+        critical_urls={"critical"}, log=lambda *a: None, max_workers=1,
+    )
+
+    assert calls == [
+        ("cover", "critical", session),
+        ("gallery", "history", session),
+    ]
+    assert listings[0]["phashes"] == [11]
+    assert listings[1]["phashes"] == [22]
+    assert cache.get_scope(pc, "critical") == "cover"
+    assert cache.get_scope(pc, "history") == "gallery"
+    assert stats["cover_fetched"] == 1
+    assert stats["gallery_fetched"] == 1
+    assert stats["critical_with_photos"] == 1
+    assert stats["critical_without_photos"] == 0
+
+
+def test_cover_hashes_fetches_only_the_card_image(monkeypatch):
+    class Response:
+        content = b"card bytes"
+
+        def raise_for_status(self):
+            pass
+
+    class Session:
+        def __init__(self):
+            self.urls = []
+
+        def get(self, url, **kwargs):
+            self.urls.append(url)
+            return Response()
+
+    session = Session()
+    monkeypatch.setattr(photomatch, "dhash", lambda content: 123)
+
+    assert photomatch.cover_hashes(
+        {"image": "https://img.test/card.jpg"}, session
+    ) == ([123], ["https://img.test/card.jpg"])
+    assert session.urls == ["https://img.test/card.jpg"]
+
+
+def test_photo_fetching_defaults_to_the_no_retry_session(monkeypatch):
+    session = object()
+    seen = []
+    monkeypatch.setattr(net, "probe_session", lambda: session)
+    monkeypatch.setattr(
+        photomatch, "listing_hashes",
+        lambda listing, actual: (seen.append(actual) or ([], [])),
+    )
+
+    photomatch.attach_hashes(
+        [{"source": "gratka", "url": "history"}],
+        log=lambda *a: None, max_workers=1,
+    )
+
+    assert seen == [session]
 
 
 # ---- the merge key, end to end ---------------------------------------------

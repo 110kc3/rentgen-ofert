@@ -1,11 +1,12 @@
 # Whole-Poland rollout: status and next tasks
 
-> Audited: 2026-08-28. Production is current through scheduled Śląskie scrape
-> `33098667425`, cold manual Małopolskie pilot `33098785162` and two-region
-> deploy `33126428927`. P0.1–P0.6 and P1.1–P1.5 are production-validated. The
-> cold half of P2 is live, remains manual-only, and exposed a photo-backlog
-> ordering defect. Correctness-first queue validation `33135609107` and deploy
-> `33144201326` passed on warm Śląskie; the required warm pilot is next.
+> Audited: 2026-08-28. Production is current through warm Śląskie queue
+> validation `33135609107`, rejected warm Małopolskie pilot `33161251008` and
+> two-region deploy `33174768425`. P0.1–P0.6 and P1.1–P1.5 are
+> production-validated. P2 remains manual-only: its cold run exposed queue
+> ordering, and its first warm run then exposed blocked detail-page/retry cost.
+> Cover-first, single-attempt correction is implemented and needs a normal
+> Śląskie validation before one corrective Małopolskie pass.
 > This is the current source of truth for the nationwide rollout. `TODO.md`
 > retains the detailed development diary and older measurements.
 
@@ -13,25 +14,26 @@
 
 **Śląskie is a trustworthy warm template and the product is genuinely
 region-aware, but the project is still not ready for a 16-voivodeship
-schedule.** The disposable Małopolskie pilot is now the second published tree,
-but it is manual-only and has completed only its cold pass. The new queue is
-now production-validated on warm Śląskie. The next rollout action is one warm
-Małopolskie pass, then disabling the pilot; capacity and nationwide hosting
-still need evidence before any matrix.
+schedule.** The disposable Małopolskie pilot is the second published tree and
+remains manual-only. Its first warm pass was mechanically green but failed the
+rollout gate at 203.1 minutes with 20,608 correctness-critical photo deferrals.
+The next rollout action is to production-validate the measured correction on
+Śląskie, then run one corrective Małopolskie pass. The pilot cannot be disabled
+as accepted—and no matrix can begin—until that pass meets the gate.
 
 | Area | Status | Evidence / gap |
 |---|---|---|
 | Region-scoped scraper output and caches | Ready | `site/data/<region>`, regional caches and exact branch staging are implemented. |
 | Canonical 16-region configuration | Proven live | `site/regions.json` is validated and owns Polish forms, TERYT, cadence, anchor and explicit portal slugs; the complete Śląskie path ran end to end. |
 | One data branch per region | Proven for two | `data-slaskie` and `data-malopolskie` hold isolated single-commit data/caches; the pilot touched only its branch. |
-| Deploy overlay for multiple region branches | Proven live for two | Deploy `33126428927` overlaid both trees; the picker, stable pages, data catalog and sitemap expose both. |
+| Deploy overlay for multiple region branches | Proven live for two | Latest deploy `33174768425` overlaid both trees; the picker, stable pages, data catalog and sitemap expose both. |
 | Portal coverage | P0 gate met | Corrected Otodom floor is 15.8–15.9k, OLX's one-probe blocked policy is proven, and active n-online retains 10.83–10.87k in 20.5–23.9 min. |
 | Coverage KPI | Proven in production | Schema v2 has published repeatedly: bounded percentages, explicit missing partitions and healthy/partial/blocked source states all survive real runs. |
-| Per-region runtime | Śląskie warm met; pilot warm unknown | Queue validation finished Śląskie's scrape in 92.0 minutes with a 17.1-second photo phase. Cold Małopolskie took 246.5 minutes, including exactly 90 minutes of photo backlog; its warm pass is still required. |
+| Per-region runtime | Śląskie met; pilot warm rejected | Śląskie finished in 92.0 minutes with a 17.1-second photo phase. Małopolskie's first warm pass took 203.1 minutes, including 96.8 minutes of photos, and deferred 20,608 critical ads. |
 | Region picker and durable regional URLs | Proven live for two | National picker, stable regional paths, region-scoped state, legacy redirects and unpublished/unknown responses passed production checks; live pilot canonicals are region-correct. |
 | Per-region metadata / OG / sitemap / llms.txt | Proven live | Canonical/JSON-LD documents parse and discovery contains only data-backed published regions. |
 | CI region matrix / cadence | Not implemented | The workflow still schedules Śląskie twice daily and accepts other regions only by manual input. |
-| Nationwide data hosting | Not decided | The two current trees serve 198.7 MiB combined; GitHub Pages has a published-site limit of 1 GB. |
+| Nationwide data hosting | Not decided | The two current trees serve 201.7 MiB combined; GitHub Pages has a published-site limit of 1 GB. |
 
 **Rollout decision:** do not add a scheduled second region. P1 is live;
 `malopolskie` is enabled only long enough for a manual disposable pilot—not a
@@ -49,22 +51,24 @@ still need evidence before any matrix.
   [Śląskie metadata](https://110kc3.github.io/rentgen-ofert/data/slaskie/meta.json)
   and [Małopolskie metadata](https://110kc3.github.io/rentgen-ofert/data/malopolskie/meta.json)
   all return HTTP 200.
-- [Deploy run 33144201326](https://github.com/110kc3/rentgen-ofert/actions/runs/33144201326)
+- [Deploy run 33174768425](https://github.com/110kc3/rentgen-ofert/actions/runs/33174768425)
   published both regional trees. The generated catalog reports 30,591 Śląskie
-  properties / 119.1 MiB and 40,811 Małopolskie / 79.6 MiB served.
+  properties / 119.1 MiB and 33,358 Małopolskie / 82.6 MiB served.
 - Latest Śląskie data is **2026-08-28 05:14 UTC**, **30,591** unique properties
   from **51,708** current raw listings. Pilot Małopolskie data is
-  **2026-08-27 23:28 UTC**, **40,811** from **61,883**.
+  **2026-08-28 13:17 UTC**, **33,358** from **63,602**.
 - Both regions have four contributing sources: Otodom, Gratka, Morizon and
   nieruchomości-online. OLX contributed zero after one bounded HTTP-403 probe.
-- The P1/pilot scrapes ran **224 offline tests before portal work**; queue
-  validation ran the expanded **230-test** gate. The post-generation validator
-  protected every branch push.
+- The P1/pilot scrapes ran **224 offline tests before portal work**; queue and
+  first warm validation ran the expanded **230-test** gate. The corrective
+  slice expands it to **235 tests** and schema-2 photo arithmetic. The
+  post-generation validator protects every branch push.
 
 ### Latest completed validation runs
 
 The corrected baselines, explicit archive sequence, regional release, cold
-pilot and queue validation all passed their publication gates and deployed:
+pilot, queue validation and first warm pilot all passed pipeline validation and
+deployed. The last row still failed the stricter P2 rollout gate:
 
 | Run | Trigger | Scrape runtime | Result | Unique / raw |
 |---|---|---:|---|---:|
@@ -77,6 +81,7 @@ pilot and queue validation all passed their publication gates and deployed:
 | [33098667425](https://github.com/110kc3/rentgen-ofert/actions/runs/33098667425) | Śląskie schedule | 110.7 min | success; deploy `33108035112` | 30,534 / 51,108 |
 | [33098785162](https://github.com/110kc3/rentgen-ofert/actions/runs/33098785162) | Małopolskie cold manual | 246.5 min | success; deploy `33126428927` | 40,811 / 61,883 |
 | [33135609107](https://github.com/110kc3/rentgen-ofert/actions/runs/33135609107) | photo-queue push | 92.0 min | success; deploy `33144201326` | 30,591 / 51,708 |
+| [33161251008](https://github.com/110kc3/rentgen-ofert/actions/runs/33161251008) | Małopolskie warm manual | 203.1 min | CI success, **P2 rejected**; deploy `33174768425` | 33,358 / 63,602 |
 
 ### Cold Małopolskie pilot evidence
 
@@ -101,7 +106,7 @@ derived list contains 60 regional towns, RCN requested TERYT `12*`, and geo
 wrote exactly 500 new `12|…` keys. No obvious Śląskie city leaked into the
 40,811-row locality inventory; five Gratka rows have no locality and several
 portal rows use a powiat adjective as their fallback, so locality and geo still
-need the warm convergence check rather than a blanket “complete” claim.
+need the corrective convergence gate rather than a blanket “complete” claim.
 
 The run's main defect was queue order, not the 90-minute bound. It sent all
 12,539 Otodom ads first and recorded 12,381 empty-gallery attempts, then made
@@ -126,6 +131,68 @@ and 1,932 history-only candidates, 43,559 cache hits, 32 fetches, 8,117
 ID-settled twins and zero deferrals. Photos took 17.1 seconds, the full scrape
 92.0 minutes, all 230 tests and generated-data validation passed, and deploy
 `33144201326` matches branch `data-slaskie` at `2282009`.
+
+### First warm Małopolskie evidence — pipeline green, rollout rejected
+
+Manual active-only run `33161251008` executed from 09:54–13:18 UTC on
+`2af146c`, refreshed only `data-malopolskie` to `96b1882` and deployed both
+trees in `33174768425`. It reused the incomplete 2026-08-27 / 14,429-row
+n-online archive state rather than harvesting it again. The n-online archive
+and RCN cache hashes stayed byte-identical to the cold branch, and
+`data-slaskie` stayed exactly at `2282009`. Region isolation therefore passed
+again.
+
+Source collection also stabilized. Morizon's cold timeout recovered to the
+full useful inventory and no source suffered a new unexplained loss:
+
+| Source | Cold current | Warm current | Warm evidence | Runtime |
+|---|---:|---:|---|---:|
+| Otodom | 12,539 | 12,578 | 253 pages; houses healthy, flats partial at page 200/212; 67.6% overall | 12.0 min |
+| OLX | 0 | 0 | one correct regional root probe, HTTP 403 | 0.1 min |
+| Gratka | 20,032 | 20,048 | 777 pages, healthy, 99.9% | 28.8 min |
+| Morizon | 18,377 | 20,051 | 778 pages, zero issues; prior failed band recovered | 32.4 min |
+| nieruchomości-online | 10,935 | 10,925 | 574 current-only pages; Kraków flats remained the sole cap | 21.7 min |
+
+The pilot still failed both photo and whole-run gates. Its photo phase consumed
+5,806.0 seconds (**96.8 minutes**) despite the configured 90-minute budget, and
+the full scrape consumed 12,185.9 seconds (**203.1 minutes**) against the
+180-minute ceiling. Of 63,602 raw rows, 48,514 were correctness-critical and
+1,916 history-only after 13,172 Morizon twins were settled by portal id. The
+phase reused 14,485 cache entries, fetched 13,493 listings and produced hashes
+for 27,961, but deferred 22,452 URLs: **20,608 critical** and 1,844 history.
+
+The published 33,358 unique count is 7,453 below the 40,811 cold result. New
+Gratka/Morizon/n-online photo evidence necessarily merges duplicates that the
+cold run kept separate, so this is not evidence of a source collapse: raw rows
+rose by 1,719 and every source was stable or recovered. It is also not yet an
+accepted convergence number, because 42.5% of current correctness candidates
+still had no decision.
+
+Cache/source inspection identifies why. Positive entries reached 20,089 for
+Gratka and 6,878 for untwinned Morizon, but only 887 for n-online. Otodom still
+held 12,381 empty entries and only 158 positive hashes. A current Otodom detail
+URL returned HTTP 403 while the cover URL already present on its search card
+returned HTTP 200 `image/jpeg`. Separately, photo work was still using the
+scraper session's five-retry 405/429/5xx ladder; in-flight failures let a best-
+effort phase overrun its wall-clock budget by 6.8 minutes.
+
+The corrective contract is therefore narrow and evidence-backed:
+
+1. uncached correctness-critical ads hash the already-scraped card cover once;
+2. history-only ads retain full-gallery hashing after correctness work;
+3. positive cover-only cache entries carry `scope: cover`, while old/normal
+   entries remain backward-compatible gallery evidence;
+4. photo requests use a single-attempt session, bounding overrun to in-flight
+   request time rather than a retry ladder; and
+5. `meta.photos` schema 2, the data validator and Actions summary distinguish
+   cover/gallery cache hits and fetches, plus critical with-photo,
+   without-photo and deferred outcomes.
+
+A cover match is still positive identity evidence. A cover non-match does not
+claim the galleries differ; it conservatively keeps those ads separate, which
+is safer than the no-photo size/price fallback. The ordinary push-triggered
+Śląskie run must validate this schema and behavior first. Only after it
+finishes should one corrective active-only Małopolskie run be dispatched.
 
 ### Latest Śląskie source health
 
@@ -165,9 +232,10 @@ Morizon substantially overlap and are merged.
   Git blob and SHA-256 byte-identical. Its n-online phase took 20.5 minutes.
 - **The warm photo backlog has converged.** Four corrected active runs completed
   all correctness candidates in roughly 32–74 seconds with no budget
-  exhaustion, so P0.5 remains closed for the warm template. The cold pilot
-  later proved that explicit queueing is required for onboarding: 36,830 ads
-  were deferred after 90 minutes, which is now persisted and prioritized.
+  exhaustion, so P0.5 remains closed for the Śląskie template. The cold pilot
+  proved explicit queueing is required for onboarding; its first warm pass
+  then proved ordering alone is insufficient when a portal's detail pages are
+  blocked. Cover-first, no-retry correction targets that P2-specific evidence.
 - **The corrected Otodom recovery succeeded.** Duplicate-category cards,
   repeated portal clones and promoted cards from other voivodeships had
   inflated the earlier 16.3k count. After rejecting them, all three runs kept
@@ -210,10 +278,10 @@ Representative phase times from the latest active-only run `33072698054`:
 At the corrected roughly 86.0-minute active average, one daily sweep of 16
 Śląskie-sized regions would need about **22.9 runner-hours per day**, or
 **11.5 hours** at `max-parallel: 2`. That is arithmetic, not an operating plan:
-most cold caches, different inventories and portal blocking remain unmeasured, and
-parallel regions can worsen shared runner-IP pressure. A matrix is still not
-justified: one cold pilot is now measured, but its warm convergence and every
-other region remain unknown.
+most cold caches, different inventories and portal blocking remain unmeasured,
+and parallel regions can worsen shared runner-IP pressure. A matrix is still
+not justified: one cold and one rejected warm pilot are measured, but its
+corrective convergence and every other region remain unknown.
 
 The capacity gate should be **at most 180 minutes per warm region**, with a
 preferred target of **150 minutes** for headroom, before a two-wide daily
@@ -224,16 +292,16 @@ cadence.
 
 Current regional branch contents:
 
-| Part | Śląskie | Małopolskie cold pilot |
+| Part | Śląskie | Małopolskie latest warm |
 |---|---:|---:|
-| Whole per-region branch | 181.3 MiB | 98.8 MiB |
-| Regional data including pipeline history | 150.6 MiB | 86.4 MiB |
-| Pipeline-only `history.json.gz` removed before deploy | 31.5 MiB | 6.8 MiB |
-| **Data actually served** | **119.1 MiB** | **79.6 MiB** |
-| Caches on the branch | 30.7 MiB | 12.3 MiB |
-| `index.json` alone | 22.8 MiB | 28.3 MiB |
+| Whole per-region branch | 181.3 MiB | 105.0 MiB |
+| Regional data including pipeline history | 150.6 MiB | 91.2 MiB |
+| Pipeline-only `history.json.gz` removed before deploy | 31.5 MiB | 8.6 MiB |
+| **Data actually served** | **119.1 MiB** | **82.6 MiB** |
+| Caches on the branch | 30.7 MiB | 13.8 MiB |
+| `index.json` alone | 22.8 MiB | 23.4 MiB |
 
-The live two-region data payload is therefore **198.7 MiB** before the small
+The live two-region data payload is therefore **201.7 MiB** before the small
 application shell and generated pages.
 
 GitHub currently documents a **1 GB published-site limit**, a 10-minute deploy
@@ -278,13 +346,12 @@ approaches the limit.
    Health remains separate from process success, and the generated-data
    validator blocks malformed/incomplete publications while writing the source,
    runtime and byte summary operators need.
-9. **Portal order was not a cold photo-work policy. Resolved and validated after the
-   pilot.** Małopolskie spent most of its bounded phase on first Otodom misses
-   and deferred 36,830 untouched ads. The queue is now correctness-first and
-   age-persisted, untouched URLs precede empty-result retries, and structured
-   metrics make critical deferral an acceptance datum. Śląskie production
-   validation completed every queue with zero deferrals in 17.1 seconds; the
-   warm pilot has not yet accepted its own convergence.
+9. **Portal order and retrying detail pages were not a cold photo-work policy.**
+   Małopolskie first deferred 36,830 ads in portal order. Correctness-first,
+   age-persisted ordering was production-validated on Śląskie, but the warm
+   pilot still deferred 20,608 critical ads because blocked detail pages and
+   retries consumed 96.8 minutes. Cover-first, single-attempt photo work is the
+   measured correction now awaiting production validation.
 
 ## Decisions for the next implementation round
 
@@ -429,8 +496,14 @@ manual pilot.
     lead an age-persisted queue; never-attempted work precedes prior empty
     retries, and meta/validation/CI distinguish critical from history-only
     deferrals. This does not reopen P0. Push run `33135609107` validated zero
-    deferrals and a 17.1-second phase on Śląskie; P2 still needs its warm
-    Małopolskie measurement.
+    deferrals and a 17.1-second phase on Śląskie.
+  - **First P2 warm measurement rejected 2026-08-28:** run `33161251008`
+    deferred 20,608 of 48,514 correctness candidates, took 96.8 minutes in
+    photos and 203.1 minutes overall. Otodom detail pages returned 403 while
+    their card images returned 200; photo requests also inherited the scraper's
+    retry ladder. Critical cold entries now hash one card cover, gallery work
+    remains history-only, single-attempt requests bound phase overrun, and
+    schema-2 metrics make cover/gallery and critical no-photo outcomes explicit.
 
 - [x] **P0.6 Add a cheap CI quality gate and run summary.**
   - Run all offline tests before any network work.
@@ -516,11 +589,20 @@ fixture invariants, so the one-region production path is safe for P2.
     correct root returned 403), n-online derived 60 towns, RCN used `12*`, geo
     wrote 500 scoped keys, branch/served bytes are measured, and every source
     published an explicit state. Five missing localities, powiat fallbacks and
-    4,370 listings awaiting coordinates keep convergence open for the warm run.
-- [ ] Run a second warm pass to measure cache benefit and convergence.
-  - **Prerequisite passed 2026-08-28:** the new queue completed on warm
-    Śląskie with zero deferrals. Dispatch exactly one manual Małopolskie run
-    with `nol_archive=skip`; do not add it to cron.
+    4,370 cold-run listings awaiting coordinates keep convergence open through
+    the corrective run.
+- [x] Run a second warm pass to measure cache benefit and convergence.
+  - **Completed but rejected 2026-08-28:** active-only run `33161251008`
+    recovered Morizon and preserved branch/cache isolation, but 20,608 critical
+    photo deferrals and 203.1-minute runtime failed the pilot gate. Pipeline
+    success/deploy `33174768425` does not override that result.
+- [ ] Run one corrective warm pass after the cover/no-retry slice is validated.
+  - Let its push-triggered Śląskie workflow finish and audit it once. Only if
+    schema-2 metrics and branch validation pass, dispatch exactly one manual
+    Małopolskie run with `nol_archive=skip`; do not add it to cron or watch it.
+  - Accept only with zero critical deferrals, photo runtime at most 60 minutes,
+    complete runtime at most 180 minutes and an explainable stable unique/raw
+    relationship.
 - [ ] Verify the deploy contains both regions, the picker/counts work, regional
   filters survive reload/share, and no Śląskie text leaks into Małopolskie.
   - **Cold deploy verified:** both trees, picker counts, listing/statistics
@@ -528,12 +610,13 @@ fixture invariants, so the one-region production path is safe for P2.
     the final post-warm comparison remain open.
 - [ ] Record the complete pilot in this document with run IDs, timings, request
   counts, source yields, archive size and branch/served bytes.
-  - **Cold half complete:** all requested measurements are recorded above;
-    append the warm comparison before accepting this item and the exit gate.
+  - **Cold and rejected-warm evidence complete:** both are recorded above;
+    append the corrective comparison before accepting this item and exit gate.
 
-**Pilot exit gate:** two successful runs, no unexplained count collapse, warm
-runtime within the P0 budget, truthful regional metadata and an easy way to
-disable the pilot from the catalog without affecting Śląskie.
+**Pilot exit gate:** cold plus a gate-accepted warm run, no unexplained count
+collapse, zero correctness-critical photo deferrals, photo work within 60
+minutes, total warm runtime within 180 minutes, truthful regional metadata and
+an easy way to disable the pilot without affecting Śląskie.
 
 ### P3 — prove scheduling capacity before building the full matrix
 

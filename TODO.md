@@ -3,7 +3,7 @@
 > Keep this file and `README.md` updated after each change.
 > Last updated: 2026-08-28
 
-## Current (2026-08-28) — P0/P1 live; P2 cold pilot exposed the photo queue
+## Current (2026-08-28) — P0/P1 live; P2 warm pilot missed its photo gate
 
 The corrected Śląskie baseline is published and stable. Five runs on main SHA
 `701795e` rejected cross-category clones, duplicate cards within a portal result
@@ -50,7 +50,7 @@ Otodom empty-gallery attempts while 14,378 are successful Gratka hashes; the
 portal-ordered queue reached neither untwinned Morizon nor n-online. The warm
 pass would therefore repeat low-yield work before measuring convergence.
 
-The next code slice fixes that measurement. Current dedupe collisions lead the
+The queue slice fixed that measurement. Current dedupe collisions lead the
 photo queue; within correctness and history queues, free cache hits and
 oldest persisted deferrals lead, never-attempted URLs precede negative-cache
 retries, and the order is stable. Deferred URLs retain their first-wait date in
@@ -68,6 +68,38 @@ validated 30,591 unique properties from 51,708 raw rows (119.1 MiB served),
 refreshed only `data-slaskie` at `2282009`, and deployed in `33144201326`; the
 live metadata matches. Otodom retained 15,863, n-online 10,735, Gratka 12,555,
 and Morizon recovered its prior timeout shortfall to 12,555 with no issue.
+
+Warm Małopolskie run `33161251008` then completed and deployed in
+`33174768425`, but it **did not pass the pilot exit gate**. Source collection
+was stable and Morizon recovered fully: Otodom 12,578, Gratka 20,048, Morizon
+20,051 and n-online 10,925 current rows. The explicit active-only path reused
+the 2026-08-27 / 14,429-row n-online archive cache; that cache, the RCN snapshot
+and `data-slaskie` at `2282009` stayed byte/ref unchanged. The branch advanced
+only `data-malopolskie` to `96b1882` and the generated tree deployed normally.
+
+The rollout result is nevertheless a rejection: the scrape took **203.1
+minutes**, beyond the 180-minute ceiling. Photos alone took 96.8 minutes and
+left 22,452 URLs deferred, including **20,608 of 48,514 correctness-critical
+ads**. It produced 33,358 unique properties from 63,602 raw rows, down from
+40,811 / 61,883 cold; the added Morizon/n-online fingerprints explain why more
+cross-portal duplicates can now merge, but the count is not a convergence
+baseline while 42.5% of the critical queue remains unprocessed.
+
+The cache identifies the bottleneck precisely. Gratka has 20,089 positive
+entries and untwinned Morizon 6,878; n-online reached only 887. Otodom still has
+12,381 empty results because its detail pages answer HTTP 403, while a sampled
+search-card image from the same live ad answers HTTP 200 image/jpeg. The photo
+phase also inherited the portal scraper's status-retry ladder, allowing its
+nominal 90-minute budget to overrun by 6.8 minutes.
+
+This corrective slice makes cold correctness work cover-first: an uncached
+critical ad hashes its already-scraped card image once, while history-only work
+keeps the full-gallery path. Cover evidence is tagged in the persisted cache so
+it is not confused with a gallery. Photo downloads use a single-attempt HTTP
+session, and `meta.photos` schema 2 plus the generated-data validator expose
+cover/gallery cache hits and fetches as well as critical rows with photos,
+without photos or deferred. The fixed budget and conservative merge rule are
+unchanged: a cover match can prove identity; a non-match keeps the ads apart.
 
 ### P0 evidence now accepted
 
@@ -106,12 +138,15 @@ and Morizon recovered its prior timeout shortfall to 12,555 with no issue.
   A failure prevents the data-branch push.
 - **Phase timings are data, not log archaeology.** `meta.json.runtime` records
   each source plus photo/history/delist/RCN/geo/write and total seconds.
-- **Warm Śląskie needs no extra photo time, but cold regions need ordering.**
+- **Warm Śląskie needs no extra photo time, but cold regions need bounded
+  evidence.**
   Four corrected Śląskie runs processed the old queue in roughly 32–74 seconds
   with no exhaustion. Małopolskie then proved portal order is not a safe cold
   queue: its full 90 minutes still deferred 36,830 ads. Correctness-first,
-  age-persisted ordering now makes that backlog explicit and convergent without
-  raising the publication budget.
+  age-persisted ordering made that backlog explicit. Its first warm pass still
+  deferred 20,608 critical ads because blocked detail pages and status retries
+  made gallery fetching too expensive; cover-first, single-attempt hashing now
+  addresses that measured bottleneck without raising the publication budget.
 - **Every publication was protected.** The offline gate preceded portal work,
   the generated-data validator checked all 71 JSON files and 118.4–119.4 MiB,
   and the regional branch push and Pages deployment succeeded after each run.
@@ -138,7 +173,7 @@ and Morizon recovered its prior timeout shortfall to 12,555 with no issue.
 - UUG geocoding selects the candidate matching the catalog TERYT prefix and
   scopes cache keys by that prefix. Same-named places in different regions can
   no longer reuse the wrong centroid.
-- Verification currently covers **230 offline tests**, including catalog,
+- Verification currently covers **235 offline tests**, including catalog,
   generator, navigation, two-region storage, ambiguous-geocoder and persisted
   photo-queue regressions.
 - Production checks after `33090688420` proved the one-region product; deploy
@@ -149,13 +184,15 @@ and Morizon recovered its prior timeout shortfall to 12,555 with no issue.
 
 ### Next
 
-1. Dispatch one warm Małopolskie pass with archive work explicitly skipped;
-   do not watch it.
-2. When it finishes, measure critical completion, backlog convergence, geo,
-   source stability and recovery of the transient Morizon band failure.
-3. If the warm gate passes, disable the disposable pilot, deploy the one-region
-   artifact and prove the `data-slaskie` ref stayed unchanged. Do not add
-   Małopolskie to cron or create a 16-region matrix.
+1. Push this corrective slice; let the ordinary Śląskie workflow validate
+   schema-2 photo metrics and the no-retry/cover path. Do not watch it.
+2. After that workflow finishes, audit it once. If it passes, dispatch one
+   corrective Małopolskie pass with archive work explicitly skipped; do not
+   watch it.
+3. Accept only with zero critical deferrals, a photo phase at most 60 minutes,
+   whole runtime at most 180 minutes and an explainable stable count. Then
+   disable the disposable pilot and prove `data-slaskie` stayed unchanged. Do
+   not add Małopolskie to cron or create a 16-region matrix.
 
 ## Superseded (2026-08-13) — stop before region two and repair the template
 

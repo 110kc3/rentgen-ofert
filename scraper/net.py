@@ -53,7 +53,7 @@ def session() -> requests.Session:
 
 
 def probe_session() -> requests.Session:
-    """A session for liveness probes: asks once, waits for nobody.
+    """A session for best-effort work: asks once, waits for nobody.
 
     `delist.sweep` asks ~300 "is this ad still there?" questions a run, and
     "could not tell" is a perfectly good answer to any of them — the record
@@ -62,7 +62,9 @@ def probe_session() -> requests.Session:
     throttled URL costs its timeout *and then* ~30 s of back-off. That is what
     turned the sweep into 27-44 min of three runs (31422141701, 31468177600,
     31502042693) for 300 requests — 12% of the CI budget, spent waiting for
-    pages that were mostly just alive.
+    pages that were mostly just alive. The bounded photo phase uses the same
+    policy: one failed image can come round next run and must not inherit a
+    portal crawler's full status-retry ladder.
 
     Redirects still follow (a portal dumping us on an index page is how it says
     "gone"); only the retrying is dropped.

@@ -192,7 +192,7 @@ def validate_data_dir(data_dir) -> dict:
 
     photos = meta.get("photos")
     _require(isinstance(photos, dict), "meta.photos must be an object")
-    _require(photos.get("schema") == 1, "meta.photos.schema must be 1")
+    _require(photos.get("schema") == 2, "meta.photos.schema must be 2")
     _require(isinstance(photos.get("enabled"), bool),
              "meta.photos.enabled must be a boolean")
     _require(isinstance(photos.get("listings"), int)
@@ -204,6 +204,9 @@ def validate_data_dir(data_dir) -> dict:
             "critical", "history_only", "cache_hits", "fetched",
             "with_photos", "identified", "deferred",
             "critical_deferred", "history_deferred",
+            "cover_cache_hits", "gallery_cache_hits",
+            "cover_fetched", "gallery_fetched",
+            "critical_with_photos", "critical_without_photos",
         )
         for field in count_fields:
             value = photos.get(field)
@@ -221,8 +224,26 @@ def validate_data_dir(data_dir) -> dict:
             == photos["listings"],
             "meta.photos outcomes do not add up to listings",
         )
+        _require(
+            photos["cover_cache_hits"] + photos["gallery_cache_hits"]
+            == photos["cache_hits"],
+            "meta.photos cache scopes do not add up to cache_hits",
+        )
+        _require(
+            photos["cover_fetched"] + photos["gallery_fetched"]
+            == photos["fetched"],
+            "meta.photos fetch scopes do not add up to fetched",
+        )
         _require(photos["critical_deferred"] <= photos["critical"],
                  "meta.photos.critical_deferred exceeds critical")
+        _require(
+            photos["critical_with_photos"]
+            + photos["critical_without_photos"]
+            + photos["critical_deferred"] == photos["critical"],
+            "meta.photos critical outcomes do not add up",
+        )
+        _require(photos["critical_with_photos"] <= photos["with_photos"],
+                 "meta.photos.critical_with_photos exceeds with_photos")
         _require(
             photos["critical_deferred"] + photos["history_deferred"]
             == photos["deferred"],
@@ -296,10 +317,14 @@ def github_summary(summary: dict) -> str:
         lines.extend([
             "",
             (f"**Photo queue:** {photos['critical']:,} correctness-critical · "
+             f"{photos['critical_with_photos']:,} critical with photos · "
+             f"{photos['critical_without_photos']:,} critical without photos · "
              f"{photos['history_only']:,} history-only · "
-             f"{photos['cache_hits']:,} cache hits · "
-             f"{photos['fetched']:,} fetched · "
-             f"{photos['deferred']:,} deferred "
+             f"{photos['cache_hits']:,} cache hits "
+             f"({photos['cover_cache_hits']:,} cover) · "
+             f"{photos['fetched']:,} fetched "
+             f"({photos['cover_fetched']:,} cover) · "
+             f"{photos['deferred']:,} total deferred "
              f"({photos['critical_deferred']:,} critical) · "
              f"backlog {backlog['count']:,}, oldest "
              f"{backlog['oldest'] or '—'}"),

@@ -55,6 +55,20 @@ def test_gz_wins_over_a_stale_plain_file(tmp_path):
     assert list(cache.load(gz)["entries"]) == ["new"]
 
 
+def test_cover_scope_round_trips_and_old_hits_default_to_gallery(tmp_path):
+    gz = tmp_path / "phash_test.json.gz"
+    c = {"version": cache.VERSION, "entries": {}}
+    cache.put(c, "cover", [H], "2026-08-28",
+              image_urls=["https://img/card.jpg"], scope="cover")
+    cache.put(c, "gallery", [H], "2026-08-28")
+    cache.save(gz, c)
+
+    loaded = cache.load(gz)
+    assert cache.get_scope(loaded, "cover") == "cover"
+    assert cache.get_scope(loaded, "gallery") == "gallery"
+    assert cache.get_scope(loaded, "missing") == "gallery"
+
+
 def test_missing_and_corrupt_files_yield_an_empty_cache(tmp_path):
     assert cache.load(tmp_path / "nope.json.gz")["entries"] == {}
     bad = tmp_path / "bad.json.gz"

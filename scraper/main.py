@@ -18,9 +18,10 @@ Environment overrides (optional):
     RENTGEN_PHOTOS      "0" to skip photo hashing (disables dedupe-by-photo and
                         relist/price history)
     RENTGEN_PHOTO_BUDGET_MIN
-                        max minutes spent fetching uncached galleries (default
-                        90; "0" = unlimited). Critical current collisions run
-                        before the age-persisted history-only backlog
+                        max minutes spent fetching uncached photos (default 90;
+                        "0" = unlimited). Critical current collisions hash one
+                        card cover first; full galleries fill the age-persisted
+                        history-only backlog afterwards
     RENTGEN_DELIST_BUDGET_MIN
                         max minutes the delist sweep may spend (default 10,
                         "0" = unlimited); unasked records retry next run
@@ -204,10 +205,12 @@ def run() -> int:
     # validator repeats the invariant at the consumer boundary.
     require_unique_urls(raw, "raw scrape")
 
-    # Fingerprint every listing by its gallery photos. Powers photo-based
-    # de-duplication, the relist/price history and the photo archive. A
+    # Fingerprint listings by their photos. Powers photo-based de-duplication,
+    # the relist/price history and the photo archive. Correctness-critical cold
+    # entries start with the already-scraped card cover; history-only entries
+    # retain the fuller gallery path. A
     # committed cache (cache/phash_<region>.json.gz) lets repeat runs reuse hashes
-    # (and gallery URLs) by listing URL and skip the slow detail fetches.
+    # (and source image URLs) by listing URL and skip the slow detail fetches.
     # Archived ads are hashed too (BEFORE the split below) so observe_archived
     # can still photo-match them when their URL was never seen live.
     # Before hashing, not inside dedupe afterwards: a morizon ad that carries
@@ -227,7 +230,7 @@ def run() -> int:
         print(f"  gratka<->morizon twins linked off the search page: {linked}")
 
     photos_enabled = os.environ.get("RENTGEN_PHOTOS", "1") != "0"
-    photo_stats = {"schema": 1, "enabled": photos_enabled, "listings": len(raw)}
+    photo_stats = {"schema": 2, "enabled": photos_enabled, "listings": len(raw)}
     if photos_enabled:
         print(f"Photo-hashing {len(raw)} listings (dedupe + history) ...")
         pc = phcache.load(CACHE_PATH)
@@ -248,7 +251,7 @@ def run() -> int:
         )
         budget_min = float(os.environ.get("RENTGEN_PHOTO_BUDGET_MIN", "90"))
         photo_stats.update(photomatch.attach_hashes(
-            photo_queue, session=http, cache=pc, today=today,
+            photo_queue, session=net.probe_session(), cache=pc, today=today,
             budget_s=budget_min * 60 if budget_min > 0 else None,
             critical_urls=critical_urls,
         ))

@@ -1,16 +1,16 @@
-"""Persistent gallery-hash cache: skip re-fetching photos we've already hashed.
+"""Persistent photo-hash cache: skip re-fetching photos we've already hashed.
 
-`photomatch` fetches each ambiguous listing's detail page plus a few gallery
-images and computes a dHash per image - by far the slowest, most rate-limited
-part of a run. A listing's photos never change, so we key the result by listing
-URL and reuse it on later runs.
+`photomatch` hashes a search-card cover for cold correctness work or fetches an
+ambiguous listing's detail page plus a few gallery images for history. The
+result is keyed by listing URL and reused on later runs.
 
 The cache lives in ``cache/phash_<region>.json.gz`` (committed, so the GitHub
 Actions job reuses it run-to-run) and self-prunes URLs not seen for
 ``MAX_AGE_DAYS`` so it can't grow without bound:
 
     {"version": 2, "entries": {url: {"h": ["<base64>", ...], "seen": "YYYY-MM-DD",
-                                     "urls": ["https://...", ...]}},
+                                     "urls": ["https://...", ...],
+                                     "scope": "cover"}},
      "backlog": {url: "YYYY-MM-DD"}}
 
 **Why gzip + base64.** The v1 file wrote each 256-bit dHash as a ~78-character
@@ -23,8 +23,10 @@ and RCN snapshots already are.
 v1 files are read transparently (decimal strings still parse) and rewritten in
 v2 on the next save, so the migration needs no separate step.
 
-"urls" (the gallery image URLs the hashes came from) is optional — old entries
-lack it.
+"urls" (the image URLs the hashes came from) is optional — old entries lack it.
+"scope" is present only for the cheaper search-card first pass; absent means the
+normal detail-page gallery. Keeping the distinction lets a later history pass
+enrich cover-only evidence without making today's dedupe wait for it.
 
 **Negative entries.** A listing whose gallery yields nothing is recorded as a
 miss rather than skipped, because "no photos" was previously never cached at
@@ -131,7 +133,7 @@ def _hashes(entry):
 
 
 def get(cache, url, today: str = None):
-    """Cached gallery hashes for ``url``.
+    """Cached photo hashes for ``url``.
 
     Returns a list of ints on a hit, ``[]`` for "we know this ad has no photos
     for us", and None when it should be fetched. Callers must distinguish []
@@ -162,13 +164,23 @@ def _days_between(a: str, b: str) -> int:
 
 
 def get_urls(cache, url):
-    """Cached gallery image URLs for ``url`` (may be [] for old entries)."""
+    """Cached source image URLs for ``url`` (may be [] for old entries)."""
     entry = cache.get("entries", {}).get(url)
     return list(entry.get("urls") or []) if entry else []
 
 
-def put(cache, url, hashes, today: str, image_urls=None) -> None:
-    """Store a gallery result for ``url``, stamped as seen ``today``.
+def get_scope(cache, url) -> str:
+    """``cover`` for a search-card hash, otherwise ``gallery``.
+
+    Gallery is the backward-compatible default: every cache entry written
+    before the scope field existed came from the detail-page gallery path.
+    """
+    entry = cache.get("entries", {}).get(url) or {}
+    return "cover" if entry.get("scope") == "cover" else "gallery"
+
+
+def put(cache, url, hashes, today: str, image_urls=None, scope=None) -> None:
+    """Store a photo result for ``url``, stamped as seen ``today``.
 
     An empty result is recorded as a miss (see the module docstring) rather
     than dropped, so a permanently photo-less ad stops being re-fetched every
@@ -188,6 +200,8 @@ def put(cache, url, hashes, today: str, image_urls=None) -> None:
     entry = {"h": [pack(h) for h in hashes], "seen": today}
     if image_urls:
         entry["urls"] = list(image_urls)
+    if scope == "cover":
+        entry["scope"] = "cover"
     entries[url] = entry
 
 
