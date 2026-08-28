@@ -59,6 +59,16 @@ the generated-data validator and the GitHub summary now expose critical versus
 history counts, cache/fetch outcomes and critical/backlog deferrals. The local
 offline gate is **230/230**.
 
+Push validation `33135609107` accepted the new queue on warm Śląskie. The job
+waited behind scheduled run `33134866042`, but its own scrape took 92.0 minutes
+and passed all 230 pre-request tests. Photos took 17.1 seconds: 41,659 current
+correctness candidates plus 1,932 history-only candidates, 43,559 cache hits,
+32 fetches, 8,117 ID-settled twins and **zero critical/history deferrals**. It
+validated 30,591 unique properties from 51,708 raw rows (119.1 MiB served),
+refreshed only `data-slaskie` at `2282009`, and deployed in `33144201326`; the
+live metadata matches. Otodom retained 15,863, n-online 10,735, Gratka 12,555,
+and Morizon recovered its prior timeout shortfall to 12,555 with no issue.
+
 ### P0 evidence now accepted
 
 - **The twice-daily n-online path is current-only.** The portal orders current
@@ -139,12 +149,11 @@ offline gate is **230/230**.
 
 ### Next
 
-1. Let the push-triggered Śląskie validation exercise the new photo metrics;
-   audit it later rather than watching it.
-2. If that baseline holds, dispatch one warm Małopolskie pass with archive work
-   skipped and measure critical completion, backlog convergence, geo and the
-   transient Morizon band failure.
-3. Disable the disposable pilot after that evidence, deploy the one-region
+1. Dispatch one warm Małopolskie pass with archive work explicitly skipped;
+   do not watch it.
+2. When it finishes, measure critical completion, backlog convergence, geo,
+   source stability and recovery of the transient Morizon band failure.
+3. If the warm gate passes, disable the disposable pilot, deploy the one-region
    artifact and prove the `data-slaskie` ref stayed unchanged. Do not add
    Małopolskie to cron or create a 16-region matrix.
 

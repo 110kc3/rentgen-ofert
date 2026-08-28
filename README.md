@@ -7,7 +7,7 @@ and presents it on one searchable page. No application server: a GitHub Actions
 job scrapes, writes static JSON, and GitHub Pages displays it.
 
 Portal blocking and serving caps mean “all listings” is a target, not a current
-guarantee. The 2026-08-28 deployment has 30,534 Śląskie and 40,811 Małopolskie
+guarantee. The 2026-08-28 deployment has 30,591 Śląskie and 40,811 Małopolskie
 current properties from four contributing sources; Małopolskie is a temporary
 manual pilot, not a scheduled region. OLX is blocked with HTTP 403; after
 rejecting cross-category clones and promoted cards from other voivodeships,
@@ -68,6 +68,11 @@ Cold Małopolskie pilot `33098785162` then passed the same gate, created only
 ads. Photo work is now ordered by current dedupe correctness, then persistent
 oldest-first history backlog; never-attempted ads precede repeated empty-gallery
 responses, and `meta.json` plus the CI summary expose each queue and deferral.
+Śląskie validation run `33135609107` then processed 41,659
+correctness-critical candidates with 43,559 cache hits, only 32 fetches and
+zero deferrals; its photo phase took 17.1 seconds and the complete scrape took
+92.0 minutes. Deploy `33144201326` published that baseline, clearing the new
+queue for one warm Małopolskie measurement.
 The next gate is still one warm Małopolskie pass, followed by disabling the
 disposable pilot—not a region matrix.
 The audited status, evidence, decisions, acceptance gates and P0–P5 task order are
