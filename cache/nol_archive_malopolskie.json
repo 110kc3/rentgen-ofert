@@ -1,0 +1,24 @@
+{
+ "by_type": {
+  "flat": {
+   "archived": 7292,
+   "capped": [
+    "krakow"
+   ],
+   "current": 8638,
+   "failed": [],
+   "pages": 541
+  },
+  "house": {
+   "archived": 7137,
+   "capped": [],
+   "current": 2297,
+   "failed": [],
+   "pages": 296
+  }
+ },
+ "complete": false,
+ "records": 14429,
+ "refreshed": "2026-08-27",
+ "schema": 1
+}
