@@ -46,13 +46,15 @@ def _dataset(tmp_path):
             "phases": {"scrape_otodom": 3.0, "write": 0.5, "total": 12.5},
         },
         "photos": {
-            "schema": 2, "enabled": True, "listings": 2, "critical": 1,
+            "schema": 3, "enabled": True, "listings": 2, "critical": 1,
+            "heuristic_fallback_enabled": False,
             "history_only": 1, "cache_hits": 1, "fetched": 0,
             "cover_cache_hits": 1, "gallery_cache_hits": 0,
             "cover_fetched": 0, "gallery_fetched": 0,
             "with_photos": 1, "identified": 0, "deferred": 1,
             "critical_deferred": 0, "history_deferred": 1,
             "critical_with_photos": 1, "critical_without_photos": 0,
+            "unresolved_size_groups": 0, "unresolved_size_listings": 0,
             "backlog": {"count": 1, "oldest": "2026-08-24", "age_days": 0},
         },
     }), encoding="utf-8")
@@ -76,6 +78,7 @@ def test_generated_dataset_validator_checks_every_payload_part(tmp_path):
     assert "Photo queue" in markdown and "1 total deferred" in markdown
     assert "1 critical with photos" in markdown
     assert "0 critical without photos" in markdown
+    assert "0 unresolved size groups" in markdown
 
 
 def test_generated_dataset_validator_rejects_count_mismatch(tmp_path):
@@ -135,4 +138,33 @@ def test_generated_dataset_validator_rejects_inconsistent_photo_scopes(tmp_path)
 
     with pytest.raises(validate_data.DataValidationError,
                        match="cache scopes do not add up"):
+        validate_data.validate_data_dir(root)
+
+
+def test_generated_dataset_validator_rejects_photo_mode_with_heuristic_fallback(
+        tmp_path):
+    root = _dataset(tmp_path)
+    meta_path = root / "meta.json"
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    meta["photos"]["heuristic_fallback_enabled"] = True
+    meta_path.write_text(json.dumps(meta), encoding="utf-8")
+
+    with pytest.raises(validate_data.DataValidationError,
+                       match="heuristic fallback must be disabled"):
+        validate_data.validate_data_dir(root)
+
+
+def test_generated_dataset_validator_rejects_impossible_unresolved_group_counts(
+        tmp_path):
+    root = _dataset(tmp_path)
+    meta_path = root / "meta.json"
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    meta["photos"]["critical_with_photos"] = 0
+    meta["photos"]["critical_without_photos"] = 1
+    meta["photos"]["unresolved_size_groups"] = 1
+    meta["photos"]["unresolved_size_listings"] = 1
+    meta_path.write_text(json.dumps(meta), encoding="utf-8")
+
+    with pytest.raises(validate_data.DataValidationError,
+                       match="unresolved size-group counts are inconsistent"):
         validate_data.validate_data_dir(root)

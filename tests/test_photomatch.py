@@ -155,6 +155,29 @@ def test_photo_queue_puts_current_collisions_and_untried_work_first():
     assert history_order.index("fresh") < history_order.index("retry")
 
 
+def test_legacy_gallery_miss_is_not_sorted_as_a_free_cover_hit():
+    positive = {
+        "source": "otodom", "type": "flat", "area": 50, "rooms": 2,
+        "url": "positive", "image": "positive.jpg",
+    }
+    gallery_miss = {
+        "source": "gratka", "type": "flat", "area": 50, "rooms": 2,
+        "url": "gallery-miss", "image": "cover-never-tried.jpg",
+    }
+    pc = {"version": cache.VERSION, "entries": {}}
+    cache.put(pc, "positive", [7], "2026-08-28")
+    for _ in range(cache.MISS_RETRIES):
+        cache.put(pc, "gallery-miss", [], "2026-08-28")
+
+    ordered, critical = photomatch.prioritize(
+        [gallery_miss, positive], cache=pc, today="2026-08-29")
+
+    assert critical == {"positive", "gallery-miss"}
+    assert [listing["url"] for listing in ordered] == [
+        "positive", "gallery-miss",
+    ]
+
+
 def test_photo_metrics_separate_critical_and_history_deferrals(monkeypatch):
     ticks = iter([0, 0, 2, 2])
     monkeypatch.setattr(photomatch.time, "monotonic", lambda: next(ticks))
@@ -186,6 +209,8 @@ def test_photo_metrics_separate_critical_and_history_deferrals(monkeypatch):
         "critical_deferred": 0,
         "critical_with_photos": 1,
         "critical_without_photos": 0,
+        "unresolved_size_groups": 0,
+        "unresolved_size_listings": 0,
         "history_deferred": 2,
         "deferred_urls": ["history-1", "history-2"],
     }
@@ -269,6 +294,77 @@ def test_photo_fetching_defaults_to_the_no_retry_session(monkeypatch):
     )
 
     assert seen == [session]
+
+
+def test_legacy_gallery_miss_cannot_suppress_a_critical_cover(monkeypatch):
+    listing = {
+        "source": "otodom", "url": "u", "image": "card.jpg",
+        "type": "flat", "area": 50, "rooms": 2,
+    }
+    pc = {"version": cache.VERSION, "entries": {}}
+    for _ in range(cache.MISS_RETRIES):
+        cache.put(pc, "u", [], "2026-08-28")
+    cover_calls = []
+    monkeypatch.setattr(
+        photomatch, "cover_hashes",
+        lambda row, session: (cover_calls.append(row["url"])
+                              or ([77], [row["image"]])),
+    )
+
+    stats = photomatch.attach_hashes(
+        [listing], session=object(), cache=pc, today="2026-08-29",
+        critical_urls={"u"}, log=lambda *a: None, max_workers=1,
+    )
+
+    assert cover_calls == ["u"]
+    assert listing["phashes"] == [77]
+    assert cache.get_scope(pc, "u") == "cover"
+    assert stats["cover_fetched"] == 1
+    assert stats["critical_without_photos"] == 0
+
+
+def test_believed_cover_miss_still_gets_its_one_week_rest(monkeypatch):
+    listing = {
+        "source": "otodom", "url": "u", "image": "card.jpg",
+        "type": "flat", "area": 50, "rooms": 2,
+    }
+    pc = {"version": cache.VERSION, "entries": {}}
+    for _ in range(cache.MISS_RETRIES):
+        cache.put(pc, "u", [], "2026-08-28", scope="cover")
+    cover_calls = []
+    monkeypatch.setattr(
+        photomatch, "cover_hashes",
+        lambda row, session: (cover_calls.append(row["url"]) or ([77], [])),
+    )
+
+    stats = photomatch.attach_hashes(
+        [listing], session=object(), cache=pc, today="2026-08-29",
+        critical_urls={"u"}, log=lambda *a: None, max_workers=1,
+    )
+
+    assert cover_calls == []
+    assert stats["cover_cache_hits"] == 1
+    assert stats["critical_without_photos"] == 1
+
+
+def test_unresolved_size_groups_are_counted_for_the_conservative_gate(
+        monkeypatch):
+    listings = [
+        {"source": source, "url": source, "type": "flat", "area": 50,
+         "rooms": 2}
+        for source in ("otodom", "gratka")
+    ]
+    monkeypatch.setattr(photomatch, "listing_hashes",
+                        lambda listing, session: ([], []))
+
+    stats = photomatch.attach_hashes(
+        listings, session=object(), critical_urls={"otodom", "gratka"},
+        log=lambda *a: None, max_workers=1,
+    )
+
+    assert stats["critical_without_photos"] == 2
+    assert stats["unresolved_size_groups"] == 1
+    assert stats["unresolved_size_listings"] == 2
 
 
 # ---- the merge key, end to end ---------------------------------------------

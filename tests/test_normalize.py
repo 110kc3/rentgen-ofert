@@ -68,7 +68,7 @@ def test_dedupe_merges_cross_portal_same_price():
            district="Sośnica", image="x", plot_area=600, created="2026-06-10")
     b = _l(source="gratka", url="gra", price=900400, area=120.0, rooms=5,
            district="sośnica", created="2026-06-12")          # same 1k bucket, case-diff
-    out = dedupe([a, b])
+    out = dedupe([a, b], allow_heuristic_fallback=True)
     assert len(out) == 1
     p = out[0]
     assert p["sources"] == ["otodom", "gratka"]               # otodom ranked first
@@ -91,7 +91,7 @@ def test_dedupe_price_only_match_when_rooms_missing():
     # same type+area+exact price, rooms missing on both -> still merged
     a = _l(source="otodom", url="o", price=430000, area=51.0)
     b = _l(source="olx", url="x", price=430000, area=51.0)
-    out = dedupe([a, b])
+    out = dedupe([a, b], allow_heuristic_fallback=True)
     assert len(out) == 1 and len(out[0]["offers"]) == 2
 
 
@@ -99,18 +99,42 @@ def test_dedupe_merges_same_size_at_different_prices():
     # same flat, two portals, different price -> one card, cheapest highlighted
     a = _l(source="otodom", url="o", price=480000, area=50.0, rooms=2)
     b = _l(source="olx", url="x", price=520000, area=50.0, rooms=2)
-    out = dedupe([a, b])
+    out = dedupe([a, b], allow_heuristic_fallback=True)
     assert len(out) == 1
     p = out[0]
     assert p["price"] == 480000 and p["price_max"] == 520000
     assert p["cheapest"]["price"] == 480000 and p["cheapest"]["source"] == "otodom"
 
 
+def test_photo_mode_keeps_an_all_unresolved_size_group_separate():
+    a = _l(source="otodom", url="o", price=500000, area=50.0, rooms=2)
+    b = _l(source="gratka", url="g", price=500000, area=50.0, rooms=2)
+
+    out = dedupe([a, b])
+
+    assert len(out) == 2
+    assert all(len(prop["offers"]) == 1 for prop in out)
+
+
+def test_photo_mode_still_unions_exact_portal_id_twins_without_hashes():
+    a = _l(source="gratka", url="g", price=500000, area=50.0, rooms=2,
+           _twin="gratka:123")
+    b = _l(source="morizon", url="m", price=500000, area=50.0, rooms=2,
+           _twin="gratka:123", _identified_by="g")
+
+    out = dedupe([a, b], allow_heuristic_fallback=False)
+
+    assert len(out) == 1
+    assert {offer["source"] for offer in out[0]["offers"]} == {
+        "gratka", "morizon",
+    }
+
+
 def test_dedupe_splits_on_huge_price_gap():
     # a 0.8M and a 1.8M "220 m2" house are never the same house -> stay separate
     a = _l(source="otodom", url="o", price=800000, area=220.0, rooms=5)
     b = _l(source="olx", url="x", price=1800000, area=220.0, rooms=5)
-    out = dedupe([a, b])
+    out = dedupe([a, b], allow_heuristic_fallback=True)
     assert len(out) == 2
 
 
@@ -144,7 +168,7 @@ def test_dedupe_merges_when_rooms_missing_on_one_side():
     # houses ignore rooms (OLX omits them); same area+price still merges
     a = _l(source="otodom", url="o", type="house", price=990000, area=150.0, rooms=5)
     b = _l(source="olx", url="x", type="house", price=990000, area=150.0, rooms=None)
-    out = dedupe([a, b])
+    out = dedupe([a, b], allow_heuristic_fallback=True)
     assert len(out) == 1 and len(out[0]["offers"]) == 2
 
 

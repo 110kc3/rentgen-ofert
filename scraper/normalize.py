@@ -17,10 +17,12 @@ Merge rule (fast "by size", as chosen): listings merge when they share
     flats:  type + exact area (m2) + room count
     houses: type + exact area (m2)                   (OLX omits house rooms)
 Price is intentionally allowed to differ - the same flat is often re-posted at
-different prices - EXCEPT a merged group may span at most +15% in price
-(SPREAD_CAP), so a 0.8M and a 1.8M "220 m2" house are not lumped together. This is
-deliberately loose and can merge distinct same-size properties (e.g. identical
-new-build units); the trade-off was chosen for coverage over precision.
+different prices. When photo matching is explicitly disabled, a merged group
+may span at most +15% in price (SPREAD_CAP), so a 0.8M and a 1.8M "220 m2" house
+are not lumped together. With photo matching enabled, callers disable that
+heuristic: an all-unresolved size group stays as separate ads, while exact
+portal-ID twins still merge. Under-deduplication is safer than inventing one
+property from several same-size listings.
 """
 from __future__ import annotations
 
@@ -448,7 +450,13 @@ def _cross_size_unify(listings):
     return listings
 
 
-def dedupe(listings):
+def dedupe(listings, allow_heuristic_fallback=False):
+    """Build properties, optionally allowing size/price merges without photos.
+
+    ``allow_heuristic_fallback`` exists for the explicit ``RENTGEN_PHOTOS=0``
+    mode. Production photo runs set it false: a failed or deferred photo fetch
+    must not silently turn into weaker merge evidence.
+    """
     link_twins(listings)
     _cross_size_unify(listings)
     groups = defaultdict(list)
@@ -485,12 +493,22 @@ def dedupe(listings):
                 prop["development"] = True
             properties.append(prop)
         elif any(m.get("phashes") for m in members):
-            # photos available -> merge only ads whose galleries match
+            # photos available -> merge only ads whose hashes match
             for cluster in _union_twins(_photo_clusters(members)):
                 if _cluster_is_development(cluster):
                     properties.extend(_build_dev(cluster))
                 else:
                     properties.append(_build(cluster))
+        elif not allow_heuristic_fallback:
+            # Photo mode was requested but this whole size group remains
+            # unresolved. Keep every ad separate rather than letting a CDN or
+            # cache failure authorize the loose size/price heuristic. Exact
+            # gratka↔morizon portal-ID twins remain safe to union.
+            for cluster in _union_twins([[member] for member in members]):
+                prop = _build(cluster)
+                if any(is_development(member) for member in cluster):
+                    prop["development"] = True
+                properties.append(prop)
         else:
             # no photo data -> fall back to the size + price-spread heuristic
             dev = _cluster_is_development(members)

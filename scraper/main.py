@@ -16,7 +16,8 @@ Environment overrides (optional):
                         "1" to opt into Otodom bands *after* its full unbanded
                         baseline (default 0; repeated 405s made them regress)
     RENTGEN_PHOTOS      "0" to skip photo hashing (disables dedupe-by-photo and
-                        relist/price history)
+                        relist/price history, and explicitly enables the loose
+                        size/price fallback)
     RENTGEN_PHOTO_BUDGET_MIN
                         max minutes spent fetching uncached photos (default 90;
                         "0" = unlimited). Critical current collisions hash one
@@ -230,7 +231,15 @@ def run() -> int:
         print(f"  gratka<->morizon twins linked off the search page: {linked}")
 
     photos_enabled = os.environ.get("RENTGEN_PHOTOS", "1") != "0"
-    photo_stats = {"schema": 2, "enabled": photos_enabled, "listings": len(raw)}
+    photo_stats = {
+        "schema": 3,
+        "enabled": photos_enabled,
+        "listings": len(raw),
+        # The size/price heuristic is an explicit escape hatch for runs that
+        # disable photo matching. A requested photo run must never downgrade a
+        # failed/deferred photo decision into weaker merge evidence.
+        "heuristic_fallback_enabled": not photos_enabled,
+    }
     if photos_enabled:
         print(f"Photo-hashing {len(raw)} listings (dedupe + history) ...")
         pc = phcache.load(CACHE_PATH)
@@ -275,7 +284,10 @@ def run() -> int:
     archived_raw = [x for x in raw if x.get("archived")]
     raw = [x for x in raw if not x.get("archived")]
 
-    listings = dedupe(raw)
+    listings = dedupe(
+        raw,
+        allow_heuristic_fallback=photo_stats["heuristic_fallback_enabled"],
+    )
     require_unique_urls(listings, "deduplicated properties")
 
     # Lifecycle bookkeeping, in dependency order:

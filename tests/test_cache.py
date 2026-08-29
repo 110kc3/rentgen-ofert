@@ -69,6 +69,25 @@ def test_cover_scope_round_trips_and_old_hits_default_to_gallery(tmp_path):
     assert cache.get_scope(loaded, "missing") == "gallery"
 
 
+def test_negative_scope_resets_retry_allowance_when_switching_to_cover(tmp_path):
+    gz = tmp_path / "phash_test.json.gz"
+    c = {"version": cache.VERSION, "entries": {}}
+    for _ in range(cache.MISS_RETRIES):
+        cache.put(c, "u", [], "2026-08-28")
+    assert cache.get(c, "u", "2026-08-28") == []
+    assert cache.get_scope(c, "u") == "gallery"
+
+    cache.put(c, "u", [], "2026-08-28", scope="cover")
+    assert c["entries"]["u"]["miss"] == 1
+    assert cache.get(c, "u", "2026-08-28") is None
+    assert cache.get_scope(c, "u") == "cover"
+
+    cache.save(gz, c)
+    loaded = cache.load(gz)
+    assert cache.get_scope(loaded, "u") == "cover"
+    assert loaded["entries"]["u"]["miss"] == 1
+
+
 def test_missing_and_corrupt_files_yield_an_empty_cache(tmp_path):
     assert cache.load(tmp_path / "nope.json.gz")["entries"] == {}
     bad = tmp_path / "bad.json.gz"

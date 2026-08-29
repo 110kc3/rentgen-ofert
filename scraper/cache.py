@@ -24,9 +24,11 @@ v1 files are read transparently (decimal strings still parse) and rewritten in
 v2 on the next save, so the migration needs no separate step.
 
 "urls" (the image URLs the hashes came from) is optional — old entries lack it.
-"scope" is present only for the cheaper search-card first pass; absent means the
-normal detail-page gallery. Keeping the distinction lets a later history pass
-enrich cover-only evidence without making today's dedupe wait for it.
+"scope" is present for the cheaper search-card path; absent means the normal
+detail-page gallery. It applies to positive hashes *and* empty attempts. That
+last part is correctness-critical during migration: a legacy "gallery blocked"
+verdict must not suppress an accessible card cover, while a repeatedly failed
+cover should still get the normal one-week negative-cache rest.
 
 **Negative entries.** A listing whose gallery yields nothing is recorded as a
 miss rather than skipped, because "no photos" was previously never cached at
@@ -194,8 +196,19 @@ def put(cache, url, hashes, today: str, image_urls=None, scope=None) -> None:
         prev = entries.get(url) or {}
         if _hashes(prev):
             return          # had photos before; a blank read now is a blip
-        entries[url] = {"h": [], "seen": today, "tried": today,
-                        "miss": (prev.get("miss") or 0) + 1}
+        next_scope = "cover" if scope == "cover" else "gallery"
+        # Gallery and cover are independent ways to obtain evidence. Three old
+        # detail-page failures say nothing about the newly available card CDN;
+        # reset the allowance when changing path instead of immediately
+        # believing the first cover failure.
+        previous_misses = (prev.get("miss") or 0) if (
+            prev and get_scope(cache, url) == next_scope
+        ) else 0
+        entry = {"h": [], "seen": today, "tried": today,
+                 "miss": previous_misses + 1}
+        if next_scope == "cover":
+            entry["scope"] = "cover"
+        entries[url] = entry
         return
     entry = {"h": [pack(h) for h in hashes], "seen": today}
     if image_urls:

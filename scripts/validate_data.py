@@ -192,13 +192,17 @@ def validate_data_dir(data_dir) -> dict:
 
     photos = meta.get("photos")
     _require(isinstance(photos, dict), "meta.photos must be an object")
-    _require(photos.get("schema") == 2, "meta.photos.schema must be 2")
+    _require(photos.get("schema") == 3, "meta.photos.schema must be 3")
     _require(isinstance(photos.get("enabled"), bool),
              "meta.photos.enabled must be a boolean")
     _require(isinstance(photos.get("listings"), int)
              and not isinstance(photos["listings"], bool)
              and photos["listings"] >= 0,
              "meta.photos.listings must be a non-negative integer")
+    _require(isinstance(photos.get("heuristic_fallback_enabled"), bool),
+             "meta.photos.heuristic_fallback_enabled must be a boolean")
+    _require(photos["heuristic_fallback_enabled"] == (not photos["enabled"]),
+             "meta.photos heuristic fallback must be disabled in photo mode")
     if photos["enabled"]:
         count_fields = (
             "critical", "history_only", "cache_hits", "fetched",
@@ -207,6 +211,7 @@ def validate_data_dir(data_dir) -> dict:
             "cover_cache_hits", "gallery_cache_hits",
             "cover_fetched", "gallery_fetched",
             "critical_with_photos", "critical_without_photos",
+            "unresolved_size_groups", "unresolved_size_listings",
         )
         for field in count_fields:
             value = photos.get(field)
@@ -244,6 +249,20 @@ def validate_data_dir(data_dir) -> dict:
         )
         _require(photos["critical_with_photos"] <= photos["with_photos"],
                  "meta.photos.critical_with_photos exceeds with_photos")
+        _require(
+            photos["unresolved_size_listings"]
+            <= photos["critical_without_photos"]
+            + photos["critical_deferred"],
+            "meta.photos unresolved listings exceed unresolved critical rows",
+        )
+        _require(
+            (photos["unresolved_size_groups"] == 0
+             and photos["unresolved_size_listings"] == 0)
+            or (photos["unresolved_size_groups"] > 0
+                and photos["unresolved_size_listings"]
+                >= 2 * photos["unresolved_size_groups"]),
+            "meta.photos unresolved size-group counts are inconsistent",
+        )
         _require(
             photos["critical_deferred"] + photos["history_deferred"]
             == photos["deferred"],
@@ -319,6 +338,8 @@ def github_summary(summary: dict) -> str:
             (f"**Photo queue:** {photos['critical']:,} correctness-critical · "
              f"{photos['critical_with_photos']:,} critical with photos · "
              f"{photos['critical_without_photos']:,} critical without photos · "
+             f"{photos['unresolved_size_groups']:,} unresolved size groups "
+             f"({photos['unresolved_size_listings']:,} listings; kept separate) · "
              f"{photos['history_only']:,} history-only · "
              f"{photos['cache_hits']:,} cache hits "
              f"({photos['cover_cache_hits']:,} cover) · "

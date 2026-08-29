@@ -264,10 +264,19 @@ def prioritize(listings, cache=None, today=None):
         if entry:
             if entry.get("h") or entry.get("hashes"):
                 return (0, "")             # positive cache hit
-            if cachemod.get(cache, url, today) is not None:
-                return (0, "")             # believed recent negative hit
+            cached = cachemod.get(cache, url, today)
+            needs_first_cover = (
+                url in critical_urls
+                and listing.get("image")
+                and cachemod.get_scope(cache, url) != "cover"
+            )
+            if cached is not None and not needs_first_cover:
+                return (0, "")             # believed negative for this path
         if url in deferred:
             return (1, deferred[url])       # oldest budget work first
+        if (url in critical_urls and listing.get("image")
+                and cachemod.get_scope(cache, url) != "cover"):
+            return (2, "")                 # gallery tried; cover never attempted
         if not entry:
             return (2, "")                 # never attempted
         return (3, "")                     # retry a prior empty response last
@@ -319,11 +328,17 @@ def attach_hashes(listings, max_workers: int = 8, session=None, log=print,
     Photo requests use a no-retry session by default. A photo is best-effort and
     comes round next run; inheriting the scraper's 405/429/5xx retry ladder let
     a handful of in-flight galleries overrun a 90-minute budget by 6.8 minutes.
+    Legacy negative gallery entries are deliberately bypassed for a first
+    critical cover attempt; negative cover entries retain the usual bounded
+    retry/rest policy. Metrics also count all-no-hash size groups so callers can
+    prove those unresolved ads were kept separate instead of heuristically
+    merged.
     The return value also carries a private ``deferred_urls`` list for cache
     persistence; callers remove it before publishing the compact metrics.
     """
     from . import net
     from . import cache as cachemod
+    from . import normalize
     session = session or net.probe_session()
     deadline = time.monotonic() + budget_s if budget_s else None
     critical_urls = set(critical_urls or ())
@@ -343,8 +358,19 @@ def attach_hashes(listings, max_workers: int = 8, session=None, log=print,
             cached = cachemod.get(cache, url, today)
             if cached is not None:
                 scope = cachemod.get_scope(cache, url)
-                return (l, cached, cachemod.get_urls(cache, url),
-                        f"cached_{scope}")
+                # Empty gallery results predate the cover-first path and do not
+                # prove that the already-scraped card image is inaccessible.
+                # Only a scoped cover miss may suppress another critical cover
+                # attempt for MISS_RECHECK_DAYS.
+                needs_first_cover = (
+                    cached == []
+                    and url in critical_urls
+                    and l.get("image")
+                    and scope != "cover"
+                )
+                if not needs_first_cover:
+                    return (l, cached, cachemod.get_urls(cache, url),
+                            f"cached_{scope}")
         if deadline is not None and time.monotonic() > deadline:
             # None, not [] — an ad we never tried must not be written back as a
             # photo miss, or a few budget-starved runs would teach the cache
@@ -401,6 +427,19 @@ def attach_hashes(listings, max_workers: int = 8, session=None, log=print,
         1 for listing, _, _, _ in results
         if listing.get("url") in critical_urls and listing.get("phashes")
     )
+    by_size = defaultdict(list)
+    for listing in listings:
+        if (listing.get("archived") or listing.get("_identified_by")
+                or listing.get("url") not in critical_urls):
+            continue
+        size = normalize.size_key(listing)
+        if size is not None:
+            by_size[size].append(listing)
+    unresolved_groups = [
+        members for members in by_size.values()
+        if len(members) > 1
+        and not any(member.get("phashes") for member in members)
+    ]
     stats = {
         "listings": len(results),
         "critical": len(critical_urls),
@@ -419,6 +458,8 @@ def attach_hashes(listings, max_workers: int = 8, session=None, log=print,
         "critical_without_photos": (
             len(critical_urls) - critical_deferred - critical_with_photos
         ),
+        "unresolved_size_groups": len(unresolved_groups),
+        "unresolved_size_listings": sum(map(len, unresolved_groups)),
         "history_deferred": skipped - critical_deferred,
         "deferred_urls": deferred_urls,
     }
@@ -428,6 +469,8 @@ def attach_hashes(listings, max_workers: int = 8, session=None, log=print,
         + (f"; {cover_fetched} cover-only fetched" if cover_fetched else "")
         + (f"; {stats['critical_without_photos']} critical without photos"
            if stats["critical_without_photos"] else "")
+        + (f"; {stats['unresolved_size_groups']} unresolved size groups"
+           if stats["unresolved_size_groups"] else "")
         + (f"; {twinned} identified by their twin" if twinned else "")
         + (f"; {skipped} skipped, photo budget exhausted" if skipped else "")
         + ")")

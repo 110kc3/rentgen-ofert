@@ -1,9 +1,9 @@
 # TODO — rentgen-ofert
 
 > Keep this file and `README.md` updated after each change.
-> Last updated: 2026-08-28
+> Last updated: 2026-08-29
 
-## Current (2026-08-28) — P0/P1 live; P2 warm pilot missed its photo gate
+## Current (2026-08-29) — P0/P1 live; P2 safety correction awaiting validation
 
 The corrected Śląskie baseline is published and stable. Five runs on main SHA
 `701795e` rejected cross-category clones, duplicate cards within a portal result
@@ -101,6 +101,31 @@ cover/gallery cache hits and fetches as well as critical rows with photos,
 without photos or deferred. The fixed budget and conservative merge rule are
 unchanged: a cover match can prove identity; a non-match keeps the ads apart.
 
+That schema-2 correction passed twice on Śląskie: push run `33188821781`
+and scheduled run `33199167100`. The latter refreshed `data-slaskie` to
+`0e9dc1a`, deployed in `33206145269`, and validated 30,752 unique properties
+from 51,874 raw rows. Its complete scrape took 91.8 minutes; photos took 16.8
+seconds with zero critical or history deferrals, 371 cover cache hits and 60
+cover fetches. The latest critical outcome is 36,690 with hashes and 5,107
+without.
+
+The zero-deferral result exposed a migration hole rather than proving every
+critical row had photo evidence. Of 22,717 Otodom cache entries, 8,086 were
+negative and 7,869 were already old enough to suppress work; legacy entries
+did not record that the failed attempt was a gallery lookup, so they could
+return before the new accessible cover path. Separately, an exact-size group
+with every member still unresolved could reach size/price fallback even in
+photo-enabled mode.
+
+This safety slice scopes negative cache attempts as cover or gallery, resets
+the miss allowance when switching paths, and lets a critical cover bypass a
+legacy gallery miss once. Photo-enabled normalization now keeps an entirely
+unresolved exact-size group separate (while exact portal-ID twins still merge);
+only explicit `RENTGEN_PHOTOS=0` enables the old heuristic. `meta.photos`
+schema 3 reports unresolved groups/listings, declares whether fallback was
+enabled, and the generated-data validator enforces that fallback is off for a
+photo run.
+
 ### P0 evidence now accepted
 
 - **The twice-daily n-online path is current-only.** The portal orders current
@@ -173,7 +198,7 @@ unchanged: a cover match can prove identity; a non-match keeps the ads apart.
 - UUG geocoding selects the candidate matching the catalog TERYT prefix and
   scopes cache keys by that prefix. Same-named places in different regions can
   no longer reuse the wrong centroid.
-- Verification currently covers **235 offline tests**, including catalog,
+- Verification currently covers **244 offline tests**, including catalog,
   generator, navigation, two-region storage, ambiguous-geocoder and persisted
   photo-queue regressions.
 - Production checks after `33090688420` proved the one-region product; deploy
@@ -184,8 +209,9 @@ unchanged: a cover match can prove identity; a non-match keeps the ads apart.
 
 ### Next
 
-1. Push this corrective slice; let the ordinary Śląskie workflow validate
-   schema-2 photo metrics and the no-retry/cover path. Do not watch it.
+1. Push this schema-3 safety slice; let the ordinary Śląskie workflow
+   validate negative-scope migration, unresolved-group metrics and disabled
+   fallback. Do not watch it.
 2. After that workflow finishes, audit it once. If it passes, dispatch one
    corrective Małopolskie pass with archive work explicitly skipped; do not
    watch it.

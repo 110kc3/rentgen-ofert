@@ -7,7 +7,7 @@ and presents it on one searchable page. No application server: a GitHub Actions
 job scrapes, writes static JSON, and GitHub Pages displays it.
 
 Portal blocking and serving caps mean “all listings” is a target, not a current
-guarantee. The latest 2026-08-28 deployment has 30,591 Śląskie and 33,358
+guarantee. The latest 2026-08-28 deployment has 30,752 Śląskie and 33,358
 Małopolskie current properties from four contributing sources; Małopolskie is a
 temporary manual pilot whose first warm run missed its runtime/photo gate, not
 a scheduled region. OLX is blocked with HTTP 403; after
@@ -25,7 +25,7 @@ never in main's git history — main stays a few MB of code while a region's
 branch is force-pushed fresh each run (the price history lives *inside*
 `history.json.gz`, so old git versions of it carry no information). One branch
 per region because a shared one is what a second region would break: Śląskie
-alone is currently ~189 MB including caches and pipeline-only history, and
+alone is currently ~182 MiB including caches and pipeline-only history, and
 every job would fetch, and force-push over, all of everyone's. A deploy overlays
 every `data-*` branch (plus the pre-split shared `data` branch, still read so
 the split needed no flag day).
@@ -84,9 +84,22 @@ CDN: a live card image answered HTTP 200. Uncached correctness-critical ads now
 hash that already-scraped cover once, while history-only work keeps full
 galleries. Photo requests do not inherit the scraper's retry ladder, cover
 evidence is distinguished in the cache, and schema-2 metrics validate each
-cover/gallery and critical outcome. The next gate is a push-triggered Śląskie
-baseline followed—only after it finishes—by one corrective manual Małopolskie
-pass. The disposable pilot is not yet accepted and no region matrix is next.
+cover/gallery and critical outcome. Push run `33188821781` and following
+schedule `33199167100` both passed on Śląskie; the latter completed in 91.8
+minutes with a 16.8-second photo phase and zero deferrals.
+
+That audit found one migration hole: 5,107 critical rows still had no hash even
+though deferrals were zero, because legacy negative *gallery* entries could
+return before the new cover path. Negative entries are now scope-aware and a
+gallery miss cannot suppress a first critical cover attempt. More importantly,
+photo-enabled normalization no longer treats any all-unresolved size group as
+permission to merge by size/price: those ads stay separate, exact portal-ID
+twins still merge, and schema-3 metadata reports the unresolved groups and
+validates that heuristic fallback is off. `RENTGEN_PHOTOS=0` is the only mode
+that explicitly enables the old heuristic. The next gate is another ordinary
+Śląskie validation, followed—only after it finishes—by one corrective manual
+Małopolskie pass. The disposable pilot is not yet accepted and no matrix is
+next.
 The audited status, evidence, decisions, acceptance gates and P0–P5 task order are
 in [`POLAND_ROLLOUT.md`](POLAND_ROLLOUT.md). `TODO.md` remains the detailed
 development diary.
@@ -268,6 +281,8 @@ development diary.
   flats); then perceptual photo hashes (dHash) confirm identity before merging.
   An uncached current collision starts with its search-card cover: a match is
   positive evidence, while a non-match conservatively keeps the ads apart.
+  A failed/deferred photo attempt also keeps the whole unresolved size group
+  separate; it never silently downgrades into weaker merge evidence.
   Full galleries remain the richer history/relist path. This avoids depending
   on blocked detail pages during cold onboarding without reviving the risky
   size+price fallback. Each card lists every portal with its price and date and
@@ -313,8 +328,10 @@ The **first** voivodeship-wide run is heavy. Current look-alikes hash their card
 covers first; remaining time builds the fuller history-gallery cache. After
 that, the committed photo-hash cache (`cache/phash_<region>.json.gz`) makes
 repeat runs much faster—each result is reused by URL—and pip downloads are
-cached in CI too. Cover-only evidence is marked so it is never mistaken for a
-full gallery. The cache stores its 256-bit hashes base64-packed inside a gzip (v1 wrote
+cached in CI too. Positive and negative cover results are scoped, so an old
+blocked-gallery verdict cannot suppress a reachable card image and a genuine
+cover failure still receives bounded retries. The cache stores its 256-bit
+hashes base64-packed inside a gzip (v1 wrote
 78-character decimal strings in plain JSON and reached 62.9 MB for one region,
 past GitHub's 50 MB warning; a v1 file is migrated on read).
 
@@ -377,7 +394,7 @@ RENTGEN_MAX_PAGES=3 RENTGEN_DELAY=0.3 python -m scraper.main
 | `RENTGEN_REGION` | slaskie | voivodeship slug to scrape (e.g. `malopolskie`) |
 | `RENTGEN_MAX_PAGES` | 200 | max result pages per portal per search (was 50, which silently truncated every portal — see *Coverage*) |
 | `RENTGEN_DELAY` | 0.7 | seconds between requests (be polite) |
-| `RENTGEN_PHOTOS` | 1 | photo-match ambiguous listings; `0` skips cover/gallery fetches |
+| `RENTGEN_PHOTOS` | 1 | photo-match ambiguous listings and conservatively separate unresolved groups; `0` skips cover/gallery fetches and explicitly enables size/price fallback |
 | `RENTGEN_PHOTO_BUDGET_MIN` | 90 | max minutes of uncached photo fetching (`0` = unlimited); current collisions hash one card cover first, while skipped full-gallery history work persists oldest-first |
 | `RENTGEN_TYPES` | house,flat | which to scrape; e.g. `house` for houses only |
 | `RENTGEN_BANDS` | 1 | price-band subdivision for supported portals; `0` disables all of it (see *Price bands*) |
