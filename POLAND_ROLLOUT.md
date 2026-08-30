@@ -6,8 +6,9 @@
 > production-validated. The pilot met every runtime/photo/convergence gate and
 > remains unscheduled. The latest Śląskie run then exposed the next P0 safety
 > gap: a formerly contributing Otodom became blocked/zero, but the truthful
-> health result still replaced the previous good branch. Source continuity is
-> the next implementation slice.
+> health result still replaced the previous good branch. P0.7 source
+> continuity is now implemented and passes 255 offline tests; its pushed
+> workflow and a recovered positive baseline have not yet been audited.
 > This is the current source of truth for the nationwide rollout. `TODO.md`
 > retains the detailed development diary and older measurements.
 
@@ -17,8 +18,9 @@
 passed, but the project is still not ready for a 16-voivodeship schedule.**
 Małopolskie remains manual-only. Its corrective pass finished in 110.9 minutes
 with 9.1 minutes of photos, zero critical deferrals and zero unresolved groups.
-The next rollout action is not another region: add a previous-publication guard
-so a transient source block cannot force-push a materially incomplete branch.
+The next rollout action is not another region: push and later audit the new
+previous-publication guard, then let a recovered source re-establish the
+positive Śląskie baseline the already degraded branch no longer contains.
 
 | Area | Status | Evidence / gap |
 |---|---|---|
@@ -26,8 +28,8 @@ so a transient source block cannot force-push a materially incomplete branch.
 | Canonical 16-region configuration | Proven live | `site/regions.json` is validated and owns Polish forms, TERYT, cadence, anchor and explicit portal slugs; the complete Śląskie path ran end to end. |
 | One data branch per region | Proven for two | `data-slaskie` and `data-malopolskie` hold isolated single-commit data/caches; the pilot touched only its branch. |
 | Deploy overlay for multiple region branches | Proven live for two | Latest deploy `33277384177` overlaid both trees; picker, stable pages, data catalog and sitemap expose both. It also published the known degraded Śląskie branch. |
-| Portal coverage | Collection floor proven; continuity gap open | Corrected Otodom floor is 15.8–15.9k and OLX's one-probe policy is proven, but run `33274226173` allowed Otodom 15,949→0 to replace good data. |
-| Coverage KPI | Truthful, not yet protective | Schema v2 reported the new Otodom block correctly; no previous-publication gate turned that regression into a failed push. |
+| Portal coverage | Collection floor proven; continuity guard awaiting production audit | Corrected Otodom floor is 15.8–15.9k and OLX's one-probe policy is proven. P0.7 now rejects the `33274226173` Otodom 15,949→0 shape before push in offline validation. |
+| Coverage KPI | Truthful and locally protective | Schema v2 reports source state; the validator now compares it with preserved publication metadata. The next completed workflow must prove the integration path. |
 | Per-region runtime | Both measured gates met | Healthy Śląskie schema-3 run took 89.8 minutes / 14.9 seconds of photos; corrective Małopolskie took 110.9 minutes / 9.1 minutes of photos. |
 | Region picker and durable regional URLs | Proven live for two | National picker, stable regional paths, region-scoped state, legacy redirects and unpublished/unknown responses passed production checks; live pilot canonicals are region-correct. |
 | Per-region metadata / OG / sitemap / llms.txt | Proven live | Canonical/JSON-LD documents parse and discovery contains only data-backed published regions. |
@@ -36,7 +38,8 @@ so a transient source block cannot force-push a materially incomplete branch.
 
 **Rollout decision:** do not add a scheduled second region. P1 and the manual
 pilot are live; `malopolskie` remains manual-only until the source-continuity
-guard lands and its disposable-pilot disposition is recorded.
+guard's production path is audited and its disposable-pilot disposition is
+recorded.
 
 ## Production snapshot
 
@@ -62,8 +65,9 @@ guard lands and its disposable-pilot disposition is recorded.
 - The P1/pilot scrapes ran **224 offline tests before portal work**; queue and
   first warm validation ran the expanded **230-test** gate. The cover-path
   slice expanded it to **235 tests**; this safety slice expands it to **244
-  tests** and schema-3 photo arithmetic. The
-  post-generation validator protects every branch push.
+  tests** and schema-3 photo arithmetic. P0.7 expands the current suite to
+  **255 tests**, including continuity transitions and workflow/deploy order.
+  The post-generation validator protects every branch push.
 
 ### Latest completed validation runs
 
@@ -288,7 +292,9 @@ The previous healthy schema-3 run had 28,253 unique / 51,810 raw rows and
 15,949 Otodom listings. The latest has 19,352 / 35,452 and no Otodom. Coverage
 reported the outage truthfully, but validation still pushed `data-slaskie` at
 `2460527`; deploy `33277384177` replaced the good branch. This is the evidence
-for the next source-continuity gate.
+that motivated the implemented source-continuity gate. Because this degraded
+metadata is now the immediate baseline, only an Otodom recovery can establish
+the next positive baseline; the guard cannot reconstruct the overwritten ref.
 
 ### What production now proves
 
@@ -327,12 +333,13 @@ for the next source-continuity gate.
 - **The OLX policy succeeded.** All five runs made one house page-one probe,
   received HTTP 403, stopped in seconds, skipped the flat request synthetically
   and published one issue with source health `blocked`. P0.3 is accepted.
-- **Payload validation succeeded; publication continuity did not.** Every run
-  executes the offline suite before scraping and validates the generated tree
-  before its regional push. That protects structure and arithmetic, but run
-  `33274226173` proved it does not compare source state with the previous good
-  publication. A categorical contributing-source regression must become a red
-  workflow so the existing branch and Pages deployment remain untouched.
+- **Payload validation succeeded; the missing continuity policy is now
+  implemented.** Run `33274226173` proved structural validation alone did not
+  compare source state with the prior publication. The workflow now preserves
+  prior metadata before scraping and the validator makes a categorical
+  contributing-source regression red before staging/push, leaving the existing
+  branch and success-only Pages deployment untouched. Production audit remains
+  open.
 - **The regional product succeeded live.** P1 scrape `33082048365` refreshed
   only `data-slaskie`; its archive cache retained the forced-refresh SHA-256
   and its 500 new geo entries use the `24|…` scope. The shared cache retained
@@ -366,8 +373,8 @@ regions would need about **26.8 runner-hours per day**, or **13.4 hours** at
 most cold caches, different inventories and portal blocking remain unmeasured,
 and parallel regions can worsen shared runner-IP pressure. A matrix is still
 not justified: only one pilot has converged, every other region is unknown, and
-the current source-continuity hole can publish a catastrophically incomplete
-branch.
+the newly implemented source-continuity workflow has not yet run to an audited
+production result.
 
 The capacity gate should be **at most 180 minutes per warm region**, with a
 preferred target of **150 minutes** for headroom, before a two-wide daily
@@ -451,10 +458,11 @@ approaches the limit.
 11. **Truthful source health did not protect the previous good branch.** Run
     `33274226173` correctly marked Otodom blocked after two HTTP-403 roots, but
     still force-pushed a 35,452-row raw tree over the preceding 51,810-row
-    publication. The next slice must compare categorical source continuity
-    before push: preserve first runs and persistently blocked sources, but fail
-    when a previously positive/non-blocked source becomes blocked, unknown or
-    zero unless an operator explicitly overrides it.
+    publication. P0.7 now compares categorical source continuity before push:
+    it preserves first runs and persistently blocked sources, but fails when a
+    previously positive/non-blocked source becomes blocked, unknown, absent or
+    zero unless an operator explicitly overrides it. The pushed workflow still
+    needs production audit.
 
 ## Decisions for the next implementation round
 
@@ -490,9 +498,9 @@ approaches the limit.
 No second scheduled region is added in this phase.
 
 **Current pick-up point:** the P0 collection/runtime work and P1 regional
-architecture are live-validated, and the manual P2 pilot passed. Run
-`33274226173` reopens one narrow P0 publication concern as P0.7: source health
-must protect the previous good branch, not merely describe its replacement.
+architecture are live-validated, and the manual P2 pilot passed. P0.7 now
+implements the narrow publication correction exposed by run `33274226173`;
+the next completed workflow must be audited without adding another region.
 
 - [x] **P0.1 Redesign the coverage model and region health result.**
   - Record parent inventory total once per source/type.
@@ -640,7 +648,7 @@ must protect the previous good branch, not merely describe its replacement.
   - **Reconfirmed 2026-08-27:** the forced/following pair ran the same 206-test
     pre-request gate, validated 119.4/119.0 MiB and both deployed successfully.
 
-- [ ] **P0.7 Keep a categorical source outage from replacing good data.**
+- [x] **P0.7 Keep a categorical source outage from replacing good data.**
   - Preserve the prior regional `meta.json` long enough to compare source
     continuity after the new generated tree validates.
   - If a source that was positive and non-blocked becomes `blocked`, `unknown`
@@ -654,6 +662,17 @@ must protect the previous good branch, not merely describe its replacement.
   - **Accept when:** the `33274226173` Otodom 15,949→0 shape is rejected while
     a normal warm fixture and persistent OLX zero pass; the data ref remains at
     its previous commit on rejection.
+  - **Implemented 2026-08-30; production acceptance pending:** the update job
+    copies prior `meta.json` to `$RUNNER_TEMP` before scraping. After complete
+    payload validation, `validate_data.py` compares each prior positive,
+    non-blocked source with the new source state and exits before staging on a
+    blocked/unknown/absent/zero transition. First publication, persistent block,
+    positive drift and blocked-to-positive recovery pass. The manual Boolean
+    `allow_source_regression` input becomes an explicitly logged CLI override.
+    Eleven new test cases reproduce 15,949→0, each unavailable condition,
+    removal, recovery/override and workflow placement; all **255 offline tests
+    pass**. The existing success-only deploy
+    condition is also pinned by the workflow contract test.
 
 **P0 exit gate:** two consecutive warm Śląskie runs publish without a source
 continuity regression, finish within 180 minutes (150 preferred), expose
@@ -663,8 +682,9 @@ truthful health/coverage, and retain the expected data branch/deploy behavior.
 in 79.6–90.0 minutes with stable corrected source floors and the required
 gate/branch/deploy chain. The forced refresh stayed within 180 minutes, and its
 following active run proved that archive work remained isolated behind the
-retained cache. P0.7 is the remaining publication-continuity correction
-discovered on 2026-08-29.
+retained cache. P0.7 implements the publication-continuity correction discovered
+on 2026-08-29; its production path and a recovered positive baseline remain to
+be audited.
 
 ### P1 — make the product genuinely region-aware
 
@@ -748,8 +768,9 @@ fixture invariants, so the one-region production path is safe for P2.
     the final post-warm comparison remain open.
   - **Corrective deploy verified:** deploy `33262428730` succeeded; the current
     live picker and both listing/statistics paths return HTTP 200 with regional
-    titles/canonicals and the correct 32,132 Małopolskie count. The 244-test
-    suite covers regional reload/share state and branch sibling preservation.
+    titles/canonicals and the correct 32,132 Małopolskie count. The current
+    255-test suite covers regional reload/share state, branch sibling
+    preservation and publication continuity.
 - [x] Record the complete pilot in this document with run IDs, timings, request
   counts, source yields, archive size and branch/served bytes.
   - **Cold and rejected-warm evidence complete:** both are recorded above;
@@ -765,12 +786,14 @@ an easy way to disable the pilot without affecting Śląskie.
 sequence is complete. The accepted run met every numerical gate, refreshed
 only `data-malopolskie`, and the tested catalog kill switch can unpublish the
 pilot without deleting its branch or touching Śląskie. Keep it manual while
-P0.7 lands, then record whether the disposable tree stays published.
+P0.7's production path is audited, then record whether the disposable tree
+stays published.
 
 ### P3 — prove scheduling capacity before building the full matrix
 
-Do not begin P3 until P0.7 protects the last good publication and the completed
-Małopolskie pilot's keep/unpublish decision is recorded.
+Do not begin P3 until P0.7 is production-audited against a recovered positive
+publication and the completed Małopolskie pilot's keep/unpublish decision is
+recorded.
 
 - [ ] Scout one page per source/type for all 16 regions to rank them by declared
   inventory and detect bad slugs cheaply.

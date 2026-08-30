@@ -12,7 +12,9 @@ Małopolskie current properties. Małopolskie's corrective manual pilot passed
 its runtime/photo gate and remains unscheduled. The Śląskie count is a known
 degraded publication: both Otodom roots returned HTTP 403 after a healthy
 28,253-property run, and the pipeline exposed the outage but still replaced the
-good branch. OLX is also blocked with HTTP 403; after
+good branch. A previous-publication continuity guard is now implemented but has
+not yet been production-audited; it protects future positive baselines and
+cannot reconstruct the already overwritten one. OLX is also blocked with HTTP 403; after
 rejecting cross-category clones and promoted cards from other voivodeships,
 Otodom's evidence-backed Śląskie floor is about 15.9k and its flat root remains
 explicitly partial at the 200-page cap.
@@ -59,8 +61,9 @@ pages in 20.5 minutes and left the freshly dated archive cache byte-for-byte
 unchanged. This closes the P0 archive-isolation gate. Exact evidence and the
 rollout decision are recorded in
 [`POLAND_ROLLOUT.md`](POLAND_ROLLOUT.md). The next step is still not a
-16-region schedule: publication must first retain the previous good branch
-when a contributing source becomes newly blocked.
+16-region schedule: the newly implemented publication guard must first be
+audited on the pushed workflow, and a recovered full-source run must
+re-establish a positive Śląskie baseline.
 P1 commit `4131f03` is also production-proven: direct deploy `33082048338`,
 regionalized scrape `33082048365` and automatic deploy `33090688420` all
 succeeded. The scrape passed all 224 offline tests, refreshed only
@@ -117,10 +120,14 @@ The following scheduled Śląskie run `33274226173` revealed the next safety
 gap. Otodom changed from 15,949 ads to a two-root HTTP-403 block; validation
 reported that health regression but still pushed `data-slaskie` and deploy
 `33277384177` replaced the healthy 28,253-property tree with 19,352 properties.
-The next bounded slice is a previous-publication guard: a formerly contributing
-source becoming blocked/unknown or dropping to zero must fail before the branch
-push unless an operator explicitly overrides it. No second-region cron or
-matrix is next.
+This slice adds the missing previous-publication guard. The workflow preserves
+the prior `meta.json`; after the new payload passes structural validation, a
+formerly positive/non-blocked source becoming blocked/unknown or zero now fails
+before staging and force-push. First publications, persistent blocked sources
+and positive count drift pass. Intentional resets require the logged manual
+`allow_source_regression` override. The 255-test offline suite includes the
+observed Otodom 15,949→0 shape and workflow/deploy ordering. Production
+validation remains pending; no second-region cron or matrix is next.
 The audited status, evidence, decisions, acceptance gates and P0–P5 task order are
 in [`POLAND_ROLLOUT.md`](POLAND_ROLLOUT.md). `TODO.md` remains the detailed
 development diary.
@@ -210,9 +217,10 @@ development diary.
   distinguishes a clean `0` from `blokada` or `brak danych`. Schema v2 has run
   successfully in production through 2026-08-29. The latest Małopolskie output
   reports Gratka healthy, Morizon/Otodom/n-online partial and OLX blocked. The
-  latest Śląskie output truthfully reports Otodom and OLX blocked, but also
-  demonstrates why truthful health still needs a previous-publication gate:
-  the degraded branch was published. The
+  latest Śląskie output truthfully reports Otodom and OLX blocked and records
+  the failure shape that motivated the new previous-publication gate. That
+  degraded branch predates the guard and remains published until a source
+  recovery replaces it. The
   served/kept split remains important: each scraper filters
   while parsing (otodom drops INVESTMENT
   bundles, OLX drops ads syndicated from Otodom), and comparing kept-against-
@@ -389,9 +397,12 @@ listings** workflow runs on its cron, on `scraper/**` changes, or manually
 (inputs: `rcn` — set `force` to re-pull the RCN transaction snapshot;
 `nol_archive` — `auto` uses the weekly cadence, `force` harvests now and `skip`
 does only the bounded current crawl; `region` — voivodeship slug, default
-`slaskie`). Before contacting a portal it runs the offline tests; after scraping
-it validates every generated JSON/gzip file, manifest count, detail shard,
-coverage block and runtime summary before anything is pushed.
+`slaskie`; `allow_source_regression` — a logged manual-only escape hatch for an
+intentional source removal/reset). Before contacting a portal it runs the
+offline tests. After scraping it validates every generated JSON/gzip file,
+manifest count, detail shard, coverage block and runtime summary, then compares
+each previously positive/non-blocked source with the preserved publication
+metadata before anything is staged or pushed.
 
 ### C) Run locally (dashboard preview)
 
@@ -493,7 +504,11 @@ python -m scripts.validate_data site/data/slaskie  # after a scrape
 
 The test suite is entirely offline. The data validator checks the emitted
 payload as a consumer would and exits non-zero on malformed JSON/gzip, count or
-shard mismatches, missing coverage health, or missing runtime diagnostics.
+shard mismatches, missing coverage health, missing runtime diagnostics, or a
+previously contributing source becoming blocked/unknown/zero. Pass the prior
+publication with `--previous-meta <path>`; use `--allow-source-regression` only
+for an intentional reset because it emits an Actions warning and permits the
+otherwise rejected transition.
 
 ## Customise
 
@@ -544,7 +559,7 @@ cache/                 (on the `data-<region>` branch, gitignored on main)
   nol_towns.json        per-region town lists for n-online (slug -> display name)
   nol_archive_<region>.json  last full n-online archive harvest and town bounds
 scripts/
-  validate_data.py      publication gate for generated regional payloads
+  validate_data.py      payload + previous-source-continuity publication gate
   region_storage.py     exact per-region branch staging + sibling-safe overlay
   update-summary.mjs    national picker/catalog, regional page and discovery generator
   templates/            regional listing + statistics HTML templates

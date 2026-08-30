@@ -65,6 +65,10 @@ def _dataset(tmp_path):
     return tmp_path
 
 
+def _meta(root):
+    return json.loads((root / "meta.json").read_text(encoding="utf-8"))
+
+
 def test_generated_dataset_validator_checks_every_payload_part(tmp_path):
     root = _dataset(tmp_path)
     summary = validate_data.validate_data_dir(root)
@@ -168,3 +172,125 @@ def test_generated_dataset_validator_rejects_impossible_unresolved_group_counts(
     with pytest.raises(validate_data.DataValidationError,
                        match="unresolved size-group counts are inconsistent"):
         validate_data.validate_data_dir(root)
+
+
+def test_source_continuity_allows_a_first_publication(tmp_path):
+    summary = validate_data.validate_data_dir(_dataset(tmp_path))
+
+    assert summary["continuity"] == {
+        "has_previous": False,
+        "checked": 0,
+        "override": False,
+        "regressions": [],
+    }
+
+
+def test_source_continuity_allows_a_persistently_blocked_source(tmp_path):
+    root = _dataset(tmp_path)
+    previous = _meta(root)
+    blocked = {"status": "blocked", "current": 0, "served_unique": 0}
+    previous["coverage"]["by_source"]["olx"] = blocked
+    current_path = root / "meta.json"
+    current = _meta(root)
+    current["coverage"]["by_source"]["olx"] = blocked
+    current_path.write_text(json.dumps(current), encoding="utf-8")
+
+    summary = validate_data.validate_data_dir(root, previous_meta=previous)
+
+    assert summary["continuity"]["checked"] == 2
+    assert summary["continuity"]["regressions"] == []
+
+
+def test_source_continuity_rejects_a_contributing_source_outage(tmp_path):
+    root = _dataset(tmp_path)
+    previous = _meta(root)
+    previous_otodom = previous["coverage"]["by_source"]["otodom"]
+    previous_otodom.update(status="partial", current=15_949,
+                            served_unique=15_949)
+    current_path = root / "meta.json"
+    current = _meta(root)
+    current_otodom = current["coverage"]["by_source"]["otodom"]
+    current_otodom.update(status="blocked", current=0, served_unique=0)
+    current_path.write_text(json.dumps(current), encoding="utf-8")
+
+    with pytest.raises(
+            validate_data.DataValidationError,
+            match=r"source continuity regression: otodom partial/15,949 -> blocked/0"):
+        validate_data.validate_data_dir(root, previous_meta=previous)
+
+
+def test_source_continuity_treats_a_removed_source_as_unknown_zero(tmp_path):
+    root = _dataset(tmp_path)
+    previous = _meta(root)
+    current_path = root / "meta.json"
+    current = _meta(root)
+    del current["coverage"]["by_source"]["otodom"]
+    current_path.write_text(json.dumps(current), encoding="utf-8")
+
+    with pytest.raises(validate_data.DataValidationError,
+                       match=r"otodom partial/1 -> unknown/0"):
+        validate_data.validate_data_dir(root, previous_meta=previous)
+
+
+@pytest.mark.parametrize(("status", "current_count"), [
+    ("unknown", 1),
+    ("healthy", 0),
+])
+def test_source_continuity_rejects_each_unavailable_condition(
+        tmp_path, status, current_count):
+    root = _dataset(tmp_path)
+    previous = _meta(root)
+    current = _meta(root)
+    current["coverage"]["by_source"]["otodom"].update(
+        status=status,
+        current=current_count,
+        served_unique=current_count,
+    )
+    (root / "meta.json").write_text(json.dumps(current), encoding="utf-8")
+
+    with pytest.raises(validate_data.DataValidationError,
+                       match="source continuity regression: otodom"):
+        validate_data.validate_data_dir(root, previous_meta=previous)
+
+
+def test_source_continuity_allows_positive_drift_and_blocked_recovery(tmp_path):
+    root = _dataset(tmp_path)
+    previous = _meta(root)
+    previous_otodom = previous["coverage"]["by_source"]["otodom"]
+    previous_otodom.update(status="blocked", current=0, served_unique=0)
+    previous_gratka = previous["coverage"]["by_source"]["gratka"]
+    previous_gratka.update(current=12_000, served_unique=12_000)
+
+    summary = validate_data.validate_data_dir(root, previous_meta=previous)
+
+    assert summary["continuity"]["checked"] == 1
+    assert summary["continuity"]["regressions"] == []
+
+
+def test_source_continuity_override_is_explicit_and_reported(tmp_path, capsys):
+    root = _dataset(tmp_path / "current")
+    previous = _meta(root)
+    previous["coverage"]["by_source"]["otodom"].update(
+        current=15_949, served_unique=15_949)
+    current = _meta(root)
+    current["coverage"]["by_source"]["otodom"].update(
+        status="blocked", current=0, served_unique=0)
+    (root / "meta.json").write_text(json.dumps(current), encoding="utf-8")
+    previous_path = tmp_path / "previous-meta.json"
+    previous_path.write_text(json.dumps(previous), encoding="utf-8")
+
+    result = validate_data.main([
+        str(root), "--previous-meta", str(previous_path),
+        "--allow-source-regression",
+    ])
+
+    assert result == 0
+    assert "override enabled" in capsys.readouterr().err
+
+
+def test_source_continuity_rejects_malformed_previous_metadata(tmp_path):
+    root = _dataset(tmp_path)
+
+    with pytest.raises(validate_data.DataValidationError,
+                       match="previous meta.coverage must be an object"):
+        validate_data.validate_data_dir(root, previous_meta={})

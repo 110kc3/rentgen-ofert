@@ -35,6 +35,11 @@ on:
         type: choice
         options: [auto, force, skip]
         default: auto
+      allow_source_regression:
+        description: "Allow a contributing source to become blocked/unknown/zero"
+        required: false
+        type: boolean
+        default: false
   push:
     branches: [main]
     # only scraper-affecting changes trigger the heavy scrape; pure site/
@@ -112,6 +117,20 @@ jobs:
             echo "no data branch yet — starting fresh"
           fi
 
+      # scraper.main replaces meta.json. Keep the last published source health
+      # outside the working tree so validation can reject a categorical outage
+      # before the orphan branch is staged or force-pushed.
+      - name: Preserve previous publication metadata
+        run: |
+          previous_meta="$RUNNER_TEMP/previous-meta-$REGION.json"
+          if test -f "site/data/$REGION/meta.json"; then
+            cp -- "site/data/$REGION/meta.json" "$previous_meta"
+            echo "PREVIOUS_META=$previous_meta" >> "$GITHUB_ENV"
+          else
+            echo "PREVIOUS_META=" >> "$GITHUB_ENV"
+            echo "No previous publication metadata; treating this as a first run"
+          fi
+
       - name: Install runtime + test dependencies
         run: pip install -r scraper/requirements-test.txt
 
@@ -133,8 +152,18 @@ jobs:
           RENTGEN_NOL_ARCHIVE: ${{ github.event.inputs.nol_archive || 'auto' }}
         run: python -u -m scraper.main   # -u: unbuffered logs, visible while running
 
-      - name: Validate generated data + publish run summary
-        run: python -m scripts.validate_data "site/data/$REGION"
+      - name: Validate generated data + source continuity + publish run summary
+        env:
+          ALLOW_SOURCE_REGRESSION: ${{ github.event.inputs.allow_source_regression || 'false' }}
+        run: |
+          validation_args=()
+          if test -n "${PREVIOUS_META:-}"; then
+            validation_args+=(--previous-meta "$PREVIOUS_META")
+          fi
+          if test "$ALLOW_SOURCE_REGRESSION" = "true"; then
+            validation_args+=(--allow-source-regression)
+          fi
+          python -m scripts.validate_data "site/data/$REGION" "${validation_args[@]}"
 
       - name: Push refreshed data (single-commit per-region data branch)
         run: |

@@ -3,7 +3,7 @@
 > Keep this file and `README.md` updated after each change.
 > Last updated: 2026-08-30
 
-## Current (2026-08-30) — P2 gate passed; publication regression guard next
+## Current (2026-08-30) — P2 passed; continuity guard implemented, audit next
 
 The corrected Śląskie baseline was stable across five runs on main SHA
 `701795e`. Those runs rejected cross-category clones, duplicate cards within a
@@ -162,11 +162,18 @@ generated-data gate. The workflow force-pushed `data-slaskie` to `2460527` and
 deploy `33277384177` replaced the healthy 28,253 / 51,810 snapshot with 19,352
 unique / 35,452 raw properties from only Gratka, Morizon and n-online. Archive
 count stayed stable (2,490 to 2,484), so this was not a normal delist event.
-The next slice must reject a previously contributing source becoming
-blocked/unknown or dropping to zero before branch push, with an explicit
-operator override and no gate on already-known blocked OLX.
+The missing guard is now implemented. The workflow copies the prior regional
+`meta.json` outside the scrape tree, validates the newly generated payload, and
+then rejects any previously positive/non-blocked source that becomes
+blocked/unknown, disappears or reaches zero before staging and force-push. A
+first publication, persistent blocked OLX, ordinary positive drift and recovery
+all pass. Intentional removal/reset requires the manual
+`allow_source_regression` input, which becomes an explicit CLI flag and emits
+an Actions warning. The current degraded branch is already the immediate
+baseline, so the guard cannot recreate the overwritten healthy snapshot; an
+Otodom recovery must establish the next positive baseline.
 
-### P0 collection/runtime evidence accepted; publication continuity open
+### P0 collection/runtime accepted; continuity implemented, validation open
 
 - **The twice-daily n-online path is current-only.** The portal orders current
   offers before its archive and the walk stops after two consecutive
@@ -214,11 +221,13 @@ operator override and no gate on already-known blocked OLX.
   addresses that measured bottleneck without raising the publication budget.
   Schema 3 then completed the corrective Małopolskie queue in 9.1 minutes with
   zero deferrals/unresolved groups, accepting the measured pilot gate.
-- **Payload integrity is protected; source continuity is not yet.** The offline
-  gate precedes portal work and the generated-data validator protects the JSON,
-  manifests, metadata arithmetic and branch shape. Run `33274226173` proved it
-  still permits a formerly contributing source to fall to blocked/zero and
-  replace a good branch. That is the next P0 safety slice.
+- **Payload integrity and categorical source continuity are now gated.** The
+  offline suite precedes portal work. After scraping, the generated-data
+  validator protects JSON, manifests, metadata arithmetic and branch shape,
+  then compares the new source states with preserved publication metadata. The
+  observed Otodom 15,949→0 transition now exits non-zero before
+  `region_storage stage`; the existing success-only deploy condition suppresses
+  publication after any such failure. Production evidence is still pending.
 
 ### Regional product now live
 
@@ -242,9 +251,9 @@ operator override and no gate on already-known blocked OLX.
 - UUG geocoding selects the candidate matching the catalog TERYT prefix and
   scopes cache keys by that prefix. Same-named places in different regions can
   no longer reuse the wrong centroid.
-- Verification currently covers **244 offline tests**, including catalog,
-  generator, navigation, two-region storage, ambiguous-geocoder and persisted
-  photo-queue regressions.
+- Verification currently covers **255 offline tests**, including catalog,
+  generator, navigation, two-region storage, ambiguous-geocoder, persisted
+  photo-queue regressions, source-continuity transitions and workflow ordering.
 - Production checks after `33090688420` proved the one-region product; deploy
   `33126428927` then proved the live two-region picker, stable
   listing/statistics canonicals, sitemap and catalog. Valid unpublished regions
@@ -253,15 +262,16 @@ operator override and no gate on already-known blocked OLX.
 
 ### Next
 
-1. Add a previous-publication source-continuity gate. When a source that had a
-   positive, non-blocked baseline becomes blocked/unknown or returns zero, fail
-   before the data-branch push. Preserve first-run behavior and known blocked
-   sources, and require an explicit operator override for intentional removal.
-2. Validate the guard with fixtures for new regions, persistent OLX blocking,
-   transient Otodom failure, recovery and override. The failed-output path must
-   retain the previous branch and skip deploy.
-3. After that slice is pushed, do not watch its run. Audit once when complete;
-   a recovered full-source Śląskie run should restore the healthy branch.
+1. Push the implemented P0.7 slice and do not watch its run. The local 255-test
+   gate is green, including first-run, persistent block, catastrophic loss,
+   removal, positive drift, recovery, override and workflow/deploy placement.
+2. Once the workflow has completed, audit it once. Confirm preservation and
+   continuity reporting occur before branch staging. If Otodom recovers, the
+   run should publish and re-establish a positive baseline; if it remains
+   blocked, the already-blocked immediate baseline is allowed by design.
+3. Record production acceptance, then use subsequent warm Śląskie runs to
+   confirm the recovered baseline and normal branch/deploy behavior. A future
+   newly categorical outage must leave that prior data ref live.
 4. Then close the disposable Małopolskie pilot state and decide whether to
    unpublish it. Do not add it to cron or create a 16-region matrix.
 

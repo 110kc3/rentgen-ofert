@@ -2,7 +2,8 @@
 
 Run after ``python -m scraper.main`` and before the data branch is pushed:
 
-    python -m scripts.validate_data site/data/slaskie
+    python -m scripts.validate_data site/data/slaskie \
+        --previous-meta /tmp/previous-meta-slaskie.json
 
 Every JSON/JSON.GZ file is parsed. The dashboard manifest, index and detail
 shards are checked as one atomic payload so a green scrape cannot publish a
@@ -10,6 +11,7 @@ missing, stale or mis-sharded file.
 """
 from __future__ import annotations
 
+import argparse
 import gzip
 import hashlib
 import json
@@ -22,6 +24,10 @@ from scraper import payload
 
 class DataValidationError(ValueError):
     pass
+
+
+SOURCE_HEALTH_VALUES = frozenset({"healthy", "partial", "blocked", "unknown"})
+UNAVAILABLE_SOURCE_STATUSES = frozenset({"blocked", "unknown"})
 
 
 def _read_json(path: pathlib.Path):
@@ -57,7 +63,99 @@ def _human_bytes(size: int) -> str:
     return f"{size} B"
 
 
-def validate_data_dir(data_dir) -> dict:
+def _source_transition(regression: dict) -> str:
+    return (
+        f"{regression['source']} "
+        f"{regression['previous_status']}/{regression['previous_current']:,} -> "
+        f"{regression['current_status']}/{regression['current_current']:,}"
+    )
+
+
+def validate_source_continuity(current_sources: dict, previous_meta=None,
+                               *, allow_regression: bool = False) -> dict:
+    """Reject categorical loss of a previously contributing source.
+
+    A missing source is equivalent to an unknown source with zero current rows.
+    Sources that were already unavailable, and first publications with no prior
+    metadata, deliberately do not establish a positive baseline.
+    """
+    result = {
+        "has_previous": previous_meta is not None,
+        "checked": 0,
+        "override": bool(allow_regression),
+        "regressions": [],
+    }
+    if previous_meta is None:
+        return result
+
+    _require(isinstance(previous_meta, dict),
+             "previous meta.json must contain an object")
+    previous_coverage = previous_meta.get("coverage")
+    _require(isinstance(previous_coverage, dict),
+             "previous meta.coverage must be an object")
+    previous_sources = previous_coverage.get("by_source")
+    _require(isinstance(previous_sources, dict) and previous_sources,
+             "previous meta.coverage.by_source must be a non-empty object")
+    _require(isinstance(current_sources, dict),
+             "current meta.coverage.by_source must be an object")
+
+    regressions = []
+    for name, previous in sorted(previous_sources.items()):
+        _require(isinstance(previous, dict),
+                 f"previous coverage source {name} must be an object")
+        previous_status = previous.get("status")
+        previous_current = previous.get("current")
+        _require(previous_status in SOURCE_HEALTH_VALUES,
+                 f"previous coverage source {name} has invalid health")
+        _require(isinstance(previous_current, int)
+                 and not isinstance(previous_current, bool)
+                 and previous_current >= 0,
+                 f"previous coverage source {name}.current must be a "
+                 "non-negative integer")
+        if (previous_current == 0
+                or previous_status in UNAVAILABLE_SOURCE_STATUSES):
+            continue
+
+        result["checked"] += 1
+        current = current_sources.get(name)
+        if isinstance(current, dict):
+            current_status = current.get("status", "unknown")
+            current_current = current.get("current", 0)
+        else:
+            current_status = "unknown"
+            current_current = 0
+        _require(current_status in SOURCE_HEALTH_VALUES,
+                 f"current coverage source {name} has invalid health")
+        _require(isinstance(current_current, int)
+                 and not isinstance(current_current, bool)
+                 and current_current >= 0,
+                 f"current coverage source {name}.current must be a "
+                 "non-negative integer")
+        if (current_status in UNAVAILABLE_SOURCE_STATUSES
+                or current_current == 0):
+            regressions.append({
+                "source": name,
+                "previous_status": previous_status,
+                "previous_current": previous_current,
+                "current_status": current_status,
+                "current_current": current_current,
+            })
+
+    result["regressions"] = regressions
+    if regressions and not allow_regression:
+        transitions = "; ".join(
+            _source_transition(item) for item in regressions
+        )
+        raise DataValidationError(
+            "source continuity regression: " + transitions
+            + "; refusing to replace a contributing source "
+            "(use --allow-source-regression only for an intentional reset)"
+        )
+    return result
+
+
+def validate_data_dir(data_dir, *, previous_meta=None,
+                      allow_source_regression: bool = False) -> dict:
     root = pathlib.Path(data_dir)
     _require(root.is_dir(), f"regional data directory does not exist: {root}")
 
@@ -159,8 +257,7 @@ def validate_data_dir(data_dir) -> dict:
     _require(isinstance(coverage, dict), "meta.coverage must be an object")
     _require(coverage.get("schema") == 2,
              "meta.coverage.schema must be 2")
-    health_values = {"healthy", "partial", "blocked", "unknown"}
-    _require(coverage.get("status") in health_values,
+    _require(coverage.get("status") in SOURCE_HEALTH_VALUES,
              "meta.coverage.status is invalid")
     _require(meta.get("health") == coverage.get("status"),
              "meta.health does not match coverage.status")
@@ -170,7 +267,7 @@ def validate_data_dir(data_dir) -> dict:
     for name, source in sources.items():
         _require(isinstance(source, dict),
                  f"coverage source {name} must be an object")
-        _require(source.get("status") in health_values,
+        _require(source.get("status") in SOURCE_HEALTH_VALUES,
                  f"coverage source {name} has invalid health")
         for field in ("current", "served_unique"):
             value = source.get(field)
@@ -292,7 +389,7 @@ def validate_data_dir(data_dir) -> dict:
     generated_bytes = sum(path.stat().st_size for path in all_files)
     published_bytes = sum(path.stat().st_size for path in all_files
                           if path.name != "history.json.gz")
-    return {
+    summary = {
         "region": root.name,
         "count": count,
         "raw": int(meta.get("raw") or 0),
@@ -306,6 +403,12 @@ def validate_data_dir(data_dir) -> dict:
         "photos": photos,
         "sources": sources,
     }
+    summary["continuity"] = validate_source_continuity(
+        sources,
+        previous_meta,
+        allow_regression=allow_source_regression,
+    )
+    return summary
 
 
 def github_summary(summary: dict) -> str:
@@ -327,6 +430,23 @@ def github_summary(summary: dict) -> str:
             f"| {name} | {source.get('status', 'unknown')} | "
             f"{int(source.get('current') or 0):,} | "
             f"{int(source.get('served_unique') or 0):,} | {pct} |")
+    continuity = summary.get("continuity")
+    if continuity:
+        regressions = continuity["regressions"]
+        if not continuity["has_previous"]:
+            continuity_line = "first publication; no prior baseline"
+        elif regressions:
+            transitions = "; ".join(
+                _source_transition(item) for item in regressions
+            )
+            continuity_line = f"operator override accepted ({transitions})"
+        else:
+            continuity_line = (
+                f"{continuity['checked']} prior contributing source(s) retained"
+            )
+            if continuity["override"]:
+                continuity_line += "; operator override enabled"
+        lines.extend(["", f"**Source continuity:** {continuity_line}."])
     lines.extend(["", "| Phase | Time |", "|---|---:|"])
     for name, seconds in summary["runtime"]["phases"].items():
         lines.append(f"| {name} | {float(seconds):.1f}s |")
@@ -356,15 +476,48 @@ def github_summary(summary: dict) -> str:
 
 def main(argv=None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
-    if len(argv) != 1:
-        print("usage: python -m scripts.validate_data site/data/<region>",
-              file=sys.stderr)
-        return 2
+    parser = argparse.ArgumentParser(
+        description="Validate generated regional data before publication.")
+    parser.add_argument("data_dir", help="site/data/<region> directory")
+    parser.add_argument(
+        "--previous-meta",
+        help="prior publication's meta.json for source-continuity checks",
+    )
+    parser.add_argument(
+        "--allow-source-regression",
+        action="store_true",
+        help="explicitly allow a contributing source to become unavailable",
+    )
     try:
-        summary = validate_data_dir(argv[0])
+        args = parser.parse_args(argv)
+    except SystemExit as exc:
+        return int(exc.code)
+
+    if args.allow_source_regression:
+        print(
+            "::warning::Source-continuity override enabled; an unavailable "
+            "previously contributing source may be published.",
+            file=sys.stderr,
+        )
+    try:
+        previous_meta = (_read_json(pathlib.Path(args.previous_meta))
+                         if args.previous_meta else None)
+        summary = validate_data_dir(
+            args.data_dir,
+            previous_meta=previous_meta,
+            allow_source_regression=args.allow_source_regression,
+        )
     except DataValidationError as exc:
         print(f"::error::{exc}", file=sys.stderr)
         return 1
+
+    regressions = summary["continuity"]["regressions"]
+    if regressions:
+        transitions = "; ".join(
+            _source_transition(item) for item in regressions
+        )
+        print(f"::warning::Source-continuity override accepted: {transitions}",
+              file=sys.stderr)
 
     line = (f"Validated {summary['region']}: {summary['count']:,} properties, "
             f"health {summary['health']}, {summary['json_files']} JSON files, "
