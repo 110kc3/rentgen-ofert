@@ -7,10 +7,12 @@ and presents it on one searchable page. No application server: a GitHub Actions
 job scrapes, writes static JSON, and GitHub Pages displays it.
 
 Portal blocking and serving caps mean “all listings” is a target, not a current
-guarantee. The latest 2026-08-28 deployment has 30,752 Śląskie and 33,358
-Małopolskie current properties from four contributing sources; Małopolskie is a
-temporary manual pilot whose first warm run missed its runtime/photo gate, not
-a scheduled region. OLX is blocked with HTTP 403; after
+guarantee. The latest 2026-08-29 deployment has 19,352 Śląskie and 32,132
+Małopolskie current properties. Małopolskie's corrective manual pilot passed
+its runtime/photo gate and remains unscheduled. The Śląskie count is a known
+degraded publication: both Otodom roots returned HTTP 403 after a healthy
+28,253-property run, and the pipeline exposed the outage but still replaced the
+good branch. OLX is also blocked with HTTP 403; after
 rejecting cross-category clones and promoted cards from other voivodeships,
 Otodom's evidence-backed Śląskie floor is about 15.9k and its flat root remains
 explicitly partial at the 200-page cap.
@@ -24,19 +26,20 @@ Scraped data and caches live on single-commit **`data-<region>` branches**,
 never in main's git history — main stays a few MB of code while a region's
 branch is force-pushed fresh each run (the price history lives *inside*
 `history.json.gz`, so old git versions of it carry no information). One branch
-per region because a shared one is what a second region would break: Śląskie
-alone is currently ~182 MiB including caches and pipeline-only history, and
+per region because a shared one is what a second region would break: a healthy
+full-source Śląskie snapshot is ~181 MiB including caches and pipeline-only
+history (the current Otodom-less branch is ~149 MiB), and
 every job would fetch, and force-push over, all of everyone's. A deploy overlays
 every `data-*` branch (plus the pre-split shared `data` branch, still read so
 the split needed no flag day).
 
 ## Poland rollout status
 
-As of 2026-08-28, **2 of 16 voivodeships are published while the manual
-Małopolskie pilot is active**; only Śląskie is scheduled. One canonical catalog
-owns every region's label, TERYT prefix, enabled state, cadence, optional anchor
-and explicit per-portal slug. The deployed product is region-aware: `/` is
-generated as a national picker, published regions get stable
+As of 2026-08-30, **2 of 16 voivodeships are published and the manual
+Małopolskie pilot has passed its corrective gate**; only Śląskie is scheduled.
+One canonical catalog owns every region's label, TERYT prefix, enabled state,
+cadence, optional anchor and explicit per-portal slug. The deployed product is
+region-aware: `/` is generated as a national picker, published regions get stable
 `region/<slug>/` and `region/<slug>/stats/` pages, browser state is scoped by
 region, and discovery metadata is generated from complete, enabled data
 actually overlaid. Disabling a catalog entry suppresses its scrape and its
@@ -56,7 +59,8 @@ pages in 20.5 minutes and left the freshly dated archive cache byte-for-byte
 unchanged. This closes the P0 archive-isolation gate. Exact evidence and the
 rollout decision are recorded in
 [`POLAND_ROLLOUT.md`](POLAND_ROLLOUT.md). The next step is still not a
-16-region schedule: a single manual disposable pilot comes before any matrix.
+16-region schedule: publication must first retain the previous good branch
+when a contributing source becomes newly blocked.
 P1 commit `4131f03` is also production-proven: direct deploy `33082048338`,
 regionalized scrape `33082048365` and automatic deploy `33090688420` all
 succeeded. The scrape passed all 224 offline tests, refreshed only
@@ -96,10 +100,27 @@ photo-enabled normalization no longer treats any all-unresolved size group as
 permission to merge by size/price: those ads stay separate, exact portal-ID
 twins still merge, and schema-3 metadata reports the unresolved groups and
 validates that heuristic fallback is off. `RENTGEN_PHOTOS=0` is the only mode
-that explicitly enables the old heuristic. The next gate is another ordinary
-Śląskie validation, followed—only after it finishes—by one corrective manual
-Małopolskie pass. The disposable pilot is not yet accepted and no matrix is
-next.
+that explicitly enables the old heuristic. Push run `33242734428` and schedule
+`33252714173` validated that contract on Śląskie; the latter finished in 89.8
+minutes with a 14.9-second photo phase, 41,750/41,762 critical ads hashed, zero
+unresolved groups/deferrals and 28,253 unique properties from 51,810 raw rows.
+
+Corrective Małopolskie run `33257448934` then passed the pilot gate: 110.9
+minutes total, 9.1 minutes of photos, 48,476/48,483 critical ads hashed, zero
+unresolved groups/deferrals and 32,132 unique properties from a stable 63,596
+raw rows. It refreshed only `data-malopolskie` at `cba13c7`, retained the
+explicitly skipped archive and RCN cache byte-for-byte, and deploy
+`33262428730` published both regions. The unique-count reduction is exactly
+explained by six fewer raw ads and 1,220 additional evidence-backed merges.
+
+The following scheduled Śląskie run `33274226173` revealed the next safety
+gap. Otodom changed from 15,949 ads to a two-root HTTP-403 block; validation
+reported that health regression but still pushed `data-slaskie` and deploy
+`33277384177` replaced the healthy 28,253-property tree with 19,352 properties.
+The next bounded slice is a previous-publication guard: a formerly contributing
+source becoming blocked/unknown or dropping to zero must fail before the branch
+push unless an operator explicitly overrides it. No second-region cron or
+matrix is next.
 The audited status, evidence, decisions, acceptance gates and P0–P5 task order are
 in [`POLAND_ROLLOUT.md`](POLAND_ROLLOUT.md). `TODO.md` remains the detailed
 development diary.
@@ -111,8 +132,8 @@ development diary.
   Małopolskie pilot) on up to five portals — a region-level search on
   Otodom/OLX/gratka/Morizon and per-city sub-domains on
   nieruchomości-online. `RENTGEN_REGION` must name an entry in
-  `site/regions.json`; Małopolskie has passed its cold run, but its first warm
-  run missed the runtime/critical-completion gate and needs one corrective pass.
+  `site/regions.json`; Małopolskie passed its cold run and its corrective warm
+  gate, but remains a manual disposable pilot while rollout closeout finishes.
   Every listing keeps its **town (locality)**, and the dashboard has a searchable
   **town multi-select** filter.
 - Keeps archived / sold listings (e.g. nieruchomości-online *Ogłoszenie archiwalne*)
@@ -187,9 +208,11 @@ development diary.
   `partial`, `blocked` or `unknown`, independently of process success. The
   dashboard therefore keeps a source that returned no listings visible and
   distinguishes a clean `0` from `blokada` or `brak danych`. Schema v2 has run
-  successfully in production through 2026-08-27; the latest completed active
-  output reports Gratka/n-online healthy, Morizon/Otodom partial and OLX
-  blocked. The
+  successfully in production through 2026-08-29. The latest Małopolskie output
+  reports Gratka healthy, Morizon/Otodom/n-online partial and OLX blocked. The
+  latest Śląskie output truthfully reports Otodom and OLX blocked, but also
+  demonstrates why truthful health still needs a previous-publication gate:
+  the degraded branch was published. The
   served/kept split remains important: each scraper filters
   while parsing (otodom drops INVESTMENT
   bundles, OLX drops ads syndicated from Otodom), and comparing kept-against-

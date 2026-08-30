@@ -1,45 +1,42 @@
 # Whole-Poland rollout: status and next tasks
 
-> Audited: 2026-08-29. Production is current through Śląskie cover-path
-> validations `33188821781` and `33199167100`, rejected warm Małopolskie pilot
-> `33161251008`, and two-region deploy `33206145269`. P0.1–P0.6 and P1.1–P1.5
-> are production-validated. P2 remains manual-only: cover-first and
-> single-attempt work passed twice, but its follow-up audit found legacy
-> gallery misses suppressing first cover attempts and unsafe all-unresolved
-> size/price fallback. The schema-3 safety correction needs one normal
-> Śląskie validation before one corrective Małopolskie pass.
+> Audited: 2026-08-30. Production is current through accepted corrective
+> Małopolskie pilot `33257448934`, subsequent Śląskie schedule `33274226173`
+> and two-region deploy `33277384177`. P1 and the manual P2 pilot are
+> production-validated. The pilot met every runtime/photo/convergence gate and
+> remains unscheduled. The latest Śląskie run then exposed the next P0 safety
+> gap: a formerly contributing Otodom became blocked/zero, but the truthful
+> health result still replaced the previous good branch. Source continuity is
+> the next implementation slice.
 > This is the current source of truth for the nationwide rollout. `TODO.md`
 > retains the detailed development diary and older measurements.
 
 ## Executive status
 
-**Śląskie is a trustworthy warm template and the product is genuinely
-region-aware, but the project is still not ready for a 16-voivodeship
-schedule.** The disposable Małopolskie pilot is the second published tree and
-remains manual-only. Its first warm pass was mechanically green but failed the
-rollout gate at 203.1 minutes with 20,608 correctness-critical photo deferrals.
-The next rollout action is to production-validate the schema-3 safety
-correction on Śląskie, then run one corrective Małopolskie pass. The pilot
-cannot be disabled as accepted—and no matrix can begin—until that pass meets
-the gate.
+**The product is genuinely region-aware and the corrective Małopolskie pilot
+passed, but the project is still not ready for a 16-voivodeship schedule.**
+Małopolskie remains manual-only. Its corrective pass finished in 110.9 minutes
+with 9.1 minutes of photos, zero critical deferrals and zero unresolved groups.
+The next rollout action is not another region: add a previous-publication guard
+so a transient source block cannot force-push a materially incomplete branch.
 
 | Area | Status | Evidence / gap |
 |---|---|---|
 | Region-scoped scraper output and caches | Ready | `site/data/<region>`, regional caches and exact branch staging are implemented. |
 | Canonical 16-region configuration | Proven live | `site/regions.json` is validated and owns Polish forms, TERYT, cadence, anchor and explicit portal slugs; the complete Śląskie path ran end to end. |
 | One data branch per region | Proven for two | `data-slaskie` and `data-malopolskie` hold isolated single-commit data/caches; the pilot touched only its branch. |
-| Deploy overlay for multiple region branches | Proven live for two | Latest deploy `33206145269` overlaid both trees; the picker, stable pages, data catalog and sitemap expose both. |
-| Portal coverage | P0 gate met | Corrected Otodom floor is 15.8–15.9k, OLX's one-probe blocked policy is proven, and active n-online retains 10.83–10.87k in 20.5–23.9 min. |
-| Coverage KPI | Proven in production | Schema v2 has published repeatedly: bounded percentages, explicit missing partitions and healthy/partial/blocked source states all survive real runs. |
-| Per-region runtime | Śląskie met; pilot warm rejected | Latest Śląskie finished in 91.8 minutes with a 16.8-second photo phase. Małopolskie's first warm pass took 203.1 minutes, including 96.8 minutes of photos, and deferred 20,608 critical ads. |
+| Deploy overlay for multiple region branches | Proven live for two | Latest deploy `33277384177` overlaid both trees; picker, stable pages, data catalog and sitemap expose both. It also published the known degraded Śląskie branch. |
+| Portal coverage | Collection floor proven; continuity gap open | Corrected Otodom floor is 15.8–15.9k and OLX's one-probe policy is proven, but run `33274226173` allowed Otodom 15,949→0 to replace good data. |
+| Coverage KPI | Truthful, not yet protective | Schema v2 reported the new Otodom block correctly; no previous-publication gate turned that regression into a failed push. |
+| Per-region runtime | Both measured gates met | Healthy Śląskie schema-3 run took 89.8 minutes / 14.9 seconds of photos; corrective Małopolskie took 110.9 minutes / 9.1 minutes of photos. |
 | Region picker and durable regional URLs | Proven live for two | National picker, stable regional paths, region-scoped state, legacy redirects and unpublished/unknown responses passed production checks; live pilot canonicals are region-correct. |
 | Per-region metadata / OG / sitemap / llms.txt | Proven live | Canonical/JSON-LD documents parse and discovery contains only data-backed published regions. |
 | CI region matrix / cadence | Not implemented | The workflow still schedules Śląskie twice daily and accepts other regions only by manual input. |
-| Nationwide data hosting | Not decided | The two current trees serve 201.9 MiB combined; GitHub Pages has a published-site limit of 1 GB. |
+| Nationwide data hosting | Not decided | The two current trees serve 182.2 MiB combined while Śląskie lacks Otodom; healthy full-source sizing is larger. GitHub Pages has a published-site limit of 1 GB. |
 
-**Rollout decision:** do not add a scheduled second region. P1 is live;
-`malopolskie` is enabled only long enough for a manual disposable pilot—not a
-16-region matrix.
+**Rollout decision:** do not add a scheduled second region. P1 and the manual
+pilot are live; `malopolskie` remains manual-only until the source-continuity
+guard lands and its disposable-pilot disposition is recorded.
 
 ## Production snapshot
 
@@ -53,14 +50,15 @@ the gate.
   [Śląskie metadata](https://110kc3.github.io/rentgen-ofert/data/slaskie/meta.json)
   and [Małopolskie metadata](https://110kc3.github.io/rentgen-ofert/data/malopolskie/meta.json)
   all return HTTP 200.
-- [Deploy run 33206145269](https://github.com/110kc3/rentgen-ofert/actions/runs/33206145269)
-  published both regional trees. The generated catalog reports 30,752 Śląskie
-  properties / 119.3 MiB and 33,358 Małopolskie / 82.6 MiB served.
-- Latest Śląskie data is **2026-08-28 19:57 UTC**, **30,752** unique properties
-  from **51,874** current raw listings. Pilot Małopolskie data is
-  **2026-08-28 13:17 UTC**, **33,358** from **63,602**.
-- Both regions have four contributing sources: Otodom, Gratka, Morizon and
-  nieruchomości-online. OLX contributed zero after one bounded HTTP-403 probe.
+- [Deploy run 33277384177](https://github.com/110kc3/rentgen-ofert/actions/runs/33277384177)
+  published both regional trees. The generated catalog reports 19,352 Śląskie
+  properties / 86.0 MiB and 32,132 Małopolskie / 96.1 MiB served.
+- Latest Śląskie data is **2026-08-29 21:57 UTC**, **19,352** unique properties
+  from **35,452** raw listings. It is explicitly degraded: Gratka, Morizon and
+  n-online contributed, while both Otodom roots and OLX returned HTTP 403.
+- Pilot Małopolskie data is **2026-08-29 16:14 UTC**, **32,132** from
+  **63,596**, with Otodom, Gratka, Morizon and n-online contributing and OLX
+  blocked after one bounded probe.
 - The P1/pilot scrapes ran **224 offline tests before portal work**; queue and
   first warm validation ran the expanded **230-test** gate. The cover-path
   slice expanded it to **235 tests**; this safety slice expands it to **244
@@ -69,11 +67,11 @@ the gate.
 
 ### Latest completed validation runs
 
-The corrected baselines, explicit archive sequence, regional release, cold
-pilot, queue validation and first warm pilot all passed pipeline validation and
-deployed. The Małopolskie warm row failed the stricter P2 rollout gate; the two
-following Śląskie rows validated the cover-path correction without accepting
-the pilot:
+The corrected baselines, archive sequence, regional release and photo-safety
+iterations all passed pipeline validation and deployed. The first Małopolskie
+warm row failed the stricter P2 gate; its corrective row passed. The final row
+is mechanically green but is a publication-policy failure because Otodom's
+new block replaced a good Śląskie branch:
 
 | Run | Trigger | Scrape runtime | Result | Unique / raw |
 |---|---|---:|---|---:|
@@ -89,6 +87,10 @@ the pilot:
 | [33161251008](https://github.com/110kc3/rentgen-ofert/actions/runs/33161251008) | Małopolskie warm manual | 203.1 min | CI success, **P2 rejected**; deploy `33174768425` | 33,358 / 63,602 |
 | [33188821781](https://github.com/110kc3/rentgen-ofert/actions/runs/33188821781) | cover-path push | about 87.9 min | success | — |
 | [33199167100](https://github.com/110kc3/rentgen-ofert/actions/runs/33199167100) | Śląskie schedule | 91.8 min | success; deploy `33206145269` | 30,752 / 51,874 |
+| [33242734428](https://github.com/110kc3/rentgen-ofert/actions/runs/33242734428) | schema-3 push | — | success; deploy `33246807232` | Śląskie validation passed |
+| [33252714173](https://github.com/110kc3/rentgen-ofert/actions/runs/33252714173) | Śląskie schedule | 89.8 min | success; deploy `33256536544` | 28,253 / 51,810 |
+| [33257448934](https://github.com/110kc3/rentgen-ofert/actions/runs/33257448934) | Małopolskie corrective manual | 110.9 min | **P2 accepted**; deploy `33262428730` | 32,132 / 63,596 |
+| [33274226173](https://github.com/110kc3/rentgen-ofert/actions/runs/33274226173) | Śląskie schedule | 73.3 min | CI success, **publication rejected**; deploy `33277384177` | 19,352 / 35,452 |
 
 ### Cold Małopolskie pilot evidence
 
@@ -224,23 +226,69 @@ The schema-3 safety contract closes both holes:
 5. metadata and generated-data validation report unresolved groups/listings
    and enforce that fallback is off whenever photo processing is enabled.
 
-One ordinary Śląskie run must validate schema 3 before the corrective
-active-only Małopolskie run is dispatched.
+Push run `33242734428` and schedule `33252714173` validated schema 3. The
+schedule completed in 89.8 minutes with a 14.9-second photo phase; 41,750 of
+41,762 critical ads had hashes, only 12 did not, and unresolved groups,
+deferrals, backlog and heuristic fallback were all zero. Branch `data-slaskie`
+advanced to `c0fdb96`, and deploy `33256536544` published 28,253 unique
+properties from 51,810 raw rows.
+
+### Corrective Małopolskie evidence — pilot gate accepted
+
+Manual active-only run `33257448934` used `nol_archive=skip`, executed from
+14:22–16:14 UTC on `c7e21df`, and passed all 244 offline tests plus generated
+data validation. Its scrape took 6,655.6 seconds (**110.9 minutes**) against the
+180-minute limit. Photos took 543.8 seconds (**9.1 minutes**) against the
+60-minute limit: 48,476 of 48,483 critical ads had hashes, only seven did not,
+and critical/history deferrals, unresolved groups and backlog were all zero.
+The old size/price heuristic remained disabled.
+
+Source inventory was stable relative to the rejected warm run:
+
+| Source | Rejected warm | Corrective warm | Corrective evidence | Runtime |
+|---|---:|---:|---|---:|
+| Otodom | 12,578 | 12,583 | 253 pages; houses healthy, flats partial at page 200/211; 67.8% overall | 11.7 min |
+| OLX | 0 | 0 | one correct regional root probe, HTTP 403 | 0.1 min |
+| Gratka | 20,048 | 20,036 | 777 pages, healthy, 99.9% | 27.7 min |
+| Morizon | 20,051 | 20,036 | 777 pages, zero issues; 100% against a lower bound | 28.9 min |
+| nieruchomości-online | 10,925 | 10,941 | 576 current-only pages; Kraków flats sole cap | 22.5 min |
+
+Raw inventory moved only 63,602→63,596 (-6). Unique properties moved
+33,358→32,132 because the number of merged offers increased by exactly 1,220;
+the remaining six are the raw-row change. Non-development properties still top
+out at eight offers. The phash cache rose from 28,012 to 49,402 positive
+entries, its 22,452-URL backlog emptied, and negatives fell from 12,403 to
+1,803. This is an explainable evidence-convergence result, not a source
+collapse.
+
+The job force-refreshed only `data-malopolskie` to single-commit `cba13c7`: 71
+regional paths, no Śląskie path. The explicitly skipped 2026-08-27 / 14,429-row
+n-online archive cache and the RCN snapshot kept their exact Git blobs. Branch
+contents measure 121.8 MiB total, 106.7 MiB regional data, 10.6 MiB pipeline
+history, 96.1 MiB served and 15.1 MiB caches. Deploy `33262428730` published
+both trees. The live picker, listing/statistics paths and regional canonicals
+returned HTTP 200. Małopolskie now has four locality-less properties,
+28,848/32,132 geocoded, 60 n-online towns for each type and no obvious Śląskie
+locality leak. The manual pilot exit gate is accepted.
 
 ### Latest Śląskie source health
 
-These are the published schema-v2 values from schedule `33199167100`:
+These are the currently published schema-v2 values from schedule
+`33274226173`:
 
 | Source | Current kept listings | Reported search state | Assessment |
 |---|---:|---|---|
-| Otodom | 15,957 | `partial`, 71.9%; flat root stops at page 200 | Correct regional floor; 263 pages completed with no refusal. |
+| Otodom | 0 | `blocked`; both house and flat roots returned HTTP 403 | Catastrophic regression from 15,949 in the preceding healthy run. |
 | OLX | 0 | `blocked`, one real root row, HTTP 403 | Runner/IP block; one probe ends the portal in about three seconds. |
-| Gratka | 12,515 | `partial`, 99.9%; 564 pages, zero issues | Full useful inventory, with the small declared-total gap explicit. |
-| Morizon | 12,515 | `partial`, 100% against a lower-bound total; 564 pages, zero issues | Useful inventory matches Gratka and no partition failed. |
-| nieruchomości-online | 10,887 current | `healthy`; 579 current-only pages; 47,754 archived rows cached from 2026-08-27 | The cache remained available and the run served no archive rows into its current result. |
+| Gratka | 12,499 | `partial`, 99.9%; 564 pages, zero issues | Stable useful inventory. |
+| Morizon | 12,494 | `partial`, 100% against a lower-bound total; 564 pages, zero issues | Stable useful inventory and no failed partition. |
+| nieruchomości-online | 10,459 current | `healthy`; 560 current-only pages; 47,754 archived rows cached from 2026-08-27 | The cache remained available and no archive rows entered the current result. |
 
-The published unique count is lower than the source sum because Gratka and
-Morizon substantially overlap and are merged.
+The previous healthy schema-3 run had 28,253 unique / 51,810 raw rows and
+15,949 Otodom listings. The latest has 19,352 / 35,452 and no Otodom. Coverage
+reported the outage truthfully, but validation still pushed `data-slaskie` at
+`2460527`; deploy `33277384177` replaced the good branch. This is the evidence
+for the next source-continuity gate.
 
 ### What production now proves
 
@@ -264,24 +312,27 @@ Morizon substantially overlap and are merged.
   Git blob and SHA-256 byte-identical. Its n-online phase took 20.5 minutes.
 - **The warm photo backlog has converged.** Four corrected active runs completed
   all correctness candidates in roughly 32–74 seconds with no budget
-  exhaustion, so P0.5 remains closed for the Śląskie template. The cold pilot
-  proved explicit queueing is required for onboarding; its first warm pass
-  then proved ordering alone is insufficient when a portal's detail pages are
-  blocked. Cover-first, no-retry correction targets that P2-specific evidence.
+  exhaustion. Schema 3 then processed Małopolskie's corrective queue in 9.1
+  minutes with zero deferrals/unresolved groups, so P0.5 and the P2 photo gate
+  are accepted.
 - **The corrected Otodom recovery succeeded.** Duplicate-category cards,
   repeated portal clones and promoted cards from other voivodeships had
   inflated the earlier 16.3k count. After rejecting them, all three runs kept
   **15,921 / 15,876 / 15,875** valid regional rows with 263/263 successful
   requests and no refusal. P0.2 therefore approves 15.8–15.9k as its explicit
   evidence-backed floor; the forced/follow-up runs retained 15,887/15,866 with
-  the same request shape, and experimental bands remain opt-in and additive.
+  the same request shape, and schema-3 run `33252714173` retained 15,949. The
+  later two-root 403 is a transient source outage that should have retained
+  that good branch; experimental bands remain opt-in and additive.
 - **The OLX policy succeeded.** All five runs made one house page-one probe,
   received HTTP 403, stopped in seconds, skipped the flat request synthetically
   and published one issue with source health `blocked`. P0.3 is accepted.
-- **The publication gate succeeded.** Every corrected/forced/following run
-  executed the offline suite before scraping, validated 71 generated JSON
-  files and 118.4–119.4 MiB before pushing, refreshed only `data-slaskie`, and
-  triggered a successful Pages deploy.
+- **Payload validation succeeded; publication continuity did not.** Every run
+  executes the offline suite before scraping and validates the generated tree
+  before its regional push. That protects structure and arithmetic, but run
+  `33274226173` proved it does not compare source state with the previous good
+  publication. A categorical contributing-source regression must become a red
+  workflow so the existing branch and Pages deployment remain untouched.
 - **The regional product succeeded live.** P1 scrape `33082048365` refreshed
   only `data-slaskie`; its archive cache retained the forced-refresh SHA-256
   and its 500 new geo entries use the `24|…` scope. The shared cache retained
@@ -293,27 +344,30 @@ Morizon substantially overlap and are merged.
 
 ### Runtime and scheduling capacity
 
-Representative phase times from the latest active-only run `33072698054`:
+Representative phase times from accepted corrective Małopolskie run
+`33257448934`:
 
 | Phase | Time |
 |---|---:|
-| Otodom | 10.2 min |
+| Otodom | 11.7 min |
 | OLX (blocked) | 0.1 min |
-| Gratka | 18.3 min |
-| Morizon | 19.7 min |
-| nieruchomości-online | 20.5 min |
-| Photo hashing | 1.0 min |
-| History preparation/update | 6.8 min |
-| Delist + RCN + geo + write | 3.1 min |
-| **Whole scrape** | **79.6 min** |
+| Gratka | 27.7 min |
+| Morizon | 28.9 min |
+| nieruchomości-online | 22.5 min |
+| Photo hashing | 9.1 min |
+| History preparation/update | 2.8 min |
+| Delist + RCN + geo + write | 8.2 min |
+| **Whole scrape** | **110.9 min** |
 
-At the corrected roughly 86.0-minute active average, one daily sweep of 16
-Śląskie-sized regions would need about **22.9 runner-hours per day**, or
-**11.5 hours** at `max-parallel: 2`. That is arithmetic, not an operating plan:
+The healthy schema-3 Śląskie and accepted Małopolskie warm measurements span
+89.8–110.9 minutes. At their roughly 100.4-minute mean, one daily sweep of 16
+regions would need about **26.8 runner-hours per day**, or **13.4 hours** at
+`max-parallel: 2`. That is arithmetic, not an operating plan:
 most cold caches, different inventories and portal blocking remain unmeasured,
 and parallel regions can worsen shared runner-IP pressure. A matrix is still
-not justified: one cold and one rejected warm pilot are measured, but its
-corrective convergence and every other region remain unknown.
+not justified: only one pilot has converged, every other region is unknown, and
+the current source-continuity hole can publish a catastrophically incomplete
+branch.
 
 The capacity gate should be **at most 180 minutes per warm region**, with a
 preferred target of **150 minutes** for headroom, before a two-wide daily
@@ -324,17 +378,19 @@ cadence.
 
 Current regional branch contents:
 
-| Part | Śląskie | Małopolskie latest warm |
+| Part | Śląskie latest degraded | Małopolskie corrective |
 |---|---:|---:|
-| Whole per-region branch | 181.8 MiB | 105.0 MiB |
-| Regional data including pipeline history | 150.9 MiB | 91.2 MiB |
-| Pipeline-only `history.json.gz` removed before deploy | 31.6 MiB | 8.6 MiB |
-| **Data actually served** | **119.3 MiB** | **82.6 MiB** |
-| Caches on the branch | 30.9 MiB | 13.8 MiB |
-| `index.json` alone | 22.9 MiB | 23.4 MiB |
+| Whole per-region branch | 149.2 MiB | 121.8 MiB |
+| Regional data including pipeline history | 117.8 MiB | 106.7 MiB |
+| Pipeline-only `history.json.gz` removed before deploy | 31.7 MiB | 10.6 MiB |
+| **Data actually served** | **86.0 MiB** | **96.1 MiB** |
+| Caches on the branch | 31.4 MiB | 15.1 MiB |
+| `index.json` alone | 13.3 MiB | 23.2 MiB |
 
-The live two-region data payload is therefore **201.9 MiB** before the small
-application shell and generated pages.
+The live two-region data payload is therefore **182.2 MiB** before the small
+application shell and generated pages. This is not a healthy capacity baseline:
+the preceding full-source Śląskie branch was 180.9 MiB total and served 117.5
+MiB, which would put the same pair at 213.6 MiB served.
 
 GitHub currently documents a **1 GB published-site limit**, a 10-minute deploy
 timeout and a soft 100 GB/month bandwidth limit: [GitHub Pages limits](https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits).
@@ -374,10 +430,11 @@ approaches the limit.
    its cache byte-for-byte.
 7. **No automated test gate protected the expensive scrape. Resolved in P0.6.**
    Production runs execute the fixture-only suite before portal requests.
-8. **A green workflow meant only “some data published.” Resolved in P0.1/P0.6.**
-   Health remains separate from process success, and the generated-data
-   validator blocks malformed/incomplete publications while writing the source,
-   runtime and byte summary operators need.
+8. **A green workflow meant only “some data published.” Partially resolved.**
+   Health remains separate from process success, and generated-data validation
+   blocks malformed publications while writing the source/runtime/byte summary
+   operators need. It does not yet compare a source with the previous good
+   publication; finding 11 is the remaining operational half.
 9. **Portal order and retrying detail pages were not a cold photo-work policy.**
    Małopolskie first deferred 36,830 ads in portal order. Correctness-first,
    age-persisted ordering was production-validated on Śląskie, but the warm
@@ -385,12 +442,19 @@ approaches the limit.
    retries consumed 96.8 minutes. Cover-first, single-attempt photo work is the
    measured correction and passed twice on Śląskie.
 10. **Legacy gallery misses and all-unresolved groups made zero deferrals an
-    unsafe completeness signal.** The latest run had zero deferrals but 5,107
-    critical rows without hashes: old negative entries could suppress a first
-    cover attempt, after which size/price fallback could merge a wholly
-    unresolved group. Negative attempt scope, first-cover migration, safe
-    photo-mode normalization and schema-3 invariants are implemented and now
-    await production validation.
+    unsafe completeness signal.** Schema-2 run `33199167100` had zero
+    deferrals but 5,107 critical rows without hashes: old negative entries
+    could suppress a first cover attempt, after which size/price fallback could
+    merge a wholly unresolved group. Negative attempt scope, first-cover
+    migration, safe photo-mode normalization and schema-3 invariants were
+    validated twice on Śląskie and then accepted on corrective Małopolskie.
+11. **Truthful source health did not protect the previous good branch.** Run
+    `33274226173` correctly marked Otodom blocked after two HTTP-403 roots, but
+    still force-pushed a 35,452-row raw tree over the preceding 51,810-row
+    publication. The next slice must compare categorical source continuity
+    before push: preserve first runs and persistently blocked sources, but fail
+    when a previously positive/non-blocked source becomes blocked, unknown or
+    zero unless an operator explicitly overrides it.
 
 ## Decisions for the next implementation round
 
@@ -408,9 +472,14 @@ approaches the limit.
 - Use GitHub Pages for the application shell, but plan to put nationwide data
   in versioned, CORS-enabled object storage (R2 or another S3-compatible store).
   Compact the JSON either way because it also improves first load.
-- Pilot **`malopolskie`** first after the P0 gate. It is a meaningful cold-region
-  test for URL slugs, town derivation, RCN `12*`, dense-city pagination and a
-  no-anchor dashboard. `dolnoslaskie` remains the fallback pilot.
+- Treat **`malopolskie`** as the completed first pilot. Its cold, rejected warm
+  and accepted corrective runs now cover URL slugs, town derivation, RCN
+  `12*`, dense-city pagination, branch isolation and a no-anchor dashboard. It
+  remains manual until its disposable-pilot disposition is recorded.
+- Preserve the last good regional branch when a formerly contributing source
+  becomes categorically unavailable. Normal count drift and already-blocked
+  OLX must not trip the guard; intentional source removal needs an explicit
+  override.
 - Do not promise daily freshness for all 16 regions until the measured capacity
   supports it. Start with a documented slower cadence if necessary.
 
@@ -420,9 +489,10 @@ approaches the limit.
 
 No second scheduled region is added in this phase.
 
-**Current pick-up point:** P0 is complete and live-validated, including the
-forced/following archive sequence. Publish P1, then proceed to exactly one
-manual pilot.
+**Current pick-up point:** the P0 collection/runtime work and P1 regional
+architecture are live-validated, and the manual P2 pilot passed. Run
+`33274226173` reopens one narrow P0 publication concern as P0.7: source health
+must protect the previous good branch, not merely describe its replacement.
 
 - [x] **P0.1 Redesign the coverage model and region health result.**
   - Record parent inventory total once per source/type.
@@ -548,6 +618,10 @@ manual pilot.
     hashes despite zero deferrals. Legacy gallery negatives now cannot suppress
     a first cover attempt; photo-enabled all-unresolved groups stay separate;
     and schema-3 metrics/validation enforce that heuristic fallback is off.
+  - **Corrective pilot accepted 2026-08-29:** run `33257448934` processed
+    48,483 critical Małopolskie ads in 9.1 minutes with only seven without a
+    hash, zero deferrals/unresolved groups and fallback disabled. The complete
+    run took 110.9 minutes.
 
 - [x] **P0.6 Add a cheap CI quality gate and run summary.**
   - Run all offline tests before any network work.
@@ -566,14 +640,31 @@ manual pilot.
   - **Reconfirmed 2026-08-27:** the forced/following pair ran the same 206-test
     pre-request gate, validated 119.4/119.0 MiB and both deployed successfully.
 
-**P0 exit gate:** two consecutive warm Śląskie runs publish without a silent
-source regression, finish within 180 minutes (150 preferred), expose truthful
-health/coverage, and retain the expected data branch/deploy behavior.
+- [ ] **P0.7 Keep a categorical source outage from replacing good data.**
+  - Preserve the prior regional `meta.json` long enough to compare source
+    continuity after the new generated tree validates.
+  - If a source that was positive and non-blocked becomes `blocked`, `unknown`
+    or zero, fail before the force-push. A red update already suppresses the
+    deploy workflow and leaves the prior branch live.
+  - Do not fail a first regional run, a source already known blocked (OLX), or
+    ordinary positive count drift. Provide an explicit, logged operator
+    override for intentional source removal/reset.
+  - Test new-region, persistent-block, catastrophic-loss, recovery and override
+    cases, plus workflow placement before `region_storage stage`/push.
+  - **Accept when:** the `33274226173` Otodom 15,949→0 shape is rejected while
+    a normal warm fixture and persistent OLX zero pass; the data ref remains at
+    its previous commit on rejection.
 
-**P0 exit accepted 2026-08-27:** four active runs finished in 79.6–90.0 minutes
-with stable corrected source floors and the required gate/branch/deploy chain.
-The forced refresh stayed within 180 minutes, and its following active run
-proved that archive work remained isolated behind the retained cache.
+**P0 exit gate:** two consecutive warm Śląskie runs publish without a source
+continuity regression, finish within 180 minutes (150 preferred), expose
+truthful health/coverage, and retain the expected data branch/deploy behavior.
+
+**P0 collection/runtime exit accepted 2026-08-27:** four active runs finished
+in 79.6–90.0 minutes with stable corrected source floors and the required
+gate/branch/deploy chain. The forced refresh stayed within 180 minutes, and its
+following active run proved that archive work remained isolated behind the
+retained cache. P0.7 is the remaining publication-continuity correction
+discovered on 2026-08-29.
 
 ### P1 — make the product genuinely region-aware
 
@@ -626,7 +717,7 @@ fixture invariants, so the one-region production path is safe for P2.
   - **Completed 2026-08-27:** run `33098785162` created only
     `data-malopolskie`, published 40,811 / 61,883 current rows and deployed in
     `33126428927`; the catalog cadence remains `manual`.
-- [ ] Validate all portal region URLs, locality normalization, n-online’s
+- [x] Validate all portal region URLs, locality normalization, n-online’s
   derived town list, RCN prefix `12*`, geo convergence, output sizes and every
   health/coverage state.
   - **Cold evidence recorded:** all configured roots were exercised (OLX's
@@ -635,35 +726,51 @@ fixture invariants, so the one-region production path is safe for P2.
     published an explicit state. Five missing localities, powiat fallbacks and
     4,370 cold-run listings awaiting coordinates keep convergence open through
     the corrective run.
+  - **Corrective evidence accepted 2026-08-29:** all four reachable source
+    inventories stayed stable, both n-online types retained 60 towns, archive
+    and RCN cache blobs stayed unchanged, locality-less properties fell to four,
+    geocoded properties reached 28,848/32,132 and no obvious Śląskie locality
+    leaked into the regional index. Every source retained explicit health.
 - [x] Run a second warm pass to measure cache benefit and convergence.
   - **Completed but rejected 2026-08-28:** active-only run `33161251008`
     recovered Morizon and preserved branch/cache isolation, but 20,608 critical
     photo deferrals and 203.1-minute runtime failed the pilot gate. Pipeline
     success/deploy `33174768425` does not override that result.
-- [ ] Run one corrective warm pass after the schema-3 safety slice is validated.
-  - Let its push-triggered Śląskie workflow finish and audit it once. Only if
-    schema-3 unresolved-group metrics, disabled fallback and branch validation
-    pass, dispatch exactly one manual
-    Małopolskie run with `nol_archive=skip`; do not add it to cron or watch it.
-  - Accept only with zero critical deferrals, photo runtime at most 60 minutes,
-    complete runtime at most 180 minutes and an explainable stable unique/raw
-    relationship.
-- [ ] Verify the deploy contains both regions, the picker/counts work, regional
+- [x] Run one corrective warm pass after the schema-3 safety slice is validated.
+  - **Accepted 2026-08-29:** exactly one manual run `33257448934` used
+    `nol_archive=skip`. It had zero critical/history deferrals, zero unresolved
+    groups, 9.1-minute photos, 110.9-minute total runtime and the exactly
+    reconciled 32,132 / 63,596 unique/raw relationship. It remains off cron.
+- [x] Verify the deploy contains both regions, the picker/counts work, regional
   filters survive reload/share, and no Śląskie text leaks into Małopolskie.
   - **Cold deploy verified:** both trees, picker counts, listing/statistics
     canonicals and sitemap entries are live. Browser reload/share behavior and
     the final post-warm comparison remain open.
-- [ ] Record the complete pilot in this document with run IDs, timings, request
+  - **Corrective deploy verified:** deploy `33262428730` succeeded; the current
+    live picker and both listing/statistics paths return HTTP 200 with regional
+    titles/canonicals and the correct 32,132 Małopolskie count. The 244-test
+    suite covers regional reload/share state and branch sibling preservation.
+- [x] Record the complete pilot in this document with run IDs, timings, request
   counts, source yields, archive size and branch/served bytes.
   - **Cold and rejected-warm evidence complete:** both are recorded above;
-    append the corrective comparison before accepting this item and exit gate.
+    the corrective comparison is recorded above with cache, path, runtime,
+    source, locality, size and deploy evidence.
 
 **Pilot exit gate:** cold plus a gate-accepted warm run, no unexplained count
 collapse, zero correctness-critical photo deferrals, photo work within 60
 minutes, total warm runtime within 180 minutes, truthful regional metadata and
 an easy way to disable the pilot without affecting Śląskie.
 
+**Pilot exit accepted 2026-08-29:** the cold, rejected warm and corrective warm
+sequence is complete. The accepted run met every numerical gate, refreshed
+only `data-malopolskie`, and the tested catalog kill switch can unpublish the
+pilot without deleting its branch or touching Śląskie. Keep it manual while
+P0.7 lands, then record whether the disposable tree stays published.
+
 ### P3 — prove scheduling capacity before building the full matrix
+
+Do not begin P3 until P0.7 protects the last good publication and the completed
+Małopolskie pilot's keep/unpublish decision is recorded.
 
 - [ ] Scout one page per source/type for all 16 regions to rank them by declared
   inventory and detect bad slugs cheaply.
