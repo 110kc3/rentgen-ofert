@@ -20,6 +20,7 @@ CATALOG_PATH = ROOT / "site" / "regions.json"
 PORTALS = ("otodom", "olx", "gratka", "morizon")
 CADENCES = {"manual", "twice_daily", "daily", "weekly"}
 SLUG_RE = re.compile(r"^[a-z]+(?:-[a-z]+)*$")
+PORTAL_SLUG_RE = re.compile(r"^[a-z]+(?:-{1,2}[a-z]+)*$")
 TERYT_RE = re.compile(r"^\d{2}$")
 
 # Poland assigns the 16 voivodeships the even two-digit prefixes 02..32. The
@@ -67,7 +68,8 @@ def _validate_region(entry, number):
              f"portals for {slug!r} must contain exactly: {', '.join(PORTALS)}")
     for portal in PORTALS:
         value = portals[portal]
-        _require(isinstance(value, str) and bool(SLUG_RE.fullmatch(value)),
+        _require(isinstance(value, str)
+                 and bool(PORTAL_SLUG_RE.fullmatch(value)),
                  f"invalid {portal} slug for {slug!r}: {value!r}")
 
     anchor = entry.get("anchor")

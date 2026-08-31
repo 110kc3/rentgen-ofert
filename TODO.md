@@ -3,7 +3,7 @@
 > Keep this file and `README.md` updated after each change.
 > Last updated: 2026-08-31
 
-## Current (2026-08-31) — pilot unpublished; bounded P3 scout ready
+## Current (2026-08-31) — first P3 scout audited; corrective rerun pending
 
 The corrected Śląskie baseline was stable across five runs on main SHA
 `701795e`. Those runs rejected cross-category clones, duplicate cards within a
@@ -200,6 +200,13 @@ reversible. Śląskie remained published and advanced normally to 28,277 unique
 properties from 51,826 raw rows in 95.4 minutes, with its positive sources and
 zero-deferral/unresolved photo state intact.
 
+Scheduled update `33395659119` subsequently retained that healthy state. It
+completed in 91.7 minutes, passed the then-current 264-test pre-request gate,
+made 264/264 successful Otodom requests, and published 28,351 unique properties
+from 51,845 raw rows with 16,022 Otodom listings and zero photo deferrals or
+unresolved groups. Deploy `33404452902` published the resulting one-region
+artifact.
+
 The first P3 implementation slice adds a separate manual-only nationwide
 scout. It validates the catalog and offline suite before making at most one
 non-retrying request for each of 16 regions × four region-wide sources × two
@@ -212,8 +219,33 @@ production traffic lock, stops starting requests after 40 minutes while
 retaining explicit unattempted rows, and has no schedule, matrix,
 data/cache/photo work or push path. Nieruchomości-online is declared out of
 scope because it has no region-wide root; an arbitrary town would not be
-comparable. The offline gate is now **264/264**. The first manual scout run and
-artifact audit remain open.
+comparable.
+
+First manual scout `33411783792` completed successfully and its full artifact
+was audited. It retained all 128 unique target rows, made 97 real requests with
+no retries, used 203.5 of 2,400 budgeted seconds, and did not exhaust its
+runtime budget. Statuses were 92 `ok`, one OLX `blocked`, 31
+`skipped_after_block`, and four Otodom `not_found`. Gratka and Morizon each
+returned all 32 targets; Otodom returned 28 and OLX stopped after the first
+Dolnośląskie house refusal. No redirect was observed.
+
+The four 404s were both property types for `kujawsko-pomorskie` and
+`warminsko-mazurskie`. Otodom's indexed roots use double hyphens in those two
+portal slugs, so the catalog now records `kujawsko--pomorskie` and
+`warminsko--mazurskie` without weakening the canonical-slug grammar. The audit
+also found that the original summary assigned ordinal ranks to those four-probe
+regions beside the fourteen six-probe regions. Ranking now derives the most
+common exact set of declared source/type targets, requires that set to be
+non-empty, and gives incomplete shapes no rank. Three regression tests cover
+the two explicit roots, strict
+canonical/portal validation, and the partial-ranking case; the offline gate is
+now **267/267**.
+
+Among the fourteen comparable first-run rows, the lowest provisional declared
+sums were Opolskie 4,275, Świętokrzyskie 6,299, Lubuskie 7,018, Podlaskie 7,457
+and Lubelskie 9,463. These are cross-source signals, not unique listings, and no
+next region is selected until the corrected hosted rerun confirms both Otodom
+roots and a common six-target ranking shape.
 
 ### P0 collection, runtime and publication continuity accepted
 
@@ -295,7 +327,7 @@ artifact audit remain open.
 - UUG geocoding selects the candidate matching the catalog TERYT prefix and
   scopes cache keys by that prefix. Same-named places in different regions can
   no longer reuse the wrong centroid.
-- Verification currently covers **264 offline tests**, including catalog,
+- Verification currently covers **267 offline tests**, including catalog,
   generator, navigation, two-region storage, ambiguous-geocoder, persisted
   photo-queue regressions, source-continuity transitions, bounded scout
   parsing/request behavior and workflow ordering.
@@ -315,9 +347,13 @@ artifact audit remain open.
    artifact now contains only Śląskie and branch `data-malopolskie` is retained.
 2. [x] Implement a manual-only, explicitly bounded one-page source/type scout
    for all 16 catalog regions, with aggregate evidence and no publication path.
-3. Run the scout once from a hosted runner and audit its artifact: rank declared
-   inventory, identify unreachable sources and review every bad-slug candidate.
-4. Use those measurements to choose a daily/two-wide or slower serial capacity
+3. [x] Run the scout once from a hosted runner and audit every target/status row,
+   unreachable source and bad-slug candidate (`33411783792`).
+4. [x] Correct the two Otodom compound slugs and prevent incomplete measurement
+   shapes from receiving ordinal ranks.
+5. Rerun the corrected scout and require zero bad-slug candidates plus one
+   common six-target ranking shape before choosing the next pilot.
+6. Use those measurements to choose a daily/two-wide or slower serial capacity
    contract before enabling another region.
 
 ## Superseded (2026-08-13) — stop before region two and repair the template

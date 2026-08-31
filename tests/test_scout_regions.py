@@ -159,6 +159,65 @@ def test_one_refusal_stops_that_source_without_dropping_target_rows():
                if check["source"] == "olx")
 
 
+def test_incomplete_measurement_shape_does_not_receive_a_rank():
+    selected = regions.load_catalog()["regions"][:3]
+    probes = []
+    for number, region in enumerate(selected):
+        for source in regions.PORTALS:
+            for typ in scout_regions.TYPES:
+                complete_target = source != "olx" and not (
+                    number == 2 and source == "otodom")
+                probes.append({
+                    "region": region["slug"],
+                    "source": source,
+                    "type": typ,
+                    "status": "ok" if complete_target else "not_found",
+                    # Make the partial region's sum much larger to prove that
+                    # magnitude cannot move it into the comparable ranking.
+                    "declared_inventory": (
+                        10_000 if complete_target and number == 2
+                        else 10 if complete_target else None),
+                    "declared_is_minimum": False,
+                })
+
+    summary, ranking_targets = scout_regions._region_summary(selected, probes)
+    by_region = {row["region"]: row for row in summary}
+
+    assert ranking_targets == [
+        "gratka/flat", "gratka/house", "morizon/flat", "morizon/house",
+        "otodom/flat", "otodom/house",
+    ]
+    assert {
+        by_region[region["slug"]]["rank"] for region in selected[:2]
+    } == {1, 2}
+    assert all(by_region[region["slug"]]["ranking_status"] == "comparable"
+               for region in selected[:2])
+    partial = by_region[selected[2]["slug"]]
+    assert partial["declared_sum"] == 40_000
+    assert partial["ranking_status"] == "incomplete"
+    assert partial["rank"] is None
+
+    report = {
+        "generated_at": "2026-08-31T09:00:00Z",
+        "scope": {
+            "requests_made": len(probes),
+            "request_budget": len(probes),
+            "target_probes": len(probes),
+            "elapsed_seconds": 0,
+            "runtime_budget_seconds": 2400,
+            "runtime_budget_exhausted": False,
+        },
+        "summary": {
+            "status_counts": {"not_found": 8, "ok": 16},
+            "ranking_declared_targets": ranking_targets,
+            "regions": summary,
+            "slug_checks": [],
+        },
+    }
+    markdown = scout_regions.markdown_summary(report)
+    assert f"| — | {partial['label']} (`{partial['region']}`)" in markdown
+
+
 def test_runtime_budget_returns_partial_evidence_instead_of_timing_out():
     class Clock:
         value = 0
@@ -180,6 +239,8 @@ def test_runtime_budget_returns_partial_evidence_instead_of_timing_out():
     assert report["scope"]["runtime_budget_exhausted"] is True
     assert report["summary"]["status_counts"] == {
         "ok": 1, "skipped_after_budget": 127}
+    assert report["summary"]["ranking_declared_targets"] == []
+    assert all(row["rank"] is None for row in report["summary"]["regions"])
 
 
 def test_404_and_off_slug_redirect_are_bad_slug_evidence():

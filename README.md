@@ -7,14 +7,15 @@ and presents it on one searchable page. No application server: a GitHub Actions
 job scrapes, writes static JSON, and GitHub Pages displays it.
 
 Portal blocking and serving caps mean “all listings” is a target, not a current
-guarantee. The latest audited 2026-08-31 deployment has 28,277 Śląskie current
-properties from 51,826 raw rows. Otodom recovered from a transient two-root 403
-and remains at 15,947; OLX remains blocked with HTTP 403. The
-previous-publication continuity guard passed all four warm publication paths,
-each within 96 minutes, after its offline fixtures proved the 15,949→0 rejection
-path. Małopolskie's corrective manual pilot also passed; it is now unpublished
-from the picker, discovery and served data, while recoverable branch
-`data-malopolskie` remains at `cba13c7`.
+guarantee. The latest audited 2026-08-31 deployment has 28,351 Śląskie current
+properties from 51,845 raw rows. Scheduled update `33395659119` completed in
+91.7 minutes, Otodom contributed 16,022 through 264/264 successful requests,
+and deploy `33404452902` published the result; OLX remains blocked with HTTP
+403. The previous-publication continuity guard passed all five warm publication
+paths, each within 96 minutes, after its offline fixtures proved the 15,949→0
+rejection path. Małopolskie's corrective manual pilot also passed; it is now
+unpublished from the picker, discovery and served data, while recoverable
+branch `data-malopolskie` remains at `cba13c7`.
 
 ```
 GitHub Actions (cron) → python -m scraper.main → site/data/<region>/*.json
@@ -62,9 +63,10 @@ pages in 20.5 minutes and left the freshly dated archive cache byte-for-byte
 unchanged. This closes the P0 archive-isolation gate. Exact evidence and the
 rollout decision are recorded in
 [`POLAND_ROLLOUT.md`](POLAND_ROLLOUT.md). The reversible pilot-unpublication
-audit is complete. P3 now has a manual, read-only one-page scout for all 16
-catalog regions; its first artifact must be measured before any schedule or
-region matrix is chosen.
+audit is complete. P3's first manual, read-only one-page scout for all 16
+catalog regions is audited. It found two Otodom compound-region slug defects
+and an incomplete-evidence ranking defect; both are corrected, and a corrected
+hosted rerun remains required before any schedule or region matrix is chosen.
 P1 commit `4131f03` is also production-proven: direct deploy `33082048338`,
 regionalized scrape `33082048365` and automatic deploy `33090688420` all
 succeeded. The scrape passed all 224 offline tests, refreshed only
@@ -140,14 +142,22 @@ artifact and discovery while preserving its branch. The intervening guarded
 51,826 with zero photo deferrals or unresolved groups.
 
 The P3 scout is intentionally separate from production. A manual-only,
-read-permission workflow runs the 264-test offline gate, then makes at most one
+read-permission workflow runs the 267-test offline gate, then makes at most one
 non-retrying request per region, region-wide source and property type (128
 targets). A source refusal stops further requests to that source, and a
 40-minute runtime budget leaves explicit skipped rows rather than losing a
 partial report to the workflow timeout. It writes one aggregate JSON artifact
 and a job summary, never a data branch, cache, photo, cron entry or matrix.
 Nieruchomości-online is explicitly excluded because it has no comparable
-region-wide search root.
+region-wide search root. First run `33411783792` completed in 203.5 seconds:
+97 real requests produced 92 reachable rows, one OLX refusal followed by 31
+explicit skips, and four Otodom 404s. Those 404s were the house/flat pairs for
+`kujawsko-pomorskie` and `warminsko-mazurskie`; Otodom uses the explicit portal
+slugs `kujawsko--pomorskie` and `warminsko--mazurskie`. The catalog now records
+those forms while canonical slugs stay strict, and the summary ranks only
+regions with the same non-empty set of declared source/type targets. A new
+hosted scout must confirm the corrected roots and comparable six-target shape
+before its inventory ordering can select the next pilot.
 The audited status, evidence, decisions, acceptance gates and P0–P5 task order are
 in [`POLAND_ROLLOUT.md`](POLAND_ROLLOUT.md). `TODO.md` remains the detailed
 development diary.
@@ -236,10 +246,10 @@ development diary.
   `partial`, `blocked` or `unknown`, independently of process success. The
   dashboard therefore keeps a source that returned no listings visible and
   distinguishes a clean `0` from `blokada` or `brak danych`. Schema v2 has run
-  successfully in production through 2026-08-30. Małopolskie's retained pilot
+  successfully in production through 2026-08-31. Małopolskie's retained pilot
   output reports Gratka healthy, Morizon/Otodom/n-online partial and OLX blocked.
   Śląskie's transient Otodom block recorded the failure shape that motivated
-  the previous-publication gate; four guarded runs then recovered and retained
+  the previous-publication gate; five guarded runs then recovered and retained
   the approved positive source floor. The
   served/kept split remains important: each scraper filters
   while parsing (otodom drops INVESTMENT

@@ -46,6 +46,26 @@ def test_every_portal_slug_is_explicit_and_used_by_search_roots():
     assert entry["portals"]["morizon"] in morizon.SEARCH["house"][0]
 
 
+def test_otodom_compound_region_slugs_are_explicit():
+    document = regions.load_catalog()
+    assert regions.portal_slug("kujawsko-pomorskie", "otodom", document) == \
+        "kujawsko--pomorskie"
+    assert regions.portal_slug("warminsko-mazurskie", "otodom", document) == \
+        "warminsko--mazurskie"
+
+
+def test_double_hyphens_are_portal_only_and_triples_are_rejected(tmp_path):
+    document = copy.deepcopy(regions.load_catalog())
+    document["regions"][0]["slug"] = "dolno--slaskie"
+    with pytest.raises(regions.RegionCatalogError, match="invalid canonical"):
+        regions.load_catalog(_write(tmp_path, document))
+
+    document = copy.deepcopy(regions.load_catalog())
+    document["regions"][0]["portals"]["otodom"] = "dolno---slaskie"
+    with pytest.raises(regions.RegionCatalogError, match="invalid otodom"):
+        regions.load_catalog(_write(tmp_path, document))
+
+
 def test_portal_slugs_may_differ_from_each_other(tmp_path):
     document = copy.deepcopy(regions.load_catalog())
     entry = next(r for r in document["regions"] if r["slug"] == "slaskie")

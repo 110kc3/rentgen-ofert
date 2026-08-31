@@ -249,13 +249,19 @@ def budget_skipped_probe(source: str, typ: str, region: dict) -> dict:
     return row
 
 
-def _region_summary(regions: list[dict], probes: list[dict]) -> list[dict]:
+def _region_summary(
+        regions: list[dict], probes: list[dict]) -> tuple[list[dict], list[str]]:
     summaries = []
     for region in regions:
         rows = [row for row in probes if row["region"] == region["slug"]]
         known = [row["declared_inventory"] for row in rows
                  if row["status"] == "ok"
                  and isinstance(row["declared_inventory"], int)]
+        declared_targets = tuple(sorted(
+            f"{row['source']}/{row['type']}" for row in rows
+            if row["status"] == "ok"
+            and isinstance(row["declared_inventory"], int)
+        ))
         by_source = {}
         for source in PORTALS:
             source_rows = [row for row in rows if row["source"] == source]
@@ -281,16 +287,40 @@ def _region_summary(regions: list[dict], probes: list[dict]) -> list[dict]:
             "target_probes": len(PORTALS) * len(TYPES),
             "issue_probes": sum(row["status"] != "ok" for row in rows),
             "by_source": by_source,
+            "_declared_targets": declared_targets,
         })
-    ranked = sorted(summaries, key=lambda row: (
-        row["declared_sum"] is None,
-        -(row["declared_sum"] or 0),
-        -row["declared_probes"],
-        row["region"],
-    ))
-    for rank, row in enumerate(ranked, 1):
+
+    # A source-wide refusal can make six declared targets the fair comparison
+    # shape for every region. A one-region 404 must not be ranked beside that
+    # shape merely because its partial sum happens to be large. Use the most
+    # common exact set of successful source/type targets, and only rank rows
+    # that match it. If no target produced a count, there is no ranking.
+    signatures = Counter(row["_declared_targets"] for row in summaries)
+    ranking_targets = min(
+        signatures,
+        key=lambda signature: (
+            -signatures[signature], -len(signature), signature),
+    ) if signatures else ()
+
+    comparable = []
+    incomplete = []
+    for row in summaries:
+        is_comparable = (
+            bool(ranking_targets)
+            and row["_declared_targets"] == ranking_targets
+        )
+        row["ranking_status"] = "comparable" if is_comparable else "incomplete"
+        row["rank"] = None
+        row.pop("_declared_targets")
+        (comparable if is_comparable else incomplete).append(row)
+
+    comparable.sort(key=lambda row: (
+        -(row["declared_sum"] or 0), row["region"]))
+    incomplete.sort(key=lambda row: (
+        -row["declared_probes"], -(row["declared_sum"] or 0), row["region"]))
+    for rank, row in enumerate(comparable, 1):
         row["rank"] = rank
-    return ranked
+    return comparable + incomplete, list(ranking_targets)
 
 
 def _slug_checks(regions: list[dict], probes: list[dict]) -> list[dict]:
@@ -370,6 +400,7 @@ def scout(document: dict, session=None, timeout: float = 20.0,
     status_counts = dict(sorted(Counter(
         row["status"] for row in probes).items()))
     elapsed = max(0, round(clock() - started, 1))
+    region_summaries, ranking_targets = _region_summary(regions, probes)
     return {
         "schema": SCHEMA,
         "generated_at": generated.astimezone(dt.timezone.utc).isoformat(
@@ -390,7 +421,8 @@ def scout(document: dict, session=None, timeout: float = 20.0,
         },
         "summary": {
             "status_counts": status_counts,
-            "regions": _region_summary(regions, probes),
+            "ranking_declared_targets": ranking_targets,
+            "regions": region_summaries,
             "slug_checks": _slug_checks(regions, probes),
         },
         "probes": probes,
@@ -425,8 +457,18 @@ def markdown_summary(report: dict) -> str:
          f"**{'yes' if scope['runtime_budget_exhausted'] else 'no'}**."),
         "",
         ("Declared sums are ranking signals, not unique-listing estimates: "
-         "portals overlap and Gratka/Morizon share inventory. Parentheses mark "
-         "incomplete house/flat pairs; Morizon may publish a rounded lower bound."),
+         "portals overlap and Gratka/Morizon share inventory. Only regions "
+         "matching the most common set of declared source/type targets receive "
+         "a rank, provided that set is non-empty; `—` marks incomplete, "
+         "non-comparable evidence. "
+         "Per-source parentheses mark incomplete house/flat pairs; Morizon may "
+         "publish a rounded lower bound."),
+        "",
+        ("Ranking targets: " + ", ".join(
+            f"`{target}`" for target in
+            report["summary"]["ranking_declared_targets"])
+         if report["summary"]["ranking_declared_targets"]
+         else "Ranking targets: none."),
         "",
         f"Statuses: {statuses}.",
         "",
@@ -434,8 +476,9 @@ def markdown_summary(report: dict) -> str:
         "|---:|---|---:|---:|---:|---:|---:|---:|",
     ]
     for row in report["summary"]["regions"]:
+        rank = row["rank"] if row["rank"] is not None else "—"
         lines.append(
-            f"| {row['rank']} | {row['label']} (`{row['region']}`) "
+            f"| {rank} | {row['label']} (`{row['region']}`) "
             f"| {_source_cell(row, 'otodom')} | {_source_cell(row, 'olx')} "
             f"| {_source_cell(row, 'gratka')} | {_source_cell(row, 'morizon')} "
             f"| {row['declared_probes']}/{row['target_probes']} "

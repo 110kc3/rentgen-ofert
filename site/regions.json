@@ -26,7 +26,7 @@
       "enabled": false,
       "cadence": "manual",
       "portals": {
-        "otodom": "kujawsko-pomorskie",
+        "otodom": "kujawsko--pomorskie",
         "olx": "kujawsko-pomorskie",
         "gratka": "kujawsko-pomorskie",
         "morizon": "kujawsko-pomorskie"
@@ -234,7 +234,7 @@
       "enabled": false,
       "cadence": "manual",
       "portals": {
-        "otodom": "warminsko-mazurskie",
+        "otodom": "warminsko--mazurskie",
         "olx": "warminsko-mazurskie",
         "gratka": "warminsko-mazurskie",
         "morizon": "warminsko-mazurskie"
