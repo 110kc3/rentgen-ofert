@@ -7,17 +7,15 @@ and presents it on one searchable page. No application server: a GitHub Actions
 job scrapes, writes static JSON, and GitHub Pages displays it.
 
 Portal blocking and serving caps mean “all listings” is a target, not a current
-guarantee. The latest 2026-08-29 deployment has 19,352 Śląskie and 32,132
-Małopolskie current properties. Małopolskie's corrective manual pilot passed
-its runtime/photo gate and remains unscheduled. The Śląskie count is a known
-degraded publication: both Otodom roots returned HTTP 403 after a healthy
-28,253-property run, and the pipeline exposed the outage but still replaced the
-good branch. A previous-publication continuity guard is now implemented but has
-not yet been production-audited; it protects future positive baselines and
-cannot reconstruct the already overwritten one. OLX is also blocked with HTTP 403; after
-rejecting cross-category clones and promoted cards from other voivodeships,
-Otodom's evidence-backed Śląskie floor is about 15.9k and its flat root remains
-explicitly partial at the 200-page cap.
+guarantee. The latest audited 2026-08-30 deployment has 28,268 Śląskie current
+properties from 51,831 raw rows. Otodom recovered from a transient two-root 403
+and stayed at 15,891–15,947 across the next two schedules; OLX remains blocked
+with HTTP 403. The previous-publication continuity guard passed all three warm
+publication paths, each within 94 minutes, after its offline fixtures proved the
+15,949→0 rejection path. Małopolskie's corrective manual pilot also passed, but
+this closeout disables its catalog entry so the next deploy removes the stale
+manual-only artifact while retaining recoverable branch `data-malopolskie` at
+`cba13c7`.
 
 ```
 GitHub Actions (cron) → python -m scraper.main → site/data/<region>/*.json
@@ -30,15 +28,19 @@ branch is force-pushed fresh each run (the price history lives *inside*
 `history.json.gz`, so old git versions of it carry no information). One branch
 per region because a shared one is what a second region would break: a healthy
 full-source Śląskie snapshot is ~181 MiB including caches and pipeline-only
-history (the current Otodom-less branch is ~149 MiB), and
+history, and
 every job would fetch, and force-push over, all of everyone's. A deploy overlays
 every `data-*` branch (plus the pre-split shared `data` branch, still read so
-the split needed no flag day).
+the split needed no flag day), then includes only catalog-enabled regions in
+the Pages artifact.
 
 ## Poland rollout status
 
-As of 2026-08-30, **2 of 16 voivodeships are published and the manual
-Małopolskie pilot has passed its corrective gate**; only Śląskie is scheduled.
+As of 2026-08-31, **1 of 16 voivodeships is enabled for publication**: Śląskie,
+which remains scheduled twice daily. The completed Małopolskie pilot is now
+disabled after passing its corrective gate; its isolated data branch is kept
+for a reversible re-enable, but no manual-only stale tree belongs in the
+artifact.
 One canonical catalog owns every region's label, TERYT prefix, enabled state,
 cadence, optional anchor and explicit per-portal slug. The deployed product is
 region-aware: `/` is generated as a national picker, published regions get stable
@@ -61,9 +63,8 @@ pages in 20.5 minutes and left the freshly dated archive cache byte-for-byte
 unchanged. This closes the P0 archive-isolation gate. Exact evidence and the
 rollout decision are recorded in
 [`POLAND_ROLLOUT.md`](POLAND_ROLLOUT.md). The next step is still not a
-16-region schedule: the newly implemented publication guard must first be
-audited on the pushed workflow, and a recovered full-source run must
-re-establish a positive Śląskie baseline.
+16-region schedule: finish the reversible pilot-unpublication deploy audit,
+then begin P3 with cheap one-page source/type scouts rather than full scrapes.
 P1 commit `4131f03` is also production-proven: direct deploy `33082048338`,
 regionalized scrape `33082048365` and automatic deploy `33090688420` all
 succeeded. The scrape passed all 224 offline tests, refreshed only
@@ -126,8 +127,15 @@ formerly positive/non-blocked source becoming blocked/unknown or zero now fails
 before staging and force-push. First publications, persistent blocked sources
 and positive count drift pass. Intentional resets require the logged manual
 `allow_source_regression` override. The 255-test offline suite includes the
-observed Otodom 15,949→0 shape and workflow/deploy ordering. Production
-validation remains pending; no second-region cron or matrix is next.
+observed Otodom 15,949→0 shape and workflow/deploy ordering. Push run
+`33299512978` recovered Otodom to 15,927 in 91.2 minutes; schedules
+`33309354137` and `33334689642` retained 15,891/15,947 in 93.3/87.6 minutes.
+All three validated 71 files, staged only 76 Śląskie paths, published zero
+photo deferrals/unresolved groups, refreshed only `data-slaskie`, and deployed
+successfully in `33303224401`, `33313477447` and `33338750925`. This accepts
+P0.7 and the complete P0 exit gate without inducing a real outage. The next
+bounded change disables the completed disposable Małopolskie pilot in the
+catalog; its `cba13c7` branch remains untouched.
 The audited status, evidence, decisions, acceptance gates and P0–P5 task order are
 in [`POLAND_ROLLOUT.md`](POLAND_ROLLOUT.md). `TODO.md` remains the detailed
 development diary.
@@ -135,12 +143,13 @@ development diary.
 ## What it does
 
 - Searches **domy** and **mieszkania** *na sprzedaż* across the selected whole
-  voivodeship (currently published: scheduled Śląskie plus the manual
-  Małopolskie pilot) on up to five portals — a region-level search on
+  voivodeship (currently enabled for publication: scheduled Śląskie) on up to
+  five portals — a region-level search on
   Otodom/OLX/gratka/Morizon and per-city sub-domains on
   nieruchomości-online. `RENTGEN_REGION` must name an entry in
-  `site/regions.json`; Małopolskie passed its cold run and its corrective warm
-  gate, but remains a manual disposable pilot while rollout closeout finishes.
+  `site/regions.json` whose `enabled` flag is true. Małopolskie passed its cold
+  and corrective warm gates, then was disabled as a completed disposable pilot;
+  its branch remains recoverable.
   Every listing keeps its **town (locality)**, and the dashboard has a searchable
   **town multi-select** filter.
 - Keeps archived / sold listings (e.g. nieruchomości-online *Ogłoszenie archiwalne*)
@@ -215,12 +224,11 @@ development diary.
   `partial`, `blocked` or `unknown`, independently of process success. The
   dashboard therefore keeps a source that returned no listings visible and
   distinguishes a clean `0` from `blokada` or `brak danych`. Schema v2 has run
-  successfully in production through 2026-08-29. The latest Małopolskie output
-  reports Gratka healthy, Morizon/Otodom/n-online partial and OLX blocked. The
-  latest Śląskie output truthfully reports Otodom and OLX blocked and records
-  the failure shape that motivated the new previous-publication gate. That
-  degraded branch predates the guard and remains published until a source
-  recovery replaces it. The
+  successfully in production through 2026-08-30. Małopolskie's retained pilot
+  output reports Gratka healthy, Morizon/Otodom/n-online partial and OLX blocked.
+  Śląskie's transient Otodom block recorded the failure shape that motivated
+  the previous-publication gate; three guarded runs then recovered and retained
+  the approved positive source floor. The
   served/kept split remains important: each scraper filters
   while parsing (otodom drops INVESTMENT
   bundles, OLX drops ads syndicated from Otodom), and comparing kept-against-
@@ -425,7 +433,7 @@ RENTGEN_MAX_PAGES=3 RENTGEN_DELAY=0.3 python -m scraper.main
 
 | Env var | Default | Meaning |
 |---|---|---|
-| `RENTGEN_REGION` | slaskie | voivodeship slug to scrape (e.g. `malopolskie`) |
+| `RENTGEN_REGION` | slaskie | enabled voivodeship slug to scrape; disabled pilot entries are rejected by CI |
 | `RENTGEN_MAX_PAGES` | 200 | max result pages per portal per search (was 50, which silently truncated every portal — see *Coverage*) |
 | `RENTGEN_DELAY` | 0.7 | seconds between requests (be polite) |
 | `RENTGEN_PHOTOS` | 1 | photo-match ambiguous listings and conservatively separate unresolved groups; `0` skips cover/gallery fetches and explicitly enables size/price fallback |

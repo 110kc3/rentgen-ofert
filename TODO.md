@@ -1,9 +1,9 @@
 # TODO — rentgen-ofert
 
 > Keep this file and `README.md` updated after each change.
-> Last updated: 2026-08-30
+> Last updated: 2026-08-31
 
-## Current (2026-08-30) — P2 passed; continuity guard implemented, audit next
+## Current (2026-08-31) — P0/P2 accepted; disposable pilot disabled
 
 The corrected Śląskie baseline was stable across five runs on main SHA
 `701795e`. Those runs rejected cross-category clones, duplicate cards within a
@@ -40,7 +40,8 @@ job / 246.5-minute scrape passed 224 tests, created only `data-malopolskie` at
 deployed both regions in `33126428927`. The branch is 98.8 MiB, its regional
 data is 86.4 MiB including pipeline history, and 79.6 MiB is actually served.
 The live picker, regional listing/statistics canonicals, sitemap and data
-catalog all expose both complete enabled trees; Małopolskie remains manual-only.
+catalog all exposed both complete enabled trees at that pilot checkpoint;
+Małopolskie remained manual-only.
 
 The cold evidence is useful rather than an exit pass. Portal collection took
 132.3 minutes, RCN's cold `12*` pull 20.5 minutes and the photo phase exhausted
@@ -173,7 +174,28 @@ an Actions warning. The current degraded branch is already the immediate
 baseline, so the guard cannot recreate the overwritten healthy snapshot; an
 Otodom recovery must establish the next positive baseline.
 
-### P0 collection/runtime accepted; continuity implemented, validation open
+That recovery and the required warm sequence are now complete:
+
+| Run | Trigger | Runtime | Unique / raw | Otodom | Photos | Data ref / deploy |
+|---|---|---:|---:|---:|---|---|
+| `33299512978` | guard push | 91.2 min | 28,222 / 51,767 | 15,927 | 41,710/41,722 critical hashed; zero deferred/unresolved | `bb1f650` / `33303224401` |
+| `33309354137` | schedule | 93.3 min | 28,207 / 51,738 | 15,891 | 41,691/41,702; zero deferred/unresolved | `069c1fb` / `33313477447` |
+| `33334689642` | schedule | 87.6 min | 28,268 / 51,831 | 15,947 | 41,759/41,770; zero deferred/unresolved | `d124f03` / `33338750925` |
+
+Every run passed 255 tests before requests, made 263–264/263–264 successful
+Otodom requests with no refusal, validated 71 files / 117.7–117.8 MiB, staged
+exactly 76 Śląskie paths and deployed. The recovered positive baseline survived
+two consecutive schedules with ordinary count drift. Together with the
+catastrophic-loss fixtures and pre-stage/success-only-deploy contract tests,
+this accepts P0.7 and the complete P0 exit gate without deliberately breaking a
+live source.
+
+The completed Małopolskie pilot is now closed conservatively: its catalog entry
+is disabled, so CI rejects accidental refreshes and the next deploy removes its
+artifact/discovery entries. The isolated `data-malopolskie` branch remains
+untouched at `cba13c7`, making the decision reversible.
+
+### P0 collection, runtime and publication continuity accepted
 
 - **The twice-daily n-online path is current-only.** The portal orders current
   offers before its archive and the walk stops after two consecutive
@@ -227,9 +249,11 @@ Otodom recovery must establish the next positive baseline.
   then compares the new source states with preserved publication metadata. The
   observed Otodom 15,949→0 transition now exits non-zero before
   `region_storage stage`; the existing success-only deploy condition suppresses
-  publication after any such failure. Production evidence is still pending.
+  publication after any such failure. Three guarded production runs retained a
+  recovered 15.9k Otodom floor and exercised preservation, validation, isolated
+  push and deploy ordering; P0.7 is accepted.
 
-### Regional product now live
+### Regional product and completed pilot closeout
 
 - `site/regions.json` is the single schema-1 catalog for all 16 official
   voivodeships: canonical slug, Polish forms, TERYT, enabled/cadence, optional
@@ -259,21 +283,24 @@ Otodom recovery must establish the next positive baseline.
   listing/statistics canonicals, sitemap and catalog. Valid unpublished regions
   still return a useful `noindex` page without exposing a data tree; unknown
   regions return 404.
+- The Małopolskie cold/rejected-warm/corrective sequence proved the two-region
+  architecture and met its final gate. It is now `enabled: false` while
+  retaining cadence, portal mapping and branch `cba13c7`; the deployment audit
+  must confirm only its artifact copy disappears.
 
 ### Next
 
-1. Push the implemented P0.7 slice and do not watch its run. The local 255-test
-   gate is green, including first-run, persistent block, catastrophic loss,
-   removal, positive drift, recovery, override and workflow/deploy placement.
-2. Once the workflow has completed, audit it once. Confirm preservation and
-   continuity reporting occur before branch staging. If Otodom recovers, the
-   run should publish and re-establish a positive baseline; if it remains
-   blocked, the already-blocked immediate baseline is allowed by design.
-3. Record production acceptance, then use subsequent warm Śląskie runs to
-   confirm the recovered baseline and normal branch/deploy behavior. A future
-   newly categorical outage must leave that prior data ref live.
-4. Then close the disposable Małopolskie pilot state and decide whether to
-   unpublish it. Do not add it to cron or create a 16-region matrix.
+1. Push the Małopolskie catalog kill-switch closeout and do not watch its runs.
+   The local tests must keep proving that disabled regions cannot scrape, the
+   artifact removes only Małopolskie, and Śląskie survives.
+2. Once complete, audit one deploy: Małopolskie must disappear from the picker,
+   sitemap, discovery and served data; its stable path must become `noindex`,
+   while `data-malopolskie` remains at `cba13c7` and Śląskie stays published.
+3. Then begin P3 with a cheap, explicitly bounded one-page source/type scout for
+   all 16 catalog regions. Record declared inventory, reachability and bad slugs
+   without creating data branches, full photo work, cron entries or a matrix.
+4. Use those measurements to choose a daily/two-wide or slower serial capacity
+   contract before enabling another region.
 
 ## Superseded (2026-08-13) — stop before region two and repair the template
 
