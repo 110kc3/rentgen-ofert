@@ -1,12 +1,13 @@
 # Whole-Poland rollout: status and next tasks
 
 > Audited: 2026-08-31. Production is current through continuity-guard push
-> `33299512978`, schedules `33309354137` / `33334689642`, and deploy
-> `33338750925`. Otodom recovered and stayed at the approved 15.8–15.9k floor;
-> all three guarded runs finished within 94 minutes with zero photo deferrals or
-> unresolved groups. P0, P1 and the manual P2 pilot are accepted. The completed
-> disposable pilot is now disabled in the catalog while its isolated branch is
-> retained; deployment verification is the remaining closeout step before P3.
+> `33299512978`, schedules `33309354137` / `33334689642`, closeout refresh
+> `33348260244`, and deploy `33353312262`. Otodom recovered and stayed at the
+> approved 15.8–15.9k floor; all four guarded runs finished within 96 minutes
+> with zero photo deferrals or unresolved groups. P0, P1 and the manual P2 pilot
+> are accepted. The disposable pilot is now absent from the live artifact while
+> its isolated branch remains recoverable. P3's bounded scout is implemented;
+> its first manual measurement is the next gate.
 > This is the current source of truth for the nationwide rollout. `TODO.md`
 > retains the detailed development diary and older measurements.
 
@@ -14,29 +15,29 @@
 
 **The product is genuinely region-aware, P0 is accepted, and the corrective
 Małopolskie pilot passed; the project is still not ready for a 16-voivodeship
-schedule.** Three guarded Śląskie runs re-established and retained a positive
+schedule.** Four guarded Śląskie runs re-established and retained a positive
 source baseline with normal count drift. Małopolskie remains recoverable but is
-now disabled because a manual-only pilot would become stale. The next rollout
-action is to audit that one-region artifact, then run cheap source/type scouts
-for all 16 regions—not full scrapes or a matrix.
+now disabled and verified absent from the artifact because a manual-only pilot
+would become stale. The next rollout action is one cheap manual source/type
+scout for all 16 regions—not full scrapes or a matrix.
 
 | Area | Status | Evidence / gap |
 |---|---|---|
 | Region-scoped scraper output and caches | Ready | `site/data/<region>`, regional caches and exact branch staging are implemented. |
 | Canonical 16-region configuration | Proven live | `site/regions.json` is validated and owns Polish forms, TERYT, cadence, anchor and explicit portal slugs; the complete Śląskie path ran end to end. |
 | One data branch per region | Proven for two | `data-slaskie` and `data-malopolskie` hold isolated single-commit data/caches; the pilot touched only its branch. |
-| Deploy overlay for multiple region branches | Proven live for two; one-region closeout pending deploy | Repeated deploys overlaid both isolated branches. The tested catalog kill switch now removes only Małopolskie's artifact while retaining its ref and Śląskie. |
+| Deploy overlay for multiple region branches | Proven live for two and after one-region closeout | Repeated deploys overlaid both isolated branches; closeout deploys removed only Małopolskie's artifact while retaining its ref and Śląskie. |
 | Portal coverage | Collection floor and continuity accepted | Corrected Otodom floor is 15.8–15.9k; it recovered to 15,927 and remained at 15,891/15,947. OLX's one-probe blocked policy remains stable. |
 | Coverage KPI | Truthful and protective | Schema v2 reports source state; P0.7 compares it with preserved metadata before push. Synthetic 15,949→0 rejection plus three production passes cover the failure and positive paths. |
 | Per-region runtime | Both measured gates met | Guarded Śląskie runs took 87.6–93.3 minutes; corrective Małopolskie took 110.9 minutes. All are below 150 preferred / 180 required. |
-| Region picker and durable regional URLs | Proven live for two; configured for one | National picker, stable regional paths, scoped state and discovery passed for two. Disabled-region placeholder/removal is tested and awaiting closeout deployment audit. |
+| Region picker and durable regional URLs | Proven live for two and configured for one | National picker, stable regional paths, scoped state and discovery passed for two. Live closeout now shows only Śląskie and a Małopolskie `noindex` placeholder. |
 | Per-region metadata / OG / sitemap / llms.txt | Proven live | Canonical/JSON-LD documents parse and discovery contains only data-backed published regions. |
-| CI region matrix / cadence | Not implemented | The workflow schedules only Śląskie twice daily and rejects disabled catalog slugs; there is no region matrix. |
+| CI region matrix / cadence | Matrix intentionally not implemented; scout ready | The update workflow schedules only Śląskie twice daily. A read-only manual scout can measure all catalog slugs without enabling a region or publishing data. |
 | Nationwide data hosting | Not decided | The latest healthy pair would serve 213.9 MiB; the closeout artifact returns to 117.8 MiB while retaining the pilot branch. GitHub Pages has a published-site limit of 1 GB. |
 
 **Rollout decision:** do not add a scheduled second region. P0/P1 and the manual
 pilot are accepted. `malopolskie` is disabled and retained as a recoverable
-branch; after its deployment audit, P3 begins with bounded scouts only.
+branch. Its live removal is accepted; P3 begins with the bounded scout only.
 
 ## Production snapshot
 
@@ -47,23 +48,26 @@ branch; after its deployment audit, P3 begins with bounded scouts only.
   enforcement), `60bea36` (cross-category duplicate rejection) and `53ce632`
   (within-page portal clone rejection). Continuity guard `cc9a591` is now also
   production-validated on its positive path.
-- [Deploy run 33338750925](https://github.com/110kc3/rentgen-ofert/actions/runs/33338750925)
-  published the latest audited two-region artifact. This closeout changes the
-  canonical catalog to one enabled region; live removal is not claimed until
-  its resulting deploy is audited.
-- Latest Śląskie data is **2026-08-30 22:17 UTC**, **28,268** unique properties
-  from **51,831** raw listings. Otodom contributes 15,947, Gratka/Morizon 12,496
-  each, n-online 10,892, and OLX is blocked after one bounded probe.
+- [Deploy run 33353312262](https://github.com/110kc3/rentgen-ofert/actions/runs/33353312262)
+  published the latest audited one-region artifact. Direct closeout deploy
+  `33348260226` first removed the disabled pilot; the guarded refresh and
+  follow-up deploy retained that shape.
+- Latest Śląskie data is **2026-08-31 03:15 UTC**, **28,277** unique properties
+  from **51,826** raw listings. Otodom contributes 15,947, Gratka 12,499,
+  Morizon 12,497, n-online 10,883, and OLX is blocked after one bounded probe.
 - Pilot Małopolskie data remains recoverable at `data-malopolskie` commit
   `cba13c7`: **32,132** from **63,596**, with four contributing sources and OLX
-  blocked. Its catalog entry is now disabled, so the next deploy must remove
-  only the artifact copy and discovery entries.
+  blocked. Its catalog entry is disabled, and the live audit confirmed that
+  only its artifact/discovery copy disappeared.
 - The P1/pilot scrapes ran **224 offline tests before portal work**; queue and
   first warm validation ran the expanded **230-test** gate. The cover-path
   slice expanded it to **235 tests**; this safety slice expands it to **244
   tests** and schema-3 photo arithmetic. P0.7 expands the current suite to
   **255 tests**, including continuity transitions and workflow/deploy order.
-  The post-generation validator protects every branch push.
+  The P3 scout slice expands the current suite to **264 tests**, including
+  aggregate parser, request/runtime-budget, source-cutoff and manual-workflow
+  contracts.
+  The post-generation validator protects every production branch push.
 
 ### Latest completed validation runs
 
@@ -94,6 +98,7 @@ healthy source floor:
 | [33299512978](https://github.com/110kc3/rentgen-ofert/actions/runs/33299512978) | continuity-guard push | 91.2 min | success; deploy `33303224401` | 28,222 / 51,767 |
 | [33309354137](https://github.com/110kc3/rentgen-ofert/actions/runs/33309354137) | Śląskie schedule | 93.3 min | success; deploy `33313477447` | 28,207 / 51,738 |
 | [33334689642](https://github.com/110kc3/rentgen-ofert/actions/runs/33334689642) | Śląskie schedule | 87.6 min | **P0 accepted**; deploy `33338750925` | 28,268 / 51,831 |
+| [33348260244](https://github.com/110kc3/rentgen-ofert/actions/runs/33348260244) | closeout push | 95.4 min | success; deploy `33353312262` | 28,277 / 51,826 |
 
 ### Cold Małopolskie pilot evidence
 
@@ -461,7 +466,7 @@ approaches the limit.
     publication. P0.7 now compares categorical source continuity before push:
     it preserves first runs and persistently blocked sources, but fails when a
     previously positive/non-blocked source becomes blocked, unknown, absent or
-    zero unless an operator explicitly overrides it. Three guarded runs then
+    zero unless an operator explicitly overrides it. Four guarded runs then
     exercised baseline recovery and positive drift in production; the exact
     outage/rejection and no-push/deploy behavior remain fixture-contract tested.
 
@@ -499,10 +504,10 @@ approaches the limit.
 
 No second scheduled region is added in this phase.
 
-**Current pick-up point:** P0 and P1 are live-validated, P2 passed, and three
-guarded runs accepted P0.7. The disposable pilot is disabled in the catalog;
-audit that deploy once, then start P3 with bounded scouts rather than enabling
-another region.
+**Current pick-up point:** P0 and P1 are live-validated, P2 passed, and four
+guarded runs accepted P0.7. The disposable pilot is disabled and its live
+removal is audited. The bounded P3 scout is implemented; run it once and audit
+the aggregate artifact rather than enabling another region.
 
 - [x] **P0.1 Redesign the coverage model and region health result.**
   - Record parent inventory total once per source/type.
@@ -793,20 +798,31 @@ sequence is complete. The accepted run met every numerical gate, refreshed
 only `data-malopolskie`, and the tested catalog kill switch can unpublish the
 pilot without deleting its branch or touching Śląskie.
 
-**Pilot disposition implemented 2026-08-31:** set `malopolskie.enabled` to
-`false`. CI now rejects an accidental manual refresh; deploy removes its data,
-picker/discovery entries and serves the stable regional route as an unpublished
-`noindex` placeholder. Branch `data-malopolskie` remains at `cba13c7`. Audit the
-resulting deploy before calling the closeout production-complete.
+**Pilot disposition accepted 2026-08-31:** `malopolskie.enabled` is `false`, so
+CI rejects an accidental manual refresh. Deploys `33348260226` and
+`33353312262` removed its data and picker/discovery entries and made the stable
+route an unpublished `noindex` placeholder. Branch `data-malopolskie` remains
+at `cba13c7`; Śląskie advanced normally. The closeout is production-complete.
 
 ### P3 — prove scheduling capacity before building the full matrix
 
-P0.7 is production-audited and the pilot disposition is recorded. Begin P3 only
-after the unpublication deploy confirms that Śląskie remains intact and the
-pilot branch remains recoverable.
+P0.7 is production-audited, the pilot disposition is recorded, and its live
+unpublication retained both Śląskie and the recoverable pilot branch.
 
-- [ ] Scout one page per source/type for all 16 regions to rank them by declared
-  inventory and detect bad slugs cheaply.
+- [x] Implement the scout as a separate `workflow_dispatch` job with
+  `contents: read`, the shared serialized portal lock and no data-branch,
+  cache, photo, cron or matrix path. It emits 128 target rows at most (16
+  regions × four regional sources × two types), makes one request with no retry
+  per target, and stops a refusing source globally rather than repeating the
+  refusal. A 40-minute runtime budget turns remaining targets into explicit
+  skipped rows so partial evidence survives before the 50-minute job backstop.
+  Aggregate JSON is retained for 30 days and the run summary exposes comparable
+  source totals and slug-review candidates. Nieruchomości-online is explicitly
+  excluded because it has no region-wide search root. Nine new fixture/contract
+  tests bring the offline gate to **264 tests**.
+- [ ] Run that manual scout once, audit all target/status rows, rank regions by
+  declared inventory and resolve every 404/off-slug candidate before selecting
+  another region.
 - [ ] Choose and document one of two capacity contracts:
   - daily refresh with warm runtime at most 180 minutes and `max-parallel: 2`,
     after confirming that two concurrent regions do not worsen blocking; or

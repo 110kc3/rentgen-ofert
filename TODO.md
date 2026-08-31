@@ -3,7 +3,7 @@
 > Keep this file and `README.md` updated after each change.
 > Last updated: 2026-08-31
 
-## Current (2026-08-31) — P0/P2 accepted; disposable pilot disabled
+## Current (2026-08-31) — pilot unpublished; bounded P3 scout ready
 
 The corrected Śląskie baseline was stable across five runs on main SHA
 `701795e`. Those runs rejected cross-category clones, duplicate cards within a
@@ -190,10 +190,30 @@ catastrophic-loss fixtures and pre-stage/success-only-deploy contract tests,
 this accepts P0.7 and the complete P0 exit gate without deliberately breaking a
 live source.
 
-The completed Małopolskie pilot is now closed conservatively: its catalog entry
-is disabled, so CI rejects accidental refreshes and the next deploy removes its
-artifact/discovery entries. The isolated `data-malopolskie` branch remains
-untouched at `cba13c7`, making the decision reversible.
+The completed Małopolskie pilot is now closed conservatively. Direct deploy
+`33348260226`, guarded refresh `33348260244` and follow-up deploy `33353312262`
+all succeeded. The live picker, `data/regions.json`, sitemap and `llms.txt`
+contain only Śląskie; Małopolskie's stable page is an unpublished `noindex`
+placeholder and its regional data returns 404. The isolated
+`data-malopolskie` branch remains untouched at `cba13c7`, making the decision
+reversible. Śląskie remained published and advanced normally to 28,277 unique
+properties from 51,826 raw rows in 95.4 minutes, with its positive sources and
+zero-deferral/unresolved photo state intact.
+
+The first P3 implementation slice adds a separate manual-only nationwide
+scout. It validates the catalog and offline suite before making at most one
+non-retrying request for each of 16 regions × four region-wide sources × two
+property types (128 target rows). A portal refusal suppresses further traffic
+to that source but leaves explicit skipped rows in the evidence. The report
+records URLs, redirects, HTTP/parser status, declared/servable inventory and
+first-page row counts, then uploads aggregate JSON plus a compact ranking
+summary from `$RUNNER_TEMP`. It has `contents: read`, shares the serialized
+production traffic lock, stops starting requests after 40 minutes while
+retaining explicit unattempted rows, and has no schedule, matrix,
+data/cache/photo work or push path. Nieruchomości-online is declared out of
+scope because it has no region-wide root; an arbitrary town would not be
+comparable. The offline gate is now **264/264**. The first manual scout run and
+artifact audit remain open.
 
 ### P0 collection, runtime and publication continuity accepted
 
@@ -249,7 +269,7 @@ untouched at `cba13c7`, making the decision reversible.
   then compares the new source states with preserved publication metadata. The
   observed Otodom 15,949→0 transition now exits non-zero before
   `region_storage stage`; the existing success-only deploy condition suppresses
-  publication after any such failure. Three guarded production runs retained a
+  publication after any such failure. Four guarded production runs retained a
   recovered 15.9k Otodom floor and exercised preservation, validation, isolated
   push and deploy ordering; P0.7 is accepted.
 
@@ -275,30 +295,28 @@ untouched at `cba13c7`, making the decision reversible.
 - UUG geocoding selects the candidate matching the catalog TERYT prefix and
   scopes cache keys by that prefix. Same-named places in different regions can
   no longer reuse the wrong centroid.
-- Verification currently covers **255 offline tests**, including catalog,
+- Verification currently covers **264 offline tests**, including catalog,
   generator, navigation, two-region storage, ambiguous-geocoder, persisted
-  photo-queue regressions, source-continuity transitions and workflow ordering.
+  photo-queue regressions, source-continuity transitions, bounded scout
+  parsing/request behavior and workflow ordering.
 - Production checks after `33090688420` proved the one-region product; deploy
   `33126428927` then proved the live two-region picker, stable
   listing/statistics canonicals, sitemap and catalog. Valid unpublished regions
   still return a useful `noindex` page without exposing a data tree; unknown
   regions return 404.
 - The Małopolskie cold/rejected-warm/corrective sequence proved the two-region
-  architecture and met its final gate. It is now `enabled: false` while
-  retaining cadence, portal mapping and branch `cba13c7`; the deployment audit
-  must confirm only its artifact copy disappears.
+  architecture and met its final gate. It is now `enabled: false`; the live
+  audit confirmed only its artifact/discovery copy disappeared while cadence,
+  portal mapping and branch `cba13c7` remained recoverable.
 
 ### Next
 
-1. Push the Małopolskie catalog kill-switch closeout and do not watch its runs.
-   The local tests must keep proving that disabled regions cannot scrape, the
-   artifact removes only Małopolskie, and Śląskie survives.
-2. Once complete, audit one deploy: Małopolskie must disappear from the picker,
-   sitemap, discovery and served data; its stable path must become `noindex`,
-   while `data-malopolskie` remains at `cba13c7` and Śląskie stays published.
-3. Then begin P3 with a cheap, explicitly bounded one-page source/type scout for
-   all 16 catalog regions. Record declared inventory, reachability and bad slugs
-   without creating data branches, full photo work, cron entries or a matrix.
+1. [x] Push and audit the reversible Małopolskie kill-switch closeout. The live
+   artifact now contains only Śląskie and branch `data-malopolskie` is retained.
+2. [x] Implement a manual-only, explicitly bounded one-page source/type scout
+   for all 16 catalog regions, with aggregate evidence and no publication path.
+3. Run the scout once from a hosted runner and audit its artifact: rank declared
+   inventory, identify unreachable sources and review every bad-slug candidate.
 4. Use those measurements to choose a daily/two-wide or slower serial capacity
    contract before enabling another region.
 

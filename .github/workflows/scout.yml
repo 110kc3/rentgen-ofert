@@ -1,0 +1,53 @@
+# Manual-only P3 measurement. This workflow cannot publish data or mutate a
+# branch: it asks at most one page per catalog region/source/type and uploads
+# aggregate reachability/inventory evidence as a run artifact.
+name: Scout regional inventory
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # Share the production scraper's lock so even a manual scout cannot add
+  # portal traffic while a full regional refresh is running.
+  group: rentgen-scrape
+  cancel-in-progress: false
+
+jobs:
+  scout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            scraper/requirements.txt
+            scraper/requirements-test.txt
+
+      - name: Install runtime + test dependencies
+        run: pip install -r scraper/requirements-test.txt
+
+      # Stay fixture-only until the code/catalog gate is green. Tests for this
+      # workflow prove the scout itself has no retries or publication path.
+      - name: Run offline test gate
+        run: python -m pytest -q
+
+      - name: Scout all catalog regions
+        run: |
+          python -u -m scripts.scout_regions \
+            --output "$RUNNER_TEMP/region-scout.json" \
+            --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload aggregate scout evidence
+        uses: actions/upload-artifact@v7
+        with:
+          name: region-scout-${{ github.run_id }}
+          path: ${{ runner.temp }}/region-scout.json
+          if-no-files-found: error
+          retention-days: 30

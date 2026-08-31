@@ -7,15 +7,14 @@ and presents it on one searchable page. No application server: a GitHub Actions
 job scrapes, writes static JSON, and GitHub Pages displays it.
 
 Portal blocking and serving caps mean “all listings” is a target, not a current
-guarantee. The latest audited 2026-08-30 deployment has 28,268 Śląskie current
-properties from 51,831 raw rows. Otodom recovered from a transient two-root 403
-and stayed at 15,891–15,947 across the next two schedules; OLX remains blocked
-with HTTP 403. The previous-publication continuity guard passed all three warm
-publication paths, each within 94 minutes, after its offline fixtures proved the
-15,949→0 rejection path. Małopolskie's corrective manual pilot also passed, but
-this closeout disables its catalog entry so the next deploy removes the stale
-manual-only artifact while retaining recoverable branch `data-malopolskie` at
-`cba13c7`.
+guarantee. The latest audited 2026-08-31 deployment has 28,277 Śląskie current
+properties from 51,826 raw rows. Otodom recovered from a transient two-root 403
+and remains at 15,947; OLX remains blocked with HTTP 403. The
+previous-publication continuity guard passed all four warm publication paths,
+each within 96 minutes, after its offline fixtures proved the 15,949→0 rejection
+path. Małopolskie's corrective manual pilot also passed; it is now unpublished
+from the picker, discovery and served data, while recoverable branch
+`data-malopolskie` remains at `cba13c7`.
 
 ```
 GitHub Actions (cron) → python -m scraper.main → site/data/<region>/*.json
@@ -62,9 +61,10 @@ finished the whole scrape in 177.4 minutes. Active-only follow-up
 pages in 20.5 minutes and left the freshly dated archive cache byte-for-byte
 unchanged. This closes the P0 archive-isolation gate. Exact evidence and the
 rollout decision are recorded in
-[`POLAND_ROLLOUT.md`](POLAND_ROLLOUT.md). The next step is still not a
-16-region schedule: finish the reversible pilot-unpublication deploy audit,
-then begin P3 with cheap one-page source/type scouts rather than full scrapes.
+[`POLAND_ROLLOUT.md`](POLAND_ROLLOUT.md). The reversible pilot-unpublication
+audit is complete. P3 now has a manual, read-only one-page scout for all 16
+catalog regions; its first artifact must be measured before any schedule or
+region matrix is chosen.
 P1 commit `4131f03` is also production-proven: direct deploy `33082048338`,
 regionalized scrape `33082048365` and automatic deploy `33090688420` all
 succeeded. The scrape passed all 224 offline tests, refreshed only
@@ -133,9 +133,21 @@ observed Otodom 15,949→0 shape and workflow/deploy ordering. Push run
 All three validated 71 files, staged only 76 Śląskie paths, published zero
 photo deferrals/unresolved groups, refreshed only `data-slaskie`, and deployed
 successfully in `33303224401`, `33313477447` and `33338750925`. This accepts
-P0.7 and the complete P0 exit gate without inducing a real outage. The next
-bounded change disables the completed disposable Małopolskie pilot in the
-catalog; its `cba13c7` branch remains untouched.
+P0.7 and the complete P0 exit gate without inducing a real outage. Closeout
+deploys `33348260226` and `33353312262` then removed Małopolskie from the live
+artifact and discovery while preserving its branch. The intervening guarded
+Śląskie refresh `33348260244` completed in 95.4 minutes and published 28,277 /
+51,826 with zero photo deferrals or unresolved groups.
+
+The P3 scout is intentionally separate from production. A manual-only,
+read-permission workflow runs the 264-test offline gate, then makes at most one
+non-retrying request per region, region-wide source and property type (128
+targets). A source refusal stops further requests to that source, and a
+40-minute runtime budget leaves explicit skipped rows rather than losing a
+partial report to the workflow timeout. It writes one aggregate JSON artifact
+and a job summary, never a data branch, cache, photo, cron entry or matrix.
+Nieruchomości-online is explicitly excluded because it has no comparable
+region-wide search root.
 The audited status, evidence, decisions, acceptance gates and P0–P5 task order are
 in [`POLAND_ROLLOUT.md`](POLAND_ROLLOUT.md). `TODO.md` remains the detailed
 development diary.
@@ -227,7 +239,7 @@ development diary.
   successfully in production through 2026-08-30. Małopolskie's retained pilot
   output reports Gratka healthy, Morizon/Otodom/n-online partial and OLX blocked.
   Śląskie's transient Otodom block recorded the failure shape that motivated
-  the previous-publication gate; three guarded runs then recovered and retained
+  the previous-publication gate; four guarded runs then recovered and retained
   the approved positive source floor. The
   served/kept split remains important: each scraper filters
   while parsing (otodom drops INVESTMENT
