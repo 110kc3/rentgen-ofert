@@ -1,9 +1,9 @@
 # TODO — rentgen-ofert
 
 > Keep this file and `README.md` updated after each change.
-> Last updated: 2026-08-31
+> Last updated: 2026-09-01
 
-## Current (2026-08-31) — first P3 scout audited; corrective rerun pending
+## Current (2026-09-01) — corrected scout accepted; Opolskie pilot selected
 
 The corrected Śląskie baseline was stable across five runs on main SHA
 `701795e`. Those runs rejected cross-category clones, duplicate cards within a
@@ -207,6 +207,14 @@ from 51,845 raw rows with 16,022 Otodom listings and zero photo deferrals or
 unresolved groups. Deploy `33404452902` published the resulting one-region
 artifact.
 
+Correction push `33437016380` and following schedule `33447269769` both passed
+the 267-test gate, source-continuity validation, exact 76-path stage and deploy.
+They published 28,418 / 51,972 and 28,395 / 51,939 respectively; Otodom retained
+16,041 then 16,030, OLX remained one bounded 403, and neither run had photo
+deferrals or unresolved groups. The latest scrape took 84.2 minutes, validated
+71 JSON files / 117.7 MiB, advanced only `data-slaskie` to `45e319b`, and deploy
+`33453345840` retained the one-region live artifact.
+
 The first P3 implementation slice adds a separate manual-only nationwide
 scout. It validates the catalog and offline suite before making at most one
 non-retrying request for each of 16 regions × four region-wide sources × two
@@ -246,6 +254,34 @@ sums were Opolskie 4,275, Świętokrzyskie 6,299, Lubuskie 7,018, Podlaskie 7,45
 and Lubelskie 9,463. These are cross-source signals, not unique listings, and no
 next region is selected until the corrected hosted rerun confirms both Otodom
 roots and a common six-target ranking shape.
+
+Corrected scout `33497077221` passed that gate on commit `31ef1e4`. It retained
+128/128 unique targets, made 97 real non-retrying requests in 187.2 seconds and
+reported 96 `ok`, one OLX `blocked` and 31 `skipped_after_block`, with no 404,
+off-slug redirect, parser/network error or budget exhaustion. All 96 successful
+rows were HTTP 200 with non-empty first pages and integer declared inventory.
+Both corrected Otodom pairs were reachable: Kujawsko-Pomorskie declared 8,520
+and Warmińsko-Mazurskie 3,786 across house/flat. Gratka, Morizon and Otodom each
+returned 32/32 rows; all 16 regions shared the exact same six-target declaration
+shape and received ranks 1–16.
+
+Opolskie is the evidence-backed next pilot. Its cross-source signal was last in
+both runs, moving only 4,275 → 4,281 (+0.14%); the corrected result is 30.3%
+below next-smallest Świętokrzyskie at 6,145 and only 9.3% of Śląskie's 46,229.
+Its source signals are Otodom 2,347, Gratka 967 and Morizon 967; they overlap and
+are not a unique-listing forecast. The catalog enables Opolskie at `manual`
+cadence solely so the guarded workflow can run its cold pilot. No
+`data-opolskie` branch exists, so it remains unpublished and unscheduled now.
+
+The capacity choice is the conservative **72-hour serial contract**, not the
+daily/two-wide option. At the hard 180-minute warm gate, fifteen additional
+regions every 72 hours average 15 runner-hours/day; adding two worst measured
+95.4-minute Śląskie runs totals about 18.2 hours/day. A 48-hour serial sweep
+would require about 25.7 hours/day and cannot fit. New regions therefore keep
+manual cadence through cold/warm acceptance, must pass the existing 150-minute
+preferred / 180-minute hard gate and seven healthy days, and remain behind the
+shared `rentgen-scrape` lock. No matrix or concurrent portal access is added in
+this slice.
 
 ### P0 collection, runtime and publication continuity accepted
 
@@ -351,10 +387,12 @@ roots and a common six-target ranking shape.
    unreachable source and bad-slug candidate (`33411783792`).
 4. [x] Correct the two Otodom compound slugs and prevent incomplete measurement
    shapes from receiving ordinal ranks.
-5. Rerun the corrected scout and require zero bad-slug candidates plus one
-   common six-target ranking shape before choosing the next pilot.
-6. Use those measurements to choose a daily/two-wide or slower serial capacity
-   contract before enabling another region.
+5. [x] Rerun the corrected scout and require zero bad-slug candidates plus one
+   common six-target ranking shape (`33497077221`).
+6. [x] Select Opolskie for the next manual cold pilot and adopt a 72-hour serial
+   capacity contract; do not add a schedule or matrix yet.
+7. Run the cold Opolskie workflow manually, audit its branch/data/deploy
+   isolation, then run a warm acceptance pass before assigning any cadence.
 
 ## Superseded (2026-08-13) — stop before region two and repair the template
 

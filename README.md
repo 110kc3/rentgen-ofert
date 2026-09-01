@@ -7,15 +7,15 @@ and presents it on one searchable page. No application server: a GitHub Actions
 job scrapes, writes static JSON, and GitHub Pages displays it.
 
 Portal blocking and serving caps mean “all listings” is a target, not a current
-guarantee. The latest audited 2026-08-31 deployment has 28,351 Śląskie current
-properties from 51,845 raw rows. Scheduled update `33395659119` completed in
-91.7 minutes, Otodom contributed 16,022 through 264/264 successful requests,
-and deploy `33404452902` published the result; OLX remains blocked with HTTP
-403. The previous-publication continuity guard passed all five warm publication
-paths, each within 96 minutes, after its offline fixtures proved the 15,949→0
-rejection path. Małopolskie's corrective manual pilot also passed; it is now
-unpublished from the picker, discovery and served data, while recoverable
-branch `data-malopolskie` remains at `cba13c7`.
+guarantee. The latest audited 2026-09-01 deployment has 28,395 Śląskie current
+properties from 51,939 raw rows. Scheduled update `33447269769` completed its
+scrape in 84.2 minutes, Otodom contributed 16,030 through 264/264 successful
+requests, and deploy `33453345840` published 117.7 MiB; OLX remains blocked
+with HTTP 403. The previous-publication continuity guard has passed seven warm
+publication paths, each within 96 minutes, after its offline fixtures proved
+the 15,949→0 rejection path. Małopolskie's corrective manual pilot also passed;
+it is now unpublished from the picker, discovery and served data, while
+recoverable branch `data-malopolskie` remains at `cba13c7`.
 
 ```
 GitHub Actions (cron) → python -m scraper.main → site/data/<region>/*.json
@@ -36,11 +36,12 @@ the Pages artifact.
 
 ## Poland rollout status
 
-As of 2026-08-31, **1 of 16 voivodeships is enabled for publication**: Śląskie,
-which remains scheduled twice daily. The completed Małopolskie pilot is now
-disabled after passing its corrective gate; its isolated data branch is kept
-for a reversible re-enable, but no manual-only stale tree belongs in the
-artifact.
+As of 2026-09-01, **Śląskie is the only published voivodeship** and remains
+scheduled twice daily. Opolskie is enabled only as the selected manual cold
+pilot; it has no data branch and therefore remains unpublished until that run
+passes validation. The completed Małopolskie pilot is disabled after passing
+its corrective gate; its isolated data branch is kept for a reversible
+re-enable, but no manual-only stale tree belongs in the artifact.
 One canonical catalog owns every region's label, TERYT prefix, enabled state,
 cadence, optional anchor and explicit per-portal slug. The deployed product is
 region-aware: `/` is generated as a national picker, published regions get stable
@@ -63,10 +64,10 @@ pages in 20.5 minutes and left the freshly dated archive cache byte-for-byte
 unchanged. This closes the P0 archive-isolation gate. Exact evidence and the
 rollout decision are recorded in
 [`POLAND_ROLLOUT.md`](POLAND_ROLLOUT.md). The reversible pilot-unpublication
-audit is complete. P3's first manual, read-only one-page scout for all 16
-catalog regions is audited. It found two Otodom compound-region slug defects
-and an incomplete-evidence ranking defect; both are corrected, and a corrected
-hosted rerun remains required before any schedule or region matrix is chosen.
+audit is complete. Corrected P3 scout `33497077221` reached all 96 attempted
+non-OLX targets, left only OLX's bounded refusal/skips, and produced one common
+six-target ranking shape for all 16 regions. Opolskie remained the smallest
+signal and is selected for a manual cold pilot; no region matrix is enabled.
 P1 commit `4131f03` is also production-proven: direct deploy `33082048338`,
 regionalized scrape `33082048365` and automatic deploy `33090688420` all
 succeeded. The scrape passed all 224 offline tests, refreshed only
@@ -155,9 +156,14 @@ explicit skips, and four Otodom 404s. Those 404s were the house/flat pairs for
 `kujawsko-pomorskie` and `warminsko-mazurskie`; Otodom uses the explicit portal
 slugs `kujawsko--pomorskie` and `warminsko--mazurskie`. The catalog now records
 those forms while canonical slugs stay strict, and the summary ranks only
-regions with the same non-empty set of declared source/type targets. A new
-hosted scout must confirm the corrected roots and comparable six-target shape
-before its inventory ordering can select the next pilot.
+regions with the same non-empty set of declared source/type targets. Corrected
+run `33497077221` then completed in 187.2 seconds with 96 `ok`, one OLX
+`blocked`, 31 explicit OLX skips, no 404/redirect/parser error and all 16
+regions comparable. Opolskie stayed last at 4,281 (4,275 in the first run),
+30.3% below next-smallest Świętokrzyskie. It is now the manual cold-pilot
+selection. The operating contract remains serial: new regions may move to a
+72-hour cadence only after cold/warm acceptance; Śląskie keeps its twice-daily
+schedule, and no concurrent matrix is justified yet.
 The audited status, evidence, decisions, acceptance gates and P0–P5 task order are
 in [`POLAND_ROLLOUT.md`](POLAND_ROLLOUT.md). `TODO.md` remains the detailed
 development diary.
@@ -165,13 +171,15 @@ development diary.
 ## What it does
 
 - Searches **domy** and **mieszkania** *na sprzedaż* across the selected whole
-  voivodeship (currently enabled for publication: scheduled Śląskie) on up to
+  voivodeship (currently published: scheduled Śląskie; enabled for a manual
+  cold pilot: Opolskie) on up to
   five portals — a region-level search on
   Otodom/OLX/gratka/Morizon and per-city sub-domains on
   nieruchomości-online. `RENTGEN_REGION` must name an entry in
-  `site/regions.json` whose `enabled` flag is true. Małopolskie passed its cold
-  and corrective warm gates, then was disabled as a completed disposable pilot;
-  its branch remains recoverable.
+  `site/regions.json` whose `enabled` flag is true. Opolskie has no data branch
+  yet and is not scheduled. Małopolskie passed its cold and corrective warm
+  gates, then was disabled as a completed disposable pilot; its branch remains
+  recoverable.
   Every listing keeps its **town (locality)**, and the dashboard has a searchable
   **town multi-select** filter.
 - Keeps archived / sold listings (e.g. nieruchomości-online *Ogłoszenie archiwalne*)
@@ -246,10 +254,10 @@ development diary.
   `partial`, `blocked` or `unknown`, independently of process success. The
   dashboard therefore keeps a source that returned no listings visible and
   distinguishes a clean `0` from `blokada` or `brak danych`. Schema v2 has run
-  successfully in production through 2026-08-31. Małopolskie's retained pilot
+  successfully in production through 2026-09-01. Małopolskie's retained pilot
   output reports Gratka healthy, Morizon/Otodom/n-online partial and OLX blocked.
   Śląskie's transient Otodom block recorded the failure shape that motivated
-  the previous-publication gate; five guarded runs then recovered and retained
+  the previous-publication gate; seven guarded runs then recovered and retained
   the approved positive source floor. The
   served/kept split remains important: each scraper filters
   while parsing (otodom drops INVESTMENT

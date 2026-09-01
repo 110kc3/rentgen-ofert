@@ -113,7 +113,7 @@
       "adjective": "opolskie",
       "locative": "opolskim",
       "teryt": "16",
-      "enabled": false,
+      "enabled": true,
       "cadence": "manual",
       "portals": {
         "otodom": "opolskie",
