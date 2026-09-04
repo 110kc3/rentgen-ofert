@@ -7,15 +7,16 @@ and presents it on one searchable page. No application server: a GitHub Actions
 job scrapes, writes static JSON, and GitHub Pages displays it.
 
 Portal blocking and serving caps mean “all listings” is a target, not a current
-guarantee. The latest audited 2026-09-01 deployment has 28,395 Śląskie current
-properties from 51,939 raw rows. Scheduled update `33447269769` completed its
-scrape in 84.2 minutes, Otodom contributed 16,030 through 264/264 successful
-requests, and deploy `33453345840` published 117.7 MiB; OLX remains blocked
-with HTTP 403. The previous-publication continuity guard has passed seven warm
-publication paths, each within 96 minutes, after its offline fixtures proved
-the 15,949→0 rejection path. Małopolskie's corrective manual pilot also passed;
-it is now unpublished from the picker, discovery and served data, while
-recoverable branch `data-malopolskie` remains at `cba13c7`.
+guarantee. The latest audited 2026-09-03 Śląskie deployment has 28,579 current
+properties from 51,943 raw rows. Scheduled update `33804201172` completed its
+scrape in 90.8 minutes, Otodom contributed 16,015, and deploy `33812434670`
+retained zero photo deferrals/unresolved groups. OLX remains blocked with HTTP
+403. Cold Opolskie run `33504082916` also passed its audit in 29.9 minutes and
+published 3,563 properties / 7.1 MiB from isolated branch `data-opolskie`;
+warm run `33855228296` then passed in 14.3 minutes with 3,556 properties, stable
+sources and zero photo deferrals/backlog; deploy `33856444810` published that
+result on its first attempt. Małopolskie's corrective pilot remains recoverable
+at `cba13c7` but is disabled and absent from served data.
 
 ```
 GitHub Actions (cron) → python -m scraper.main → site/data/<region>/*.json
@@ -36,12 +37,13 @@ the Pages artifact.
 
 ## Poland rollout status
 
-As of 2026-09-01, **Śląskie is the only published voivodeship** and remains
-scheduled twice daily. Opolskie is enabled only as the selected manual cold
-pilot; it has no data branch and therefore remains unpublished until that run
-passes validation. The completed Małopolskie pilot is disabled after passing
-its corrective gate; its isolated data branch is kept for a reversible
-re-enable, but no manual-only stale tree belongs in the artifact.
+As of 2026-09-04, **Śląskie and the manual Opolskie pilot are published**.
+Śląskie remains scheduled twice daily. Opolskie's cold run passed and its
+isolated branch is live; its warm run also passed, and it remains manual only
+until the selected serial 72-hour cadence is implemented.
+The completed Małopolskie pilot is disabled after passing its corrective gate;
+its isolated data branch is kept for a reversible re-enable, but no disabled
+tree belongs in the artifact.
 One canonical catalog owns every region's label, TERYT prefix, enabled state,
 cadence, optional anchor and explicit per-portal slug. The deployed product is
 region-aware: `/` is generated as a national picker, published regions get stable
@@ -67,7 +69,13 @@ rollout decision are recorded in
 audit is complete. Corrected P3 scout `33497077221` reached all 96 attempted
 non-OLX targets, left only OLX's bounded refusal/skips, and produced one common
 six-target ranking shape for all 16 regions. Opolskie remained the smallest
-signal and is selected for a manual cold pilot; no region matrix is enabled.
+signal. Cold run `33504082916` then passed in 29.9 minutes, created only
+`data-opolskie` at `e0f29a6`, and deploy `33514004545` published its 3,563
+properties beside Śląskie. Its cold photo backlog/deferrals were zero; Otodom
+flats remained partial and one unresolved two-ad group was safely kept
+separate. Warm run `33855228296` then passed in 14.3 minutes with stable source
+drift, 4,207 cache hits, only 45.6 seconds of photos and zero deferrals/backlog.
+Opolskie is accepted for serial 72-hour scheduling; no region matrix is enabled.
 P1 commit `4131f03` is also production-proven: direct deploy `33082048338`,
 regionalized scrape `33082048365` and automatic deploy `33090688420` all
 succeeded. The scrape passed all 224 offline tests, refreshed only
@@ -160,8 +168,9 @@ regions with the same non-empty set of declared source/type targets. Corrected
 run `33497077221` then completed in 187.2 seconds with 96 `ok`, one OLX
 `blocked`, 31 explicit OLX skips, no 404/redirect/parser error and all 16
 regions comparable. Opolskie stayed last at 4,281 (4,275 in the first run),
-30.3% below next-smallest Świętokrzyskie. It is now the manual cold-pilot
-selection. The operating contract remains serial: new regions may move to a
+30.3% below next-smallest Świętokrzyskie. Its cold pilot then completed in 29.9
+minutes and its warm run in 14.3; both are accepted. The operating contract
+remains serial: new regions may move to a
 72-hour cadence only after cold/warm acceptance; Śląskie keeps its twice-daily
 schedule, and no concurrent matrix is justified yet.
 The audited status, evidence, decisions, acceptance gates and P0–P5 task order are
@@ -171,15 +180,16 @@ development diary.
 ## What it does
 
 - Searches **domy** and **mieszkania** *na sprzedaż* across the selected whole
-  voivodeship (currently published: scheduled Śląskie; enabled for a manual
-  cold pilot: Opolskie) on up to
+  voivodeship (currently published: scheduled Śląskie and manual-pilot
+  Opolskie) on up to
   five portals — a region-level search on
   Otodom/OLX/gratka/Morizon and per-city sub-domains on
   nieruchomości-online. `RENTGEN_REGION` must name an entry in
-  `site/regions.json` whose `enabled` flag is true. Opolskie has no data branch
-  yet and is not scheduled. Małopolskie passed its cold and corrective warm
-  gates, then was disabled as a completed disposable pilot; its branch remains
-  recoverable.
+  `site/regions.json` whose `enabled` flag is true. Opolskie has an isolated
+  pilot data branch and passed warm acceptance, but is not scheduled until the
+  serial 72-hour cadence slice lands.
+  Małopolskie passed its cold and corrective warm gates, then was disabled as a
+  completed disposable pilot; its branch remains recoverable.
   Every listing keeps its **town (locality)**, and the dashboard has a searchable
   **town multi-select** filter.
 - Keeps archived / sold listings (e.g. nieruchomości-online *Ogłoszenie archiwalne*)
