@@ -326,7 +326,7 @@ healthy at 99.8%, n-online stayed healthy, and OLX repeated its single bounded
 403.
 
 The warm photo phase took only 45.6 seconds: 4,009/4,012 critical ads had
-hashes, 4,207 fetches were cache hits, and critical/history deferrals and the
+hashes, 4,207 results were cache hits, and critical/history deferrals and the
 backlog were zero. The same three critical ads lacked a hash and the same
 two-listing group remained unresolved, safely separate with heuristic fallback
 disabled. The explicit archive skip retained the 2026-09-01 / 8,029-row archive
