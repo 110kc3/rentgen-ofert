@@ -3,12 +3,12 @@
 > Keep this file and `README.md` updated after each change.
 > Last updated: 2026-09-06
 
-## Current (2026-09-06) — review P1 fixes complete locally; production verification pending
+## Current (2026-09-06) — all seven review fixes complete locally; production verification pending
 
-The owner selected all four P1 findings from the 2026-09-05 architecture/bug
-review for implementation, and requested the remaining P2 findings be recorded
-only. Review severity labels below are separate from the P0–P5 rollout phases
-in [POLAND_ROLLOUT.md](POLAND_ROLLOUT.md).
+The owner selected the four P1 findings, then the remaining three P2 fixes
+from the 2026-09-05 review. All seven are implemented. Tailscale is excluded
+from this work. Review severity labels below are separate from the P0–P5
+rollout phases in [POLAND_ROLLOUT.md](POLAND_ROLLOUT.md).
 
 ### Completed review fixes
 
@@ -35,47 +35,62 @@ in [POLAND_ROLLOUT.md](POLAND_ROLLOUT.md).
    malformed layer types fail before mutation. Re-enrichment removes retracted
    sales from current cards and their timelines; archives use reconciled data.
 
-Local verification: **309 passed** with `.venv/bin/python -m pytest -q`
-(Python 3.11; CI uses 3.12), including 42 added regression cases. No production
-scrape was dispatched for this slice. Previously conflated histories are not
-automatically split because old observations lack per-offer address evidence.
-Stricter identity checks can keep more cards separate and RCN reconciliation
-can reduce sale totals; these are expected corrections to audit after refresh.
+### Completed P2 review fixes
 
-**Pending verification:** the impending `main` push's Update listings and
-Deploy site runs have not been observed. At the next session check the pushed
-commit once in [Actions](https://github.com/110kc3/rentgen-ofert/actions?query=branch%3Amain),
-including successful prior-history restoration, regional isolation, source
-continuity, runtime, and resulting unique/sale counts. Do not treat the local
-test pass as production acceptance. The next accepted rollout implementation
-remains serial 72-hour Opolskie cadence, followed by seven healthy days;
-this slice does not implement cadence or regional expansion.
+5. [x] **Latest daily price history.** `_observe` now replaces the latest
+   daily value for each URL/status instead of ignoring the second scrape.
+   Live and archived evidence remain separate, repeated identical values are
+   idempotent, and each portal keeps its own observation. Daily trails use
+   the minimum across the latest daily values of observed portal offers;
+   individual intraday ticks are intentionally not retained. Regression cases
+   cover price increases/decreases, multiple portals and archive evidence.
+6. [x] **Retryable browser data loading.** Failed HTTP/network/JSON requests
+   and missing detail records leave data incomplete and evict failed promises.
+   Archive and detail failures display a Polish retry button. Successful
+   requests are shared/cached, including genuinely empty archives; a late
+   archive response cannot replace the current-listings view. Eight offline
+   Node cases execute the app's real loaders and retry handlers with DOM/fetch
+   fixtures. This is not a full browser end-to-end run.
+7. [x] **Detail-aware cache versions.** Manifest schema 2 hashes the exact
+   index and all detail bytes in numeric shard order using SHA-256 (20 hex
+   characters). Detail-only changes invalidate the existing `?v=` cache key;
+   identical payloads remain stable. The generated-data validator verifies
+   the same full-payload hash and still accepts legacy index-only manifests
+   while regions refresh serially. The listing template's script version is
+   bumped so browser fixes load on deployment.
 
-### Deferred review findings (P2)
+Local verification: **316 passed** with `.venv/bin/python -m pytest -q`
+(Python 3.11; CI uses 3.12), including the eight-case Node browser runner.
+`node --check site/app.js` and `git diff --check` also pass.
+The previous P1 commit `490be3f` completed Update listings
+[`34004170487`](https://github.com/110kc3/rentgen-ofert/actions/runs/34004170487)
+and the recorded direct Deploy site
+[`34004170501`](https://github.com/110kc3/rentgen-ofert/actions/runs/34004170501)
+successfully; checked once on 2026-09-06. A separate semantic audit of its
+changed identity/sale counts has not been completed.
 
-Recorded at the owner's request; implementation has not been selected. Numbers
-5–7 retain their identities from the review and are separate from rollout steps.
+**Pending verification:** the impending `main` push's new scrape and deploy
+are unobserved. At the next session check its commit once in
+[Actions](https://github.com/110kc3/rentgen-ofert/actions?query=branch%3Amain),
+including schema-2 payload validation, regional isolation, source continuity,
+runtime and resulting unique/sale counts. Confirm retry controls in a real
+browser and the latest daily price after another refresh. No workflow was
+manually dispatched; do not equate the offline suite with production acceptance.
 
-5. [ ] **Intraday price history (small).** Observations keyed only by date/URL
-   ignore a later price on the second daily scrape. Reproduction: a card moves
-   from 400,000 to 350,000 PLN while its trail retains 400,000. Accept when a
-   documented intraday or daily-update policy captures the later value,
-   timeline/card output agrees, and repeated identical observations stay
-   idempotent. Source: `scraper/history.py::_observe`.
-6. [ ] **Retryable browser data loading (small).** A transient detail failure
-   is cached as an empty shard and marks the listing `_full`; archive failures
-   similarly become a cached empty archive. Accept when failures have visible
-   retryable state, a subsequent success restores content, and only successful
-   loads mark data complete. Source: `site/app.js::loadDetails/loadArchive`.
-7. [ ] **Detail-aware cache versions (small).** `payload.build` hashes only
-   the index, so a street/detail-only change leaves the manifest version
-   unchanged. Accept when changed detail content changes its cache key and
-   fixtures verify both detail-only invalidation and unchanged-data stability.
-   Source: `scraper/payload.py::build` and the browser shard loader.
+### Remaining rollout and architecture work
 
-Architecture follow-ups remain in the existing rollout queue: compact index,
-sharded archive, versioned object storage and rollback in P4. They were not
-selected for implementation by this bug-fix request.
+All seven review defects are locally closed. The remaining accepted queue is
+still [the rollout plan](POLAND_ROLLOUT.md): implement serial 72-hour Opolskie
+cadence, then hold the cohort for seven healthy days. P4 retains the compact
+index, sharded archive, versioned object storage and rollback TODOs with its
+existing capacity/atomic-publication acceptance gates. These tasks have not
+been implemented by this bug-fix batch; regional expansion and hosting changes
+remain subject to that plan. No Tailscale work is required or selected.
+
+Previously conflated histories remain preserved because old observations lack
+per-offer address evidence for automatic splitting. Stricter identity checks
+can keep more cards separate and RCN reconciliation can reduce sale totals;
+these corrections still need production measurement.
 
 ### Rollout evidence through 2026-09-04
 

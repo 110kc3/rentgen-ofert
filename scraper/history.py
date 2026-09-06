@@ -121,9 +121,18 @@ def _merge_photo_urls(rec, urls):
 
 
 def _observe(rec, p, today, status=None):
+    """Keep the latest daily observation per URL and lifecycle status.
+
+    A second scrape updates that day's price rather than silently discarding
+    it. Live and archived evidence remain distinct; repeats are idempotent.
+    """
     url = p.get("url")
-    if not any(o.get("date") == today and o.get("url") == url
-               for o in rec["observations"]):
+    existing = next((o for o in rec["observations"]
+                     if o.get("date") == today and o.get("url") == url
+                     and o.get("status") == status), None)
+    if existing is not None:
+        existing.update(price=p.get("price"), source=p.get("source"))
+    else:
         obs = {"date": today, "price": p.get("price"), "url": url,
                "source": p.get("source")}
         if status:
@@ -192,6 +201,7 @@ def compact(records) -> list:
                 continue
             for o in r.get("observations") or []:
                 if not any(x.get("date") == o.get("date") and x.get("url") == o.get("url")
+                           and x.get("status") == o.get("status")
                            for x in keep["observations"]):
                     keep["observations"].append(o)
             for u in r.get("photo_urls") or []:

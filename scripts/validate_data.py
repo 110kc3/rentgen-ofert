@@ -201,11 +201,6 @@ def validate_data_dir(data_dir, *, previous_meta=None,
     _require(len(index) == count,
              f"manifest count {count} != index rows {len(index)}")
 
-    index_bytes = index_path.read_bytes()
-    expected_version = hashlib.sha1(index_bytes).hexdigest()[:10]
-    _require(version == expected_version,
-             f"manifest version {version} != index hash {expected_version}")
-
     expected_shards = {root / "d" / f"{i:02d}.json" for i in range(shards)}
     actual_shards = set((root / "d").glob("*.json")) if (root / "d").is_dir() else set()
     missing = sorted(str(path.relative_to(root)) for path in expected_shards - actual_shards)
@@ -240,6 +235,20 @@ def validate_data_dir(data_dir, *, previous_meta=None,
             _require(isinstance(detail, dict),
                      f"detail for {url} must be an object")
             detail_urls.add(url)
+
+    # Old regional branches remain readable during the serial rollout; new
+    # publications include detail bytes in the version, not just the index.
+    schema = manifest.get("schema", 1)
+    _require(schema in (1, 2), f"unsupported manifest schema: {schema}")
+    index_bytes = index_path.read_bytes()
+    expected_version = (
+        payload.content_version(index_bytes,
+                                ((root / "d" / f"{i:02d}.json").read_bytes()
+                                 for i in range(shards)))
+        if schema == 2 else hashlib.sha1(index_bytes).hexdigest()[:10]
+    )
+    _require(version == expected_version,
+             f"manifest version {version} != payload hash {expected_version}")
 
     _require(meta.get("count") == count,
              f"meta count {meta.get('count')} != manifest count {count}")

@@ -20,6 +20,36 @@ def _prop(**kw):
     return base
 
 
+@pytest.mark.parametrize("price", [350000, 450000])
+def test_second_daily_scrape_replaces_price_and_is_idempotent(price):
+    records = []
+    history.update([_prop(price=400000)], records, "2026-09-04")
+    history.update([_prop(price=400000)], records, "2026-09-05")
+    for _ in range(2):
+        current = _prop(price=price)
+        history.update([current], records, "2026-09-05")
+    assert len(records[0]["observations"]) == 2
+    assert current["price_history"][-1] == {"date": "2026-09-05", "price": price}
+    assert current["timeline"][-1]["kind"] == "price"
+    assert current["timeline"][-1]["price"] == current["price"]
+
+
+def test_daily_replacement_keeps_other_portal_and_archive_observations():
+    records = []
+    offers = [{"url": "a", "source": "otodom", "price": 400000},
+              {"url": "b", "source": "olx", "price": 390000}]
+    history.update([_prop(url="a", offers=offers)], records, "2026-09-05")
+    rec = records[0]
+    history._observe(rec, offers[0], "2026-09-05", status="archived")
+    offers[0]["price"] = 350000
+    current = _prop(url="a", offers=offers, price=350000)
+    history.update([current], records, "2026-09-05")
+    assert len(rec["observations"]) == 3
+    assert current["price_history"][-1]["price"] == 350000
+    assert next(o for o in rec["observations"] if o["url"] == "b")["price"] == 390000
+    assert next(o for o in rec["observations"] if o.get("status"))["price"] == 400000
+
+
 @pytest.mark.parametrize("conflict", [
     {"locality": "Częstochowa"}, {"street": "Lipowa"}, {"rooms": 4}, {"floor": 8},
 ])

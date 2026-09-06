@@ -743,16 +743,22 @@ const sorters = {
   area_desc: (a, b) => (b.area ?? -Infinity) - (a.area ?? -Infinity),
 };
 
+let archiveRequest = null;
 async function loadArchive() {
   if (state.archive) return state.archive;
-  try {
-    const a = await fetch(`${DATA}/archive.json`, { cache: "no-store" }).then((r) => r.json());
-    state.archive = Array.isArray(a) ? a : [];
-    for (const l of state.archive) l._full = true;   // archive ships complete records
-  } catch (e) {
-    state.archive = [];
+  if (!archiveRequest) {
+    archiveRequest = (async () => {
+      const response = await fetch(`${DATA}/archive.json`, { cache: "no-store" });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const rows = await response.json();
+      if (!Array.isArray(rows) || rows.some((l) => !l || typeof l !== "object" || Array.isArray(l)))
+        throw new Error("Invalid archive");
+      for (const l of rows) l._full = true;
+      state.archive = rows;
+      return rows;
+    })().finally(() => { archiveRequest = null; });
   }
-  return state.archive;
+  return archiveRequest;
 }
 
 // ---- lazy detail shards ------------------------------------------------------
@@ -770,32 +776,65 @@ async function loadDetails(l) {
   if (l._full || !l.url) return l;
   const s = shardOf(l.url, state.shards || 64);
   if (!shardCache.has(s)) {
-    shardCache.set(s, fetch(`${DATA}/d/${String(s).padStart(2, "0")}.json${state.v || ""}`)
-      .then((r) => (r.ok ? r.json() : {})).catch(() => ({})));
+    const request = fetch(`${DATA}/d/${String(s).padStart(2, "0")}.json${state.v || ""}`)
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      }).catch((error) => {
+        if (shardCache.get(s) === request) shardCache.delete(s);
+        throw error;
+      });
+    shardCache.set(s, request);
   }
-  const shard = await shardCache.get(s);
-  Object.assign(l, shard[l.url] || {});
+  const request = shardCache.get(s);
+  const shard = await request;
+  const detail = shard && !Array.isArray(shard) && shard[l.url];
+  if (!detail || typeof detail !== "object" || Array.isArray(detail)) {
+    if (shardCache.get(s) === request) shardCache.delete(s);
+    throw new Error("Missing listing details");
+  }
+  Object.assign(l, detail);
   l._full = true;
   return l;
 }
 
-// one capturing listener fills a card's expandable sections on first open
-// (`toggle` doesn't bubble, hence capture: true)
-function wireLazyDetails() {
-  $("#grid").addEventListener("toggle", async (e) => {
-    const det = e.target;
-    if (!det.open) return;
-    const cardEl = det.closest(".card[data-href]");
-    if (!cardEl) return;
-    const l = state.byUrl && state.byUrl.get(cardEl.dataset.href);
-    if (!l || l._full) return;
+// Populate every expanded section from one successful detail load.
+async function fillCardDetails(cardEl) {
+  const l = state.byUrl && state.byUrl.get(cardEl.dataset.href);
+  if (!l || l._full) return;
+  let message = cardEl.querySelector(".detail-load-status");
+  if (!message) {
+    message = document.createElement("div");
+    message.className = "detail-load-status";
+    message.setAttribute("role", "status");
+    cardEl.appendChild(message);
+  }
+  message.textContent = "Wczytywanie szczegółów…";
+  try {
     await loadDetails(l);
-    cardEl.querySelectorAll("details.offers .offers-body")
-      .forEach((el) => { el.innerHTML = offersRows(l); });
-    cardEl.querySelectorAll("details.tl .tl-body")
-      .forEach((el) => { el.innerHTML = tlBody(l); });
-    const ul = cardEl.querySelector(".pin-ul");   // street arrives with the shard
-    if (ul && !ul.value && l.street) ul.value = l.street;
+  } catch (error) {
+    message.innerHTML = 'Nie udało się wczytać szczegółów. <button type="button">Spróbuj ponownie</button>';
+    message.querySelector("button").onclick = (event) => {
+      event.stopPropagation();
+      fillCardDetails(cardEl);
+    };
+    return;
+  }
+  message.remove();
+  cardEl.querySelectorAll("details.offers .offers-body")
+    .forEach((el) => { el.innerHTML = offersRows(l); });
+  cardEl.querySelectorAll("details.tl .tl-body")
+    .forEach((el) => { el.innerHTML = tlBody(l); });
+  const ul = cardEl.querySelector(".pin-ul");   // street arrives with the shard
+  if (ul && !ul.value && l.street) ul.value = l.street;
+}
+
+// `toggle` does not bubble; capture it for all cards, including later chunks.
+function wireLazyDetails() {
+  $("#grid").addEventListener("toggle", (e) => {
+    if (!e.target.open) return;
+    const cardEl = e.target.closest(".card[data-href]");
+    if (cardEl) fillCardDetails(cardEl);
   }, true);
 }
 
@@ -829,8 +868,17 @@ function watchSentinel() {
 
 function render() {
   if (inArchive() && !state.archive) {
+    view = [];
+    rendered = 0;
+    if (moreObserver) moreObserver.disconnect();
+    $("#count").textContent = "";
+    if (state.mapOn) updateMapMarkers();
     $("#grid").innerHTML = `<div class="empty">Wczytywanie archiwum…</div>`;
-    loadArchive().then(render);
+    loadArchive().then(() => { if (inArchive()) render(); }).catch(() => {
+      if (!inArchive() || state.archive) return;
+      $("#grid").innerHTML = '<div class="empty" role="status">Nie udało się wczytać archiwum. <button type="button" id="retry-archive">Spróbuj ponownie</button></div>';
+      $("#retry-archive").onclick = render;
+    });
     return;
   }
   const f = currentFilters();

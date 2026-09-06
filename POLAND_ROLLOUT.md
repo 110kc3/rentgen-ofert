@@ -1,17 +1,19 @@
 # Whole-Poland rollout: status and next tasks
 
-> **Code update 2026-09-06:** all four P1-severity findings from the 2026-09-05
-> review are fixed locally (309 offline tests): restoration fails closed,
-> photo matching rejects contradictory identities, RCN checks flat attributes
-> before address acceptance, and available RCN evidence reconciles old sale
-> claims. Production verification of the impending `main` push is pending;
-> check its Update listings/Deploy site runs once next session. The detailed
-> handoff and three deferred P2 findings are in
-> [TODO.md](TODO.md#current-2026-09-06--review-p1-fixes-complete-locally-production-verification-pending).
-> Review severity labels do not rename the rollout phases below. No cadence,
-> catalog enablement or storage migration changed in this slice. Stricter
-> matching may change unique/sale counts; the following production audit
-> predates the changes and does not certify them.
+> **Code update 2026-09-06:** all seven review fixes are implemented locally
+> (316 offline tests, including an eight-case browser loading runner). P1
+> commit `490be3f` passed its recorded scrape `34004170487` and direct deploy
+> `34004170501`; its changed identity/sale counts still need semantic audit.
+> The P2 follow-up updates daily price observations, makes browser failures
+> retryable, and versions the index plus details together in manifest schema 2.
+> Its impending `main` push remains pending production verification. Check
+> that commit's scrape/deploy once next session. The owning handoff is in
+> [TODO.md](TODO.md#remaining-rollout-and-architecture-work).
+> All seven review defects are locally closed; review severities do not rename
+> rollout phases. Serial 72-hour Opolskie cadence and the P4 compact-index,
+> archive-sharding, versioned-storage and rollback TODOs remain outstanding.
+> No cadence, region enablement, hosting or Tailscale change was made.
+> The following dated production audit predates the review fixes.
 
 > Audited: 2026-09-04. Production is current through warm Opolskie run
 > `33855228296` and deploy `33856444810`; scheduled Śląskie run `33804201172`

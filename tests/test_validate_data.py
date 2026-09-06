@@ -1,6 +1,7 @@
 """Generated regional-data gate (offline)."""
 import gzip
 import json
+import hashlib
 
 import pytest
 
@@ -83,6 +84,27 @@ def test_generated_dataset_validator_checks_every_payload_part(tmp_path):
     assert "1 critical with photos" in markdown
     assert "0 critical without photos" in markdown
     assert "0 unresolved size groups" in markdown
+
+
+def test_validator_accepts_legacy_manifest_during_regional_migration(tmp_path):
+    root = _dataset(tmp_path)
+    path = root / "manifest.json"
+    manifest = json.loads(path.read_text())
+    manifest.pop("schema")
+    manifest["v"] = hashlib.sha1((root / "index.json").read_bytes()).hexdigest()[:10]
+    path.write_text(json.dumps(manifest))
+    assert validate_data.validate_data_dir(root)["count"] == 2
+
+
+def test_validator_rejects_detail_changes_without_new_version(tmp_path):
+    root = _dataset(tmp_path)
+    url = "https://example.test/flat/1"
+    path = root / "d" / f"{payload.shard_of(url, 4):02d}.json"
+    shard = json.loads(path.read_text())
+    shard[url]["street"] = "Lipowa"
+    path.write_text(json.dumps(shard))
+    with pytest.raises(validate_data.DataValidationError, match="payload hash"):
+        validate_data.validate_data_dir(root)
 
 
 def test_generated_dataset_validator_rejects_count_mismatch(tmp_path):

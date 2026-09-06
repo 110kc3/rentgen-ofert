@@ -32,7 +32,7 @@ def test_build_splits_index_and_shards(tmp_path):
     ls = [_listing(), _listing(url="https://olx.pl/d/oferta/z-2.html", sales=None)]
     v = payload.build(ls, tmp_path, shards=4, log=lambda *a: None)
     mf = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
-    assert mf == {"v": v, "shards": 4, "count": 2}
+    assert mf == {"schema": 2, "v": v, "shards": 4, "count": 2}
     idx = json.loads((tmp_path / "index.json").read_text(encoding="utf-8"))
     assert len(idx) == 2
     slim = idx[0]
@@ -53,6 +53,20 @@ def test_build_splits_index_and_shards(tmp_path):
     assert len(det["offers"]) == 2 and det["street"] == "Asnyka"
     assert det["sales"][0]["addr"] == "Asnyka 11"
     assert payload.shard_of("https://otodom.pl/pl/oferta/x-1", 4) in range(4)
+
+
+def test_detail_only_changes_invalidate_version_and_identical_payload_is_stable(tmp_path):
+    listing = _listing()
+    first = payload.build([listing], tmp_path, shards=4, log=lambda *a: None)
+    index = (tmp_path / "index.json").read_bytes()
+    assert payload.build([listing], tmp_path, shards=4, log=lambda *a: None) == first
+    listing["street"] = "Lipowa"
+    second = payload.build([listing], tmp_path, shards=4, log=lambda *a: None)
+    assert (tmp_path / "index.json").read_bytes() == index
+    assert first != second
+    assert payload.build([listing], tmp_path, shards=4, log=lambda *a: None) == second
+    listing["price"] = 350000
+    assert payload.build([listing], tmp_path, shards=4, log=lambda *a: None) != second
 
 
 def test_shard_hash_matches_js_implementation():

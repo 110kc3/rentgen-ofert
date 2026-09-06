@@ -23,6 +23,7 @@ import hashlib
 import json
 import os
 import pathlib
+from itertools import chain
 
 SHARDS = 64
 
@@ -72,6 +73,15 @@ def _write(path: pathlib.Path, text: str):
     os.replace(tmp, path)
 
 
+def content_version(index_bytes, shard_bytes):
+    """Schema-2 version covers every payload byte in numeric shard order."""
+    digest = hashlib.sha256(b"rentgen-payload-v2\0")
+    for part in chain((index_bytes,), shard_bytes):
+        digest.update(len(part).to_bytes(8, "big"))
+        digest.update(part)
+    return digest.hexdigest()[:20]
+
+
 def build(listings, data_dir, shards: int = SHARDS, log=print) -> str:
     """Write manifest.json + index.json + d/NN.json under ``data_dir``.
 
@@ -90,15 +100,16 @@ def build(listings, data_dir, shards: int = SHARDS, log=print) -> str:
             shard_maps[shard_of(url, shards)][url] = det
 
     index_json = json.dumps(index, ensure_ascii=False, separators=(",", ":"))
-    v = hashlib.sha1(index_json.encode("utf-8")).hexdigest()[:10]
     _write(data_dir / "index.json", index_json)
     total = 0
     for i, m in enumerate(shard_maps):
         s = json.dumps(m, ensure_ascii=False, separators=(",", ":"))
         total += len(s)
         _write(ddir / f"{i:02d}.json", s)
+    v = content_version(index_json.encode("utf-8"),
+                        ((ddir / f"{i:02d}.json").read_bytes() for i in range(shards)))
     _write(data_dir / "manifest.json",
-           json.dumps({"v": v, "shards": shards, "count": len(index)}))
+           json.dumps({"schema": 2, "v": v, "shards": shards, "count": len(index)}))
     log(f"  payload: index {len(index_json)/1e6:.1f} MB + {shards} detail shards "
         f"{total/1e6:.1f} MB (v={v})")
     return v
