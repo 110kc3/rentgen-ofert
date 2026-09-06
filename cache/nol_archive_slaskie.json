@@ -1,0 +1,24 @@
+{
+ "by_type": {
+  "flat": {
+   "archived": 38170,
+   "capped": [
+    "katowice"
+   ],
+   "current": 8368,
+   "failed": [],
+   "pages": 1467
+  },
+  "house": {
+   "archived": 9716,
+   "capped": [],
+   "current": 2473,
+   "failed": [],
+   "pages": 352
+  }
+ },
+ "complete": false,
+ "records": 47886,
+ "refreshed": "2026-09-03",
+ "schema": 1
+}
