@@ -97,25 +97,9 @@ jobs:
         run: python -m scraper.regions --region "$REGION" --require-enabled
 
       - name: Pull this region's data + caches from its data branch
-        run: |
-          if git fetch origin "$DATA_BRANCH"; then
-            git checkout FETCH_HEAD -- "site/data/$REGION" 2>/dev/null \
-              || echo "$DATA_BRANCH has no regional data yet"
-            git checkout FETCH_HEAD -- cache 2>/dev/null \
-              || echo "$DATA_BRANCH has no caches yet"
-            git reset -q      # keep the files, but untracked on main's checkout
-          elif git fetch origin data; then
-            # Pre-split shared branch: read once, until this region's own
-            # branch exists. The push below writes only this region back.
-            echo "no $DATA_BRANCH yet — seeding from the shared data branch"
-            git checkout FETCH_HEAD -- "site/data/$REGION" 2>/dev/null \
-              || echo "shared data branch has no $REGION data"
-            git checkout FETCH_HEAD -- cache 2>/dev/null \
-              || echo "shared data branch has no caches"
-            git reset -q
-          else
-            echo "no data branch yet — starting fresh"
-          fi
+        # Remote absence is checked explicitly. Transport/authentication,
+        # fetch, incomplete history and extraction failures abort publication.
+        run: python -m scripts.region_storage restore "$REGION"
 
       # scraper.main replaces meta.json. Keep the last published source health
       # outside the working tree so validation can reject a categorical outage

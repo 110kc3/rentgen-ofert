@@ -32,9 +32,10 @@ import json
 import os
 import pathlib
 import re
-import unicodedata
 import urllib.parse
 import xml.etree.ElementTree as ET
+
+from .identity import fold as _fold, street_match
 
 WFS = "https://mapy.geoportal.gov.pl/wss/service/rcn"
 NS_MS = "{http://mapserver.gis.umn.edu/mapserver}"
@@ -254,64 +255,6 @@ def refresh(cache_path, session, teryt_prefix="24", today=None, force=False, log
 
 # ---- matching ---------------------------------------------------------------
 
-def _fold(s):
-    """lowercase, strip diacritics (incl. ł) and punctuation, collapse spaces —
-    'Bielsko - Biała' and 'Bielsko-Biała' must fold to the same key."""
-    if not s:
-        return ""
-    s = s.replace("ł", "l").replace("Ł", "L")
-    s = unicodedata.normalize("NFKD", s)
-    s = "".join(c for c in s if not unicodedata.combining(c))
-    return " ".join(re.sub(r"[^a-z0-9 ]", " ", s.lower()).split())
-
-
-_STREET_NOISE = {"ul", "ulica", "al", "aleja", "pl", "plac", "os", "osiedle", "gen",
-                 "sw", "ks", "dr", "prof", "mjr", "kpt", "im"}
-
-
-def _street_tokens(s):
-    return [t for t in _fold(s).split() if t not in _STREET_NOISE and not t.isdigit()]
-
-
-# folded (ASCII) declension endings a street-name token may gain/swap; a suffix
-# outside this set means a DIFFERENT word ('gorna' vs 'gornika'), not a case form
-_DECL_SUFFIX = {"", "a", "e", "i", "y", "ej", "iej", "ego", "iego",
-                "emu", "iemu", "ym", "im", "ymi", "imi", "ach", "iach"}
-
-
-def _tok_eq(a, b):
-    """Token equality tolerant of Polish declension: 'gdanska' == 'gdanskiej',
-    'polna' == 'polnej', but 'kwiatowa' != 'kwiatkowskiego' and
-    'gorna' != 'gornika' (an agent noun, not a case of 'gorna')."""
-    if a == b:
-        return True
-    short, long_ = (a, b) if len(a) <= len(b) else (b, a)
-    common = 0
-    for x, y in zip(short, long_):
-        if x != y:
-            break
-        common += 1
-    return (common >= 4 and common >= len(short) - 1
-            and long_[common:] in _DECL_SUFFIX)
-
-
-def street_match(a, b):
-    """True when two street names plausibly refer to the same street.
-
-    Compares the significant last token (surname) with declension tolerance
-    and requires any remaining tokens of the shorter name to appear in the
-    longer one, so 'Asnyka' == 'Adama Asnyka', 'ul. Gdanskiej' == 'Gdanska',
-    but 'Polna' != 'Lipowa'.
-    """
-    ta, tb = _street_tokens(a), _street_tokens(b)
-    if not ta or not tb:
-        return False
-    if not _tok_eq(ta[-1], tb[-1]):
-        return False
-    small, big = (ta, tb) if len(ta) <= len(tb) else (tb, ta)
-    return all(any(_tok_eq(t, u) for u in big) for t in small[:-1])
-
-
 def _index_by_town(rows):
     idx = {}
     for r in rows:
@@ -373,6 +316,20 @@ def _score(rec, snap, r, is_flat, unique=False):
     lets weaker attribute evidence through (still conservative: mismatching
     known attributes always reject).
     """
+    # A street/parcel locates a building, not a particular unit. Known flat
+    # attributes must agree BEFORE any address evidence can accept a deed.
+    hits = 0
+    if is_flat:
+        rooms, floor = _to_i(snap.get("rooms")), _floor_int(snap.get("floor"))
+        if rooms is not None and r.get("izb") is not None:
+            if rooms != r["izb"]:
+                return 0, False
+            hits += 1
+        if floor is not None and r.get("kond") is not None:
+            # Keep the existing tolerance for portal/storey numbering.
+            if r["kond"] not in (floor, floor + 1):
+                return 0, False
+            hits += 1
     dz = snap.get("dzialka_id")
     if dz and r.get("dz") and _fold(dz) == _fold(r["dz"]):
         return 2, True             # same cadastral parcel -> same building
@@ -396,17 +353,6 @@ def _score(rec, snap, r, is_flat, unique=False):
     if r.get("a") is None:
         return 0, False        # area-less deed without street match -> never
     if is_flat:
-        rooms, floor = _to_i(snap.get("rooms")), _floor_int(snap.get("floor"))
-        hits = 0
-        if rooms is not None and r.get("izb") is not None:
-            if rooms != r["izb"]:
-                return 0, False
-            hits += 1
-        if floor is not None and r.get("kond") is not None:
-            # kondygnacja is 1-based (parter = 1), listing floor is usually 0-based
-            if r["kond"] not in (floor, floor + 1):
-                return 0, False
-            hits += 1
         if hits >= 2:
             return 1, True
         # a to-the-decimal area that exists exactly once in the town is itself
@@ -444,8 +390,16 @@ def match(records, snapshot, log=print):
     """
     if not snapshot:
         return 0
-    by_town = {"flat": _index_by_town(snapshot.get("lokale") or []),
-               "house": _index_by_town(snapshot.get("budynki") or [])}
+    # Missing snapshot/layer is unavailable evidence; a present empty layer is
+    # evidence with no deeds. Validate before changing any persisted claims.
+    by_town = {}
+    for typ, layer in (("flat", "lokale"), ("house", "budynki")):
+        rows = snapshot.get(layer)
+        if rows is None:
+            continue
+        if not isinstance(rows, list):
+            raise ValueError(f"RCN {layer} must be a list or unavailable")
+        by_town[typ] = _index_by_town(rows)
     attached = 0
     funnel = {"records": 0, "no_location_yet": 0, "no_deed_candidates": 0,
               "candidates_rejected": 0, "matched": 0}
@@ -453,6 +407,9 @@ def match(records, snapshot, log=print):
         typ = rec.get("type")
         if typ not in by_town:
             continue
+        # These are derived claims: rebuild even when candidates disappear,
+        # become ambiguous, contradict a corrected address or change lifecycle.
+        rec.pop("sales", None)
         if rec.get("development"):
             continue   # marketing photos != a specific flat; deeds can't be attributed
         funnel["records"] += 1

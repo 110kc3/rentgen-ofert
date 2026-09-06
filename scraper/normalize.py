@@ -31,6 +31,7 @@ import unicodedata
 from collections import defaultdict
 
 from .regions import catalog
+from .identity import compatible
 
 OTODOM_ROOMS = {
     "ONE": 1, "TWO": 2, "THREE": 3, "FOUR": 4, "FIVE": 5,
@@ -329,8 +330,13 @@ def same_photos(a_hashes, b_hashes):
 
 
 def _photo_clusters(members):
-    """Cluster a size-group by matching photos; un-photographed ads stay alone."""
-    n = len(members)
+    """Photo clusters cannot contain contradictory known property attributes.
+
+    Seed exact portal-ID twins first. Check every member before union so an
+    unknown-location bridge cannot join two known, different towns transitively.
+    """
+    groups = _union_twins([[member] for member in members])
+    n = len(groups)
     parent = list(range(n))
 
     def find(x):
@@ -341,15 +347,17 @@ def _photo_clusters(members):
 
     for i in range(n):
         for j in range(i + 1, n):
-            if same_photos(members[i].get("phashes") or [], members[j].get("phashes") or []):
-                ri, rj = find(i), find(j)
-                if ri != rj:
-                    parent[ri] = rj
+            ri, rj = find(i), find(j)
+            if ri == rj:
+                continue
+            left, right = groups[ri], groups[rj]
+            if (any(same_photos(a.get("phashes") or [], b.get("phashes") or [])
+                    for a in left for b in right)
+                    and all(compatible(a, b) for a in left for b in right)):
+                parent[ri] = rj
+                groups[rj].extend(left)
 
-    clusters = {}
-    for i in range(n):
-        clusters.setdefault(find(i), []).append(members[i])
-    return list(clusters.values())
+    return [group for i, group in enumerate(groups) if find(i) == i]
 
 
 def link_twins(listings):
@@ -541,7 +549,8 @@ def link_same_size(properties):
         if not (2 <= len(urls) <= 3):          # 2-3 = likely relist; more = a development
             continue
         for p in members:
-            others = [m for m in members if m.get("url") != p.get("url")]
+            others = [m for m in members if m.get("url") != p.get("url")
+                      and compatible(p, m)]
             if not others:
                 continue
             p["relisted"] = True

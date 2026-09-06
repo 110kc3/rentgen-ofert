@@ -109,12 +109,52 @@ def overlay_region(root, ref, region):
     return True
 
 
+def restore_region(root, region):
+    """Restore a published tree; only verified absence permits a cold start.
+
+    A network/auth/fetch/checkout failure is never evidence of a new region.
+    Existing regional branches must carry metadata AND lifecycle history.
+    The legacy branch may lack this region, but a partial tree is an error.
+    Cache files are optional and selected from this region's allowlist.
+    """
+    root = pathlib.Path(root).resolve()
+    _entry(root, region)
+    relative = f"site/data/{region}"
+    for branch in (f"data-{region}", "data"):
+        remote = _git(root, "ls-remote", "--exit-code", "--heads", "origin",
+                      f"refs/heads/{branch}", check=False)
+        if remote.returncode == 2:  # Git explicitly reports no matching ref
+            continue
+        if remote.returncode:
+            raise RegionStorageError(
+                f"cannot determine whether {branch} exists: {remote.stderr.strip()}")
+        _git(root, "fetch", "origin", f"refs/heads/{branch}")
+        files = set(_git(root, "ls-tree", "-r", "--name-only", "FETCH_HEAD").stdout.splitlines())
+        regional = {name for name in files if name.startswith(relative + "/")}
+        if branch == "data" and not regional:
+            return None
+        histories = {f"{relative}/history.json.gz", f"{relative}/history.json"}
+        if f"{relative}/meta.json" not in regional or not regional & histories:
+            raise RegionStorageError(
+                f"{branch} has incomplete {relative}: metadata and history are required")
+        caches = sorted(path.as_posix() for path in allowed_index_paths(region)
+                        if path.as_posix() in files)
+        # Worktree-only restoration keeps main and its index unchanged. Any
+        # extraction failure aborts the job before metadata preservation/scrape.
+        _git(root, "restore", "--source=FETCH_HEAD", "--worktree", "--",
+             relative, *caches)
+        return branch
+    return None
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="isolate regional data branches")
     parser.add_argument("--root", default=".", help="repository root")
     sub = parser.add_subparsers(dest="command", required=True)
     stage = sub.add_parser("stage", help="stage one region for an orphan branch")
     stage.add_argument("region")
+    restore = sub.add_parser("restore", help="restore prior data or verify a cold start")
+    restore.add_argument("region")
     overlay = sub.add_parser("overlay", help="overlay one region from a git ref")
     overlay.add_argument("ref")
     overlay.add_argument("region")
@@ -123,6 +163,10 @@ def main(argv=None) -> int:
         if args.command == "stage":
             staged = stage_region(args.root, args.region)
             print(f"staged {len(staged)} path(s) for {args.region}")
+        elif args.command == "restore":
+            source = restore_region(args.root, args.region)
+            print(f"restored {args.region} from {source}" if source else
+                  f"verified no prior data for {args.region}; starting fresh")
         else:
             changed = overlay_region(args.root, args.ref, args.region)
             if changed:

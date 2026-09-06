@@ -3,6 +3,7 @@ from scraper.normalize import (
     take_unseen,
 )
 import pytest
+from scraper.normalize import link_same_size
 
 
 def test_room_maps():
@@ -60,6 +61,59 @@ def _l(**kw):
                 image=None, created=None)
     base.update(kw)
     return base
+
+
+@pytest.mark.parametrize("conflict", [
+    {"locality": "Częstochowa"}, {"street": "Lipowa"}, {"floor": 8},
+])
+def test_shared_photo_cannot_override_known_identity_conflict(conflict):
+    base = dict(area=50, rooms=2, locality="Gliwice", street="Polna",
+                floor=1, phashes=[3], price=400000)
+    rows = [_l(**base), _l(**(base | conflict | {"url": "other", "source": "olx"}))]
+    out = link_same_size(dedupe(rows))
+    assert len(out) == 2
+    assert not any(p.get("also_listed") or p.get("relisted") for p in out)
+
+
+def test_unknown_metadata_cannot_bridge_incompatible_photo_clusters():
+    rows = [_l(url="a", area=50, rooms=2, locality="Gliwice", phashes=[3]),
+            _l(url="unknown", area=50, rooms=2, phashes=[3]),
+            _l(url="b", area=50, rooms=2, locality="Częstochowa", phashes=[3])]
+    from itertools import permutations
+    for order in permutations(rows):
+        out = dedupe(list(order))
+        assert len(out) == 2
+        assert not any({"a", "b"} <= {o["url"] for o in p["offers"]} for p in out)
+
+
+def test_normalized_addresses_and_unknown_floor_still_photo_match():
+    a = _l(url="a", area=50, rooms=2, locality="Bielsko-Biała",
+           street="ul. Adama Asnyka", floor="parter", phashes=[3])
+    b = _l(url="b", area=50, rooms=2, locality="Bielsko - Biala",
+           street="Asnyka", floor=0, phashes=[3])
+    assert len(dedupe([a, b])) == 1
+    b["floor"] = None
+    assert len(dedupe([a, b])) == 1
+
+
+def test_exact_twins_survive_conflicts_without_bridging_other_properties():
+    a = _l(url="a", source="gratka", source_id="42", area=50, rooms=2,
+           locality="Gliwice", phashes=[3])
+    b = _l(url="b", source="morizon", gratka_id="42", area=51, rooms=3,
+           locality="Częstochowa", phashes=[3])
+    c = _l(url="c", area=50, rooms=2, locality="Gliwice", phashes=[3])
+    out = dedupe([a, b, c])
+    assert len(out) == 2
+    assert any({"a", "b"} == {o["url"] for o in p["offers"]} for p in out)
+
+
+def test_cross_size_photo_unification_rejects_room_and_floor_conflicts():
+    for conflict in ({"rooms": 3}, {"floor": 8}):
+        a = _l(url="a", area=50, price=400000, rooms=2, floor=1,
+               locality="Gliwice", phashes=[3])
+        b = dict(a, url="b", area=51, **conflict)
+        assert len(dedupe([a, b])) == 2
+        assert (a["area"], b["area"]) == (50, 51)
 
 
 def test_dedupe_merges_cross_portal_same_price():

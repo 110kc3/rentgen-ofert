@@ -28,6 +28,7 @@ import pathlib
 from collections import defaultdict
 
 from .normalize import same_photos
+from .identity import compatible
 
 MAX_HASHES = 10       # cap stored gallery hashes per property
 MAX_PHOTO_URLS = 8    # cap archived gallery URLs per property
@@ -78,15 +79,17 @@ def save(path, records):
     os.replace(tmp, p)
 
 
-def _find(rec_index, typ, area, hashes):
+def _find(rec_index, typ, area, hashes, listing):
     if not hashes:
         return None
     buckets = [(typ, b) for b in (
         (int(round(area)) - 1, int(round(area)), int(round(area)) + 1) if area is not None else (None,))]
     for b in buckets:
         for r in rec_index.get(b, []):
-            if same_photos(hashes, r.get("hashes", [])):
-                return r
+            if not r.get("development") and same_photos(hashes, r.get("hashes", [])):
+                identity = dict(r.get("snapshot") or {}, type=r.get("type"))
+                if compatible(listing, identity):
+                    return r
     return None
 
 
@@ -134,7 +137,7 @@ def _match_or_create(records, index, url_idx, p, today):
     typ, area = p.get("type"), p.get("area")
     # developer ads share marketing photos across many units, so photo identity
     # is meaningless for them — match by URL only
-    rec = None if p.get("development") else _find(index, typ, area, hashes)
+    rec = None if p.get("development") else _find(index, typ, area, hashes, p)
     if rec is None and p.get("url"):
         cand = url_idx.get(p["url"])
         # URL fallback: only trust it when photos don't contradict it
@@ -287,6 +290,8 @@ def update(properties, records, today: str):
         p["photo_urls"] = (rec.get("photo_urls") or [])[:MAX_PHOTO_URLS]
         if rec.get("sales"):
             p["sales"] = rec["sales"]
+        else:
+            p.pop("sales", None)
         p["_rec"] = rec               # transient link for reenrich(); not published
     return records
 
@@ -301,6 +306,8 @@ def reenrich(properties):
         p["timeline"] = timeline(rec)
         if rec.get("sales"):
             p["sales"] = rec["sales"]
+        else:
+            p.pop("sales", None)
 
 
 def observe_archived(archived_listings, records, today: str):
@@ -319,8 +326,8 @@ def observe_archived(archived_listings, records, today: str):
         rec = None
         if p.get("url") and p["url"] in url_idx:
             rec = url_idx[p["url"]]
-        elif p.get("phashes"):
-            rec = _find(index, p.get("type"), p.get("area"), p["phashes"])
+        elif p.get("phashes") and not p.get("development"):
+            rec = _find(index, p.get("type"), p.get("area"), p["phashes"], p)
         if rec is None:
             continue
         _observe(rec, p, today, status="archived")

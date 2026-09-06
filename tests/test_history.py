@@ -2,6 +2,7 @@
 timeline and archive building. Offline — no network."""
 import threading
 import time
+import pytest
 
 from scraper import delist, history, net
 
@@ -17,6 +18,47 @@ def _prop(**kw):
                 rooms=2, floor=1, offers=[])
     base.update(kw)
     return base
+
+
+@pytest.mark.parametrize("conflict", [
+    {"locality": "Częstochowa"}, {"street": "Lipowa"}, {"rooms": 4}, {"floor": 8},
+])
+def test_reused_photo_does_not_transfer_conflicting_history_or_archive(conflict):
+    records = []
+    history.update([_prop()], records, "2026-06-01")
+    other = _prop(url="https://olx.pl/other", **conflict)
+    assert history.observe_archived([other], records, "2026-06-10") == 0
+    assert "delisted" not in records[0]
+    history.update([other], records, "2026-06-11")
+    assert len(records) == 2
+    assert other["first_seen"] == "2026-06-11"
+    assert not other["relisted"]
+    assert records[0]["last_seen"] == "2026-06-01"
+
+
+def test_developer_photo_record_is_not_a_resale_identity():
+    records = []
+    history.update([_prop(development=True)], records, "2026-06-01")
+    other = _prop(url="https://olx.pl/resale")
+    history.update([other], records, "2026-06-11")
+    assert len(records) == 2
+    assert not other["relisted"]
+
+
+def test_reenrich_removes_retracted_sales_from_card_and_timeline():
+    from scraper import rcn
+    records = []
+    history.update([_prop()], records, "2026-06-01")
+    records[0]["sales"] = [{"kind": "past", "date": "2025-01-01", "price": 200000}]
+    current = _prop()
+    history.update([current], records, "2026-06-02")
+    assert current["sales"]
+    rcn.match(records, {"lokale": [], "budynki": []}, log=lambda *a: None)
+    history.reenrich([current])
+    assert "sales" not in current
+    assert not any(e["kind"].startswith("sale") for e in current["timeline"])
+    records[0]["delisted"] = "2026-06-03"
+    assert history.build_archive(records)[0]["sold"] is None
 
 
 def test_photo_match_appends_observation_and_snapshot():

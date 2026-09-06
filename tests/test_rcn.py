@@ -1,5 +1,6 @@
 """RCN: GML parsing, compaction, street matching and sale attachment. Offline."""
 from scraper import rcn
+import pytest
 
 GML_PAGE = """<?xml version='1.0' encoding="UTF-8" ?>
 <wfs:FeatureCollection
@@ -190,3 +191,81 @@ def test_renumbered_parcel_street_nr_still_wins():
     assert rcn.match([rec], {"lokale": [], "budynki": [deed]},
                      log=lambda *a: None) == 1
     assert rec["sales"][0]["confidence"] == "wysoka"
+
+
+@pytest.mark.parametrize("anchor", ["street", "number", "parcel"])
+@pytest.mark.parametrize("conflict", [{"izb": 4}, {"kond": 8}])
+def test_address_evidence_cannot_override_conflicting_flat_attributes(anchor, conflict):
+    rec = _rec(delisted="2026-06-15")
+    deed = _tx(d="2026-07-20", **conflict)
+    if anchor == "number":
+        rec["snapshot"]["nr"] = "11"
+    if anchor == "parcel":
+        rec["snapshot"]["dzialka_id"] = deed["dz"] = "246601_1.0041.1506"
+    assert rcn.match([rec], {"lokale": [deed], "budynki": []},
+                     log=lambda *a: None) == 0
+    assert "sales" not in rec
+
+
+@pytest.mark.parametrize("change", ["ambiguous", "empty", "attributes", "location", "development"])
+def test_previously_attached_sale_is_reconciled_when_evidence_changes(change):
+    rec = _rec(delisted="2026-06-15")
+    deed = _tx(d="2026-07-20")
+    snap = {"lokale": [deed], "budynki": []}
+    assert rcn.match([rec], snap, log=lambda *a: None) == 1
+    assert rec["sales"][0]["kind"] == "sold"
+    if change == "ambiguous":
+        snap["lokale"].append(_tx(d="2026-08-02", nr="13"))
+    elif change == "empty":
+        snap["lokale"] = []
+    elif change == "attributes":
+        rec["snapshot"]["rooms"] = 4
+    elif change == "location":
+        rec["snapshot"]["locality"] = "Częstochowa"
+    else:
+        rec["development"] = True
+    assert rcn.match([rec], snap, log=lambda *a: None) == 0
+    assert "sales" not in rec
+
+
+@pytest.mark.parametrize("unavailable", [None, {}, {"budynki": []}, {"lokale": None}])
+def test_unavailable_snapshot_or_layer_preserves_existing_evidence(unavailable):
+    rec = _rec()
+    snap = {"lokale": [_tx()], "budynki": []}
+    rcn.match([rec], snap, log=lambda *a: None)
+    previous = rec["sales"]
+    rcn.match([rec], unavailable, log=lambda *a: None)
+    assert rec["sales"] == previous
+
+
+def test_ambiguous_sold_retraction_preserves_supported_past_deeds():
+    rec = _rec(delisted="2026-06-15")
+    snap = {"lokale": [_tx(), _tx(d="2026-07-20")], "budynki": []}
+    rcn.match([rec], snap, log=lambda *a: None)
+    assert {s["kind"] for s in rec["sales"]} == {"past", "sold"}
+    snap["lokale"].append(_tx(d="2026-08-02", nr="13"))
+    rcn.match([rec], snap, log=lambda *a: None)
+    assert {s["kind"] for s in rec["sales"]} == {"past"}
+
+
+def test_invalid_snapshot_fails_before_retracting_any_claim():
+    rec = _rec()
+    rcn.match([rec], {"lokale": [_tx()]}, log=lambda *a: None)
+    previous = rec["sales"]
+    with pytest.raises(ValueError, match="budynki"):
+        rcn.match([rec], {"lokale": [], "budynki": "invalid"}, log=lambda *a: None)
+    assert rec["sales"] == previous
+
+
+def test_rcn_refresh_failure_preserves_cached_evidence(tmp_path, monkeypatch):
+    path = tmp_path / "rcn.json.gz"
+    snapshot = {"fetched": "2026-06-01", "lokale": [_tx()], "budynki": []}
+    rcn.save_snapshot(path, snapshot)
+
+    def unavailable(*args, **kwargs):
+        raise OSError("offline fixture")
+
+    monkeypatch.setattr(rcn, "fetch_all", unavailable)
+    assert rcn.refresh(path, None, today="2026-09-05", log=lambda *a: None) == snapshot
+    assert rcn.refresh(tmp_path / "missing.gz", None, today="2026-09-05",
+                       log=lambda *a: None) is None

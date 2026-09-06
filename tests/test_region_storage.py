@@ -89,3 +89,83 @@ def test_overlay_replaces_one_region_and_preserves_its_sibling(tmp_path):
     assert not region_storage.overlay_region(
         root, "data-slaskie", "malopolskie")
     assert sibling.read_text() == "keep malopolskie"
+
+
+def _restore_repo(tmp_path, branch=None, paths=()):
+    root = _repo(tmp_path)
+    _git(root, "add", ".")
+    _git(root, "commit", "-qm", "main catalog")
+    _git(root, "remote", "add", "origin", str(root))
+    if branch:
+        _git(root, "checkout", "--orphan", branch)
+        _git(root, "rm", "-rf", ".")
+        for path in paths:
+            _put(root, path)
+        _git(root, "add", ".")
+        _git(root, "commit", "--allow-empty", "-qm", "data fixture")
+        _git(root, "checkout", "main")
+    return root
+
+
+@pytest.mark.parametrize("branch", ["data-slaskie", "data"])
+def test_restore_recovers_history_without_changing_main_or_siblings(tmp_path, branch):
+    paths = ("site/data/slaskie/meta.json", "site/data/slaskie/history.json.gz",
+             "cache/phash_slaskie.json.gz", "cache/phash_opolskie.json.gz",
+             "site/data/opolskie/meta.json")
+    root = _restore_repo(tmp_path, branch, paths)
+    _put(root, "site/data/opolskie/keep.txt", "sibling")
+    head = _git(root, "rev-parse", "HEAD")
+    assert region_storage.restore_region(root, "slaskie") == branch
+    assert (root / paths[1]).read_text() == "fixture"
+    assert (root / paths[2]).read_text() == "fixture"
+    assert not (root / paths[3]).exists()
+    assert not (root / paths[4]).exists()
+    assert (root / "site/data/opolskie/keep.txt").read_text() == "sibling"
+    assert _git(root, "rev-parse", "HEAD") == head
+    assert _git(root, "diff", "--cached", "--name-only") == ""
+
+
+@pytest.mark.parametrize("legacy_other_region", [False, True])
+def test_restore_allows_only_verified_cold_start(tmp_path, legacy_other_region):
+    root = _restore_repo(tmp_path, "data" if legacy_other_region else None,
+                         ["site/data/opolskie/meta.json"])
+    assert region_storage.restore_region(root, "slaskie") is None
+    assert not (root / "site/data/slaskie").exists()
+
+
+@pytest.mark.parametrize("branch,paths", [
+    ("data-slaskie", []),
+    ("data-slaskie", ["site/data/slaskie/meta.json"]),
+    ("data", ["site/data/slaskie/meta.json"]),
+    ("data-slaskie", ["site/data/slaskie/history.json.gz"]),
+])
+def test_restore_rejects_incomplete_existing_tree(tmp_path, branch, paths):
+    root = _restore_repo(tmp_path, branch, paths)
+    with pytest.raises(region_storage.RegionStorageError, match="incomplete"):
+        region_storage.restore_region(root, "slaskie")
+
+
+def test_restore_transport_failure_is_not_a_cold_start(tmp_path):
+    root = _restore_repo(tmp_path)
+    _git(root, "remote", "set-url", "origin", str(root / "unreachable.git"))
+    with pytest.raises(region_storage.RegionStorageError, match="cannot determine"):
+        region_storage.restore_region(root, "slaskie")
+
+
+@pytest.mark.parametrize("operation", ["fetch", "restore"])
+def test_restore_propagates_fetch_and_extraction_failure(tmp_path, monkeypatch, operation):
+    root = _restore_repo(tmp_path, "data-slaskie",
+                         ["site/data/slaskie/meta.json", "site/data/slaskie/history.json.gz"])
+    original = region_storage._git
+    calls = []
+
+    def fail(root, *args, **kw):
+        calls.append(args)
+        if args[0] == operation:
+            raise subprocess.CalledProcessError(128, ["git", *args], stderr="fixture failure")
+        return original(root, *args, **kw)
+
+    monkeypatch.setattr(region_storage, "_git", fail)
+    with pytest.raises(subprocess.CalledProcessError):
+        region_storage.restore_region(root, "slaskie")
+    assert not any(args[-1] == "refs/heads/data" for args in calls)

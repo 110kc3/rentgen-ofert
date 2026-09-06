@@ -6,6 +6,26 @@ to grow deliberately to all 16 Polish voivodeships. It attempts **Otodom**, **OL
 and presents it on one searchable page. No application server: a GitHub Actions
 job scrapes, writes static JSON, and GitHub Pages displays it.
 
+**2026-09-06 correctness update:** the four P1 findings from the 2026-09-05
+review are implemented and pass **309 offline tests**. Data restoration now
+stops on remote/read failures or missing lifecycle history; only verified
+absence permits a cold start. Photo-based dedupe, history and related-listing
+links reject conflicting known towns, streets and flat attributes, including
+transitive photo bridges, while exact portal-ID twins remain valid. RCN checks
+known rooms/floors before accepting address evidence and reconciles previous
+sale claims when available evidence becomes contradictory or ambiguous.
+Unavailable RCN snapshots/layers preserve prior claims. Cards and archives
+drop claims retracted by reconciliation.
+
+Production verification for this push is **pending**; the rollout evidence
+below predates these fixes. The three P2 findings (intraday price history,
+retryable browser data loading, and detail-aware cache versions) are recorded
+with acceptance criteria in [TODO.md](TODO.md#deferred-review-findings-p2).
+Previously conflated historical records are preserved: their observations
+lack enough address provenance for automatic splitting. Current matching
+prevents new contradictory photo associations; counts and sale totals may
+change after refresh. The existing rollout and storage gates still apply.
+
 Portal blocking and serving caps mean “all listings” is a target, not a current
 guarantee. The latest audited 2026-09-03 Śląskie deployment has 28,579 current
 properties from 51,943 raw rows. Scheduled update `33804201172` completed its

@@ -1,9 +1,83 @@
 # TODO — rentgen-ofert
 
 > Keep this file and `README.md` updated after each change.
-> Last updated: 2026-09-04
+> Last updated: 2026-09-06
 
-## Current (2026-09-04) — warm Opolskie pilot accepted; cadence next
+## Current (2026-09-06) — review P1 fixes complete locally; production verification pending
+
+The owner selected all four P1 findings from the 2026-09-05 architecture/bug
+review for implementation, and requested the remaining P2 findings be recorded
+only. Review severity labels below are separate from the P0–P5 rollout phases
+in [POLAND_ROLLOUT.md](POLAND_ROLLOUT.md).
+
+### Completed review fixes
+
+1. [x] **P1 — stop publication when prior data cannot be restored.**
+   `scripts.region_storage restore` distinguishes Git's explicit absent-ref
+   result from transport/auth/fetch/extraction failures. Existing regional
+   trees require metadata and lifecycle history. Legacy fallback is used only
+   after verified absence of the regional branch; caches use the regional
+   allowlist. Temporary Git repositories test cold starts, restoration,
+   incomplete branches, errors and sibling/index preservation.
+2. [x] **P1 — reject contradictory photo identities.** Shared address rules
+   protect dedupe, cross-size unification, historical photo matching, archived
+   photo ingestion and related-listing links. Known town/street or flat
+   rooms/floor conflicts veto photo evidence. Every member is checked before
+   joining photo clusters, so missing metadata cannot bridge conflicting
+   properties. Exact Gratka/Morizon IDs still join; normalized Polish address
+   variants and unknown attributes remain supported.
+3. [x] **P1 — check flat attributes before RCN address acceptance.** Known
+   rooms/floors must agree before street, building-number or parcel evidence
+   can produce a sale. Existing portal/storey-number tolerance is retained.
+4. [x] **P1 — reconcile previously attached RCN sales.** An available layer
+   rebuilds derived claims, removing unsupported/ambiguous sales and retaining
+   supported past deeds. Missing snapshots/layers preserve prior evidence;
+   malformed layer types fail before mutation. Re-enrichment removes retracted
+   sales from current cards and their timelines; archives use reconciled data.
+
+Local verification: **309 passed** with `.venv/bin/python -m pytest -q`
+(Python 3.11; CI uses 3.12), including 42 added regression cases. No production
+scrape was dispatched for this slice. Previously conflated histories are not
+automatically split because old observations lack per-offer address evidence.
+Stricter identity checks can keep more cards separate and RCN reconciliation
+can reduce sale totals; these are expected corrections to audit after refresh.
+
+**Pending verification:** the impending `main` push's Update listings and
+Deploy site runs have not been observed. At the next session check the pushed
+commit once in [Actions](https://github.com/110kc3/rentgen-ofert/actions?query=branch%3Amain),
+including successful prior-history restoration, regional isolation, source
+continuity, runtime, and resulting unique/sale counts. Do not treat the local
+test pass as production acceptance. The next accepted rollout implementation
+remains serial 72-hour Opolskie cadence, followed by seven healthy days;
+this slice does not implement cadence or regional expansion.
+
+### Deferred review findings (P2)
+
+Recorded at the owner's request; implementation has not been selected. Numbers
+5–7 retain their identities from the review and are separate from rollout steps.
+
+5. [ ] **Intraday price history (small).** Observations keyed only by date/URL
+   ignore a later price on the second daily scrape. Reproduction: a card moves
+   from 400,000 to 350,000 PLN while its trail retains 400,000. Accept when a
+   documented intraday or daily-update policy captures the later value,
+   timeline/card output agrees, and repeated identical observations stay
+   idempotent. Source: `scraper/history.py::_observe`.
+6. [ ] **Retryable browser data loading (small).** A transient detail failure
+   is cached as an empty shard and marks the listing `_full`; archive failures
+   similarly become a cached empty archive. Accept when failures have visible
+   retryable state, a subsequent success restores content, and only successful
+   loads mark data complete. Source: `site/app.js::loadDetails/loadArchive`.
+7. [ ] **Detail-aware cache versions (small).** `payload.build` hashes only
+   the index, so a street/detail-only change leaves the manifest version
+   unchanged. Accept when changed detail content changes its cache key and
+   fixtures verify both detail-only invalidation and unchanged-data stability.
+   Source: `scraper/payload.py::build` and the browser shard loader.
+
+Architecture follow-ups remain in the existing rollout queue: compact index,
+sharded archive, versioned object storage and rollback in P4. They were not
+selected for implementation by this bug-fix request.
+
+### Rollout evidence through 2026-09-04
 
 The corrected Śląskie baseline was stable across five runs on main SHA
 `701795e`. Those runs rejected cross-category clones, duplicate cards within a

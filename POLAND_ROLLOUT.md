@@ -1,5 +1,18 @@
 # Whole-Poland rollout: status and next tasks
 
+> **Code update 2026-09-06:** all four P1-severity findings from the 2026-09-05
+> review are fixed locally (309 offline tests): restoration fails closed,
+> photo matching rejects contradictory identities, RCN checks flat attributes
+> before address acceptance, and available RCN evidence reconciles old sale
+> claims. Production verification of the impending `main` push is pending;
+> check its Update listings/Deploy site runs once next session. The detailed
+> handoff and three deferred P2 findings are in
+> [TODO.md](TODO.md#current-2026-09-06--review-p1-fixes-complete-locally-production-verification-pending).
+> Review severity labels do not rename the rollout phases below. No cadence,
+> catalog enablement or storage migration changed in this slice. Stricter
+> matching may change unique/sale counts; the following production audit
+> predates the changes and does not certify them.
+
 > Audited: 2026-09-04. Production is current through warm Opolskie run
 > `33855228296` and deploy `33856444810`; scheduled Śląskie run `33804201172`
 > remains its current regional ref, and Otodom is above the approved
