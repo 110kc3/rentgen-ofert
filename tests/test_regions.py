@@ -35,7 +35,7 @@ def test_production_catalog_has_all_official_regions_and_one_default():
     assert malopolskie["cadence"] == "manual"
     assert malopolskie["enabled"] is False
     opolskie = regions.get_region("opolskie", document)
-    assert opolskie["cadence"] == "manual"
+    assert opolskie["cadence"] == "every_72h"
     assert opolskie["enabled"] is True
     assert regions.get_region("slaskie", document)["cadence"] == "twice_daily"
 

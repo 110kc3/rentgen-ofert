@@ -6,35 +6,36 @@ to grow deliberately to all 16 Polish voivodeships. It attempts **Otodom**, **OL
 and presents it on one searchable page. No application server: a GitHub Actions
 job scrapes, writes static JSON, and GitHub Pages displays it.
 
-**2026-09-06 correctness update:** all seven findings from the 2026-09-05
-review are implemented and pass **316 offline tests**, including eight browser
-loading/retry cases. The P1 fixes stop failed history restoration, veto
-contradictory photo identities and reconcile RCN sale evidence; commit
-`490be3f` passed its recorded scrape and direct deploy. The follow-up P2 slice
-keeps the latest daily price per portal URL/status, makes failed archive/detail
-loads visibly retryable, and includes every detail shard in the schema-2
-manifest version. Legacy manifests remain readable during regional refresh.
+**2026-09-09 update:** the seven review fixes have completed a production
+and browser audit. The latest checked Śląskie publication contains **29,945**
+properties from **52,225** raw offers, uses manifest schema 2 and took **114.9
+minutes**, with no photo deferrals/unresolved groups. Replaying unchanged deed
+evidence explains the reduction from 73 confirmed-sale records to 15. All 21
+sampled same-day offer-price changes retained their later value. Live Chromium
+checks recovered detail HTTP failures and archive network failures through the
+visible retry controls.
 
-Production verification of the P2 push is **pending**. The dated rollout
-evidence below predates these review changes. Completed fixes, remaining
-verification and the existing rollout/storage work are recorded in
-[TODO.md](TODO.md#remaining-rollout-and-architecture-work).
-Previously conflated historical records are preserved: their observations
-lack enough address provenance for automatic splitting. Current matching
-prevents new contradictory photo associations; counts and sale totals may
-change after refresh. The existing rollout and storage gates still apply.
+The identity audit also found conservative extra cards where portals disagree
+about town/county labels or include building numbers in street names. Old
+conflated histories remain preserved because they lack per-offer address
+provenance. These are documented precision limits, not evidence of market
+growth. See [the dated audit](docs/audits/2026-09-09-production.md).
 
-Portal blocking and serving caps mean “all listings” is a target, not a current
-guarantee. The latest audited 2026-09-03 Śląskie deployment has 28,579 current
-properties from 51,943 raw rows. Scheduled update `33804201172` completed its
-scrape in 90.8 minutes, Otodom contributed 16,015, and deploy `33812434670`
-retained zero photo deferrals/unresolved groups. OLX remains blocked with HTTP
-403. Cold Opolskie run `33504082916` also passed its audit in 29.9 minutes and
-published 3,563 properties / 7.1 MiB from isolated branch `data-opolskie`;
-warm run `33855228296` then passed in 14.3 minutes with 3,556 properties, stable
-sources and zero photo deferrals/backlog; deploy `33856444810` published that
-result on its first attempt. Małopolskie's corrective pilot remains recoverable
-at `cba13c7` but is disabled and absent from served data.
+**Opolskie now has a serial 72-hour cadence in code.** An hourly check at minute
+17 UTC reads the last successful publication; it does no portal work until
+72 hours have elapsed. A small seven-day Actions artifact records each
+Opolskie attempt, so failures also wait 72 hours before automatic retry.
+Śląskie retains its 06:00/18:00 UTC schedule. The global scrape lock queues
+pending work instead of replacing it. Actual starts can be later because of
+the hourly tick, serialization and GitHub scheduling delays. Manual runs remain
+available, and changing Opolskie's catalog cadence to `manual` pauses its timer.
+Checks that publish no data do not deploy Pages.
+
+The impending push and first scheduled Opolskie run are **pending verification**.
+The next gate is seven healthy days for this two-region cohort before any
+expansion. [TODO.md](TODO.md) owns the handoff. OLX remains blocked after its
+bounded probe, and Otodom's serving cap means coverage remains explicitly
+partial. Małopolskie stays disabled with its data branch recoverable.
 
 ```
 GitHub Actions (cron) → python -m scraper.main → site/data/<region>/*.json
@@ -55,10 +56,10 @@ the Pages artifact.
 
 ## Poland rollout status
 
-As of 2026-09-04, **Śląskie and the manual Opolskie pilot are published**.
-Śląskie remains scheduled twice daily. Opolskie's cold run passed and its
-isolated branch is live; its warm run also passed, and it remains manual only
-until the selected serial 72-hour cadence is implemented.
+As of 2026-09-09, **Śląskie and Opolskie are published**. Śląskie remains
+scheduled twice daily. Opolskie passed its cold/warm pilot; its serial
+72-hour scheduler is implemented, with production acceptance pending. The
+seven-day cohort observation starts with its first successful scheduled refresh.
 The completed Małopolskie pilot is disabled after passing its corrective gate;
 its isolated data branch is kept for a reversible re-enable, but no disabled
 tree belongs in the artifact.
@@ -198,14 +199,14 @@ development diary.
 ## What it does
 
 - Searches **domy** and **mieszkania** *na sprzedaż* across the selected whole
-  voivodeship (currently published: scheduled Śląskie and manual-pilot
+  voivodeship (currently published: scheduled Śląskie and
   Opolskie) on up to
   five portals — a region-level search on
   Otodom/OLX/gratka/Morizon and per-city sub-domains on
   nieruchomości-online. `RENTGEN_REGION` must name an entry in
   `site/regions.json` whose `enabled` flag is true. Opolskie has an isolated
-  pilot data branch and passed warm acceptance, but is not scheduled until the
-  serial 72-hour cadence slice lands.
+  data branch and a serial 72-hour cadence, checked hourly; the first automatic
+  refresh and seven-day observation remain to be accepted.
   Małopolskie passed its cold and corrective warm gates, then was disabled as a
   completed disposable pilot; its branch remains recoverable.
   Every listing keeps its **town (locality)**, and the dashboard has a searchable
@@ -419,7 +420,8 @@ development diary.
 2. **Settings → Pages → Build and deployment → Source: GitHub Actions.**
 3. **Settings → Actions → General → Workflow permissions: Read and write.**
 4. **Actions tab → "Update listings" → Run workflow** to do the first full scrape.
-   It then re-runs automatically twice a day (06:00 & 18:00 UTC).
+   Śląskie then re-runs twice daily (06:00 & 18:00 UTC). Opolskie is checked
+   hourly and refreshed only after its 72-hour publication/attempt cooldown.
 
 The **first** voivodeship-wide run is heavy. Current look-alikes hash their card
 covers first; remaining time builds the fuller history-gallery cache. After
@@ -593,7 +595,11 @@ otherwise rejected transition.
 - **Add a portal** — write a module exposing `scrape(max_pages, delay, ...)`
   that returns the shared listing dict (see the docstring in
   `scraper/normalize.py`) and add it to `SOURCES` in `scraper/main.py`.
-- **Schedule** — the `cron` line in `.github/workflows/update.yml`.
+- **Schedule** — `.github/workflows/update.yml` and `scripts/schedule_region.py`.
+  The catalog owns region enablement/cadence; only Śląskie and Opolskie have
+  automatic trigger mappings. Missing or unreadable prior metadata stops the
+  Opolskie check. Its attempt marker must upload before restoration or portal
+  work; automatic retries respect the marker even when publication fails.
 
 ## Project layout
 
@@ -627,6 +633,7 @@ cache/                 (on the `data-<region>` branch, gitignored on main)
 scripts/
   validate_data.py      payload + previous-source-continuity publication gate
   region_storage.py     exact per-region branch staging + sibling-safe overlay
+  schedule_region.py    serial cadence decision + publication/attempt cooldown
   update-summary.mjs    national picker/catalog, regional page and discovery generator
   templates/            regional listing + statistics HTML templates
 site/

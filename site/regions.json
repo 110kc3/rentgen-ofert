@@ -114,7 +114,7 @@
       "locative": "opolskim",
       "teryt": "16",
       "enabled": true,
-      "cadence": "manual",
+      "cadence": "every_72h",
       "portals": {
         "otodom": "opolskie",
         "olx": "opolskie",

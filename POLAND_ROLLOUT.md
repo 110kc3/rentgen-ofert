@@ -1,19 +1,16 @@
 # Whole-Poland rollout: status and next tasks
 
-> **Code update 2026-09-06:** all seven review fixes are implemented locally
-> (316 offline tests, including an eight-case browser loading runner). P1
-> commit `490be3f` passed its recorded scrape `34004170487` and direct deploy
-> `34004170501`; its changed identity/sale counts still need semantic audit.
-> The P2 follow-up updates daily price observations, makes browser failures
-> retryable, and versions the index plus details together in manifest schema 2.
-> Its impending `main` push remains pending production verification. Check
-> that commit's scrape/deploy once next session. The owning handoff is in
-> [TODO.md](TODO.md#remaining-rollout-and-architecture-work).
-> All seven review defects are locally closed; review severities do not rename
-> rollout phases. Serial 72-hour Opolskie cadence and the P4 compact-index,
-> archive-sharding, versioned-storage and rollback TODOs remain outstanding.
-> No cadence, region enablement, hosting or Tailscale change was made.
-> The following dated production audit predates the review fixes.
+> **Code/audit update 2026-09-09:** the production audit of `092d8de` is
+> complete with documented identity precision limits. Both live regional payloads
+> validate; real Chromium retries recover. Opolskie's serial 72-hour scheduler
+> is implemented with hourly eligibility checks, a failed-attempt cooldown,
+> queued global serialization and no-op deploy suppression. The impending push
+> and first scheduled refresh remain pending production verification. Begin the
+> seven-day cohort observation only after that refresh succeeds. The owning
+> handoff is [TODO.md](TODO.md); the detailed evidence is the
+> [dated production audit](docs/audits/2026-09-09-production.md).
+> P4 storage/rollback work and additional regions remain outside this batch.
+> The dated snapshot below preserves the pre-review pilot evidence.
 
 > Audited: 2026-09-04. Production is current through warm Opolskie run
 > `33855228296` and deploy `33856444810`; scheduled Śląskie run `33804201172`
@@ -37,7 +34,8 @@ cold/warm pilot passed; the project is still not ready for a 16-voivodeship
 schedule.** Guarded Śląskie runs retain the positive source baseline with normal
 count drift. Małopolskie remains recoverable but disabled. Opolskie's 29.9-minute
 cold and 14.3-minute warm scrapes proved source stability, convergence and
-isolation. The next slice is its selected serial 72-hour schedule, not a matrix.
+isolation. Its selected serial 72-hour scheduler is now implemented; first-run verification
+and the seven-day observation remain open.
 
 | Area | Status | Evidence / gap |
 |---|---|---|
@@ -50,14 +48,13 @@ isolation. The next slice is its selected serial 72-hour schedule, not a matrix.
 | Per-region runtime | Opolskie accepted | Latest Śląskie took 90.8 minutes, corrective Małopolskie 110.9, cold Opolskie 29.9 and warm Opolskie 14.3; all pass 150 preferred / 180 required. |
 | Region picker and durable regional URLs | Proven live for two enabled regions | National picker, stable listing/statistics paths, scoped state and discovery expose Śląskie plus the data-backed Opolskie pilot. |
 | Per-region metadata / OG / sitemap / llms.txt | Proven live | Canonical/JSON-LD documents parse and discovery contains only data-backed published regions. |
-| CI region matrix / cadence | 72-hour serial contract selected; implementation next | Śląskie alone remains scheduled today. Opolskie passed manual validation and is ready for a serial 72-hour schedule; no concurrent portal access is enabled. |
+| CI region matrix / cadence | 72-hour serial scheduler implemented; production acceptance pending | Opolskie eligibility is checked hourly against publication and attempt timestamps, under the global lock. Śląskie retains its twice-daily schedule. No concurrent portal access. |
 | Nationwide data hosting | Not decided | Current Śląskie + Opolskie data serves about 125.4 MiB; the larger retained Małopolskie measurement keeps the nationwide capacity warning intact. |
 
-**Rollout decision:** do not add a scheduled second region. P0/P1 and the manual
-pilot are accepted. `malopolskie` is disabled and retained as a recoverable
-branch. Cold and warm Opolskie are audited and accepted for the selected serial
-72-hour cadence. This authorizes only that one non-concurrent schedule; cohort
-expansion still waits for seven healthy days.
+**Rollout decision (2026-09-09):** Śląskie and Opolskie form the selected
+cohort. Opolskie's cold/warm pilot is accepted; its automatic scheduler now needs
+first-run verification and seven healthy days. `malopolskie` remains disabled
+and recoverable. No additional region or concurrent matrix is authorized.
 
 ## Production snapshot
 
@@ -640,12 +637,11 @@ approaches the limit.
 
 No second scheduled region is added in this phase.
 
-**Current pick-up point:** P0 and P1 are live-validated, P2 passed, and seven
-guarded runs accepted P0.7. The disposable pilot is disabled and its live
-removal is audited. Corrected P3 scout `33497077221` passed. Cold Opolskie run
-`33504082916` and warm run `33855228296` passed their audits. Opolskie remains
-manual until the selected serial 72-hour cadence is implemented; no matrix or
-cohort expansion is authorized.
+**Current pick-up point (2026-09-09):** the review fixes are production-audited
+with documented precision limits, and Opolskie's serial 72-hour scheduler is
+implemented. Check the impending push once, verify the first automatic Opolskie
+publication and no-op skip, then observe the cohort for seven healthy days.
+P0/P1 and the cold/warm pilot remain accepted; no additional region is selected.
 
 - [x] **P0.1 Redesign the coverage model and region health result.**
   - Record parent inventory total once per source/type.
@@ -992,8 +988,13 @@ unpublication retained both Śląskie and the recoverable pilot branch.
 - [x] Audit warm Opolskie run `33855228296`. It passed in 14.3 minutes with
   stable sources, zero deferrals/backlog, immutable archive/RCN caches and exact
   branch isolation.
-- [ ] Implement Opolskie's serial 72-hour cadence, then hold the cohort for at
-  least seven healthy days before selecting another region.
+- [x] Implement Opolskie's serial 72-hour cadence (2026-09-09): hourly eligibility
+  checks read publication metadata inside the global lock; seven-day attempt
+  artifacts enforce the cooldown after failures. Pending runs are queued, and
+  no-op updates cannot deploy. First production acceptance remains open.
+- [ ] Verify the first scheduled Opolskie run, then hold the cohort for at least
+  seven healthy days / three successful Opolskie cycles before selecting another
+  region. Use the current TODO handoff for exact checks and failure handling.
 - [ ] Add regions in cohorts **1 → 2 → 4 → 8 → 16**, with at least seven days of
   healthy measurements before doubling.
 - [ ] Scale photo, geo and delist budgets per region/backlog instead of applying

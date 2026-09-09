@@ -296,7 +296,7 @@ const HEALTH_LABEL = {
   unknown: 'stan źródeł nieznany',
 };
 const CADENCE_LABEL = {
-  manual: 'ręczny', twice_daily: '2× dziennie', daily: 'codzienny', weekly: 'tygodniowy',
+  manual: 'ręczny', twice_daily: '2× dziennie', every_72h: 'co 72 godziny', daily: 'codzienny', weekly: 'tygodniowy',
 };
 
 function publishedCard(region) {
@@ -305,6 +305,7 @@ function publishedCard(region) {
         <h3>${escapeHtml(region.label)}</h3>
         <div class="region-count">${nf(data.count)} ofert</div>
         <div class="region-meta">Aktualizacja: ${escapeHtml(datePl(data.updated))} · <span class="region-size">${humanBytes(data.bytes)}</span></div>
+        <div class="region-meta">Harmonogram: ${escapeHtml(CADENCE_LABEL[region.cadence] || region.cadence)}</div>
         <div class="region-meta">${escapeHtml(data.sources.join(', ') || 'brak aktywnych źródeł')}</div>
         <div class="region-health ${escapeHtml(data.health)}">${escapeHtml(HEALTH_LABEL[data.health] || HEALTH_LABEL.unknown)}</div>
       </a>`;

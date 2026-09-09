@@ -18,7 +18,7 @@ from collections.abc import Mapping
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 CATALOG_PATH = ROOT / "site" / "regions.json"
 PORTALS = ("otodom", "olx", "gratka", "morizon")
-CADENCES = {"manual", "twice_daily", "daily", "weekly"}
+CADENCES = {"manual", "twice_daily", "every_72h", "daily", "weekly"}
 SLUG_RE = re.compile(r"^[a-z]+(?:-[a-z]+)*$")
 PORTAL_SLUG_RE = re.compile(r"^[a-z]+(?:-{1,2}[a-z]+)*$")
 TERYT_RE = re.compile(r"^\d{2}$")

@@ -91,6 +91,8 @@ def test_generates_picker_catalog_stable_pages_and_discovery(tmp_path):
     assert "30 761 ofert" in picker
     assert 'href="region/slaskie/"' in picker
     assert 'href="region/malopolskie/"' in picker
+    assert "Harmonogram: 2× dziennie" in picker
+    assert "harmonogram: co 72 godziny" in picker
     assert "częściowe pokrycie źródeł" in picker
     assert 'class="region-size"' in picker
     assert 'current.searchParams.has("f")' in picker

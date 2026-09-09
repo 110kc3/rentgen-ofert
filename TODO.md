@@ -1,9 +1,65 @@
 # TODO — rentgen-ofert
 
 > Keep this file and `README.md` updated after each change.
-> Last updated: 2026-09-06
+> Last updated: 2026-09-09
 
-## Current (2026-09-06) — all seven review fixes complete locally; production verification pending
+## Current (2026-09-09) — production audit complete; Opolskie schedule implemented
+
+The owner selected the production audit and serial 72-hour Opolskie scheduler.
+The [dated audit](docs/audits/2026-09-09-production.md) records the production
+refs, replay method, samples, browser recovery and limitations. `092d8de`
+passed its push-triggered scrape/deploy and six subsequent schedules through
+2026-09-08. Both published regional trees pass the data validator; Śląskie also
+passes continuity against the pre-review source baseline. No data branch was
+modified and no workflow was manually dispatched during this audit.
+
+Completed implementation:
+- Opolskie uses catalog cadence `every_72h`. The hourly `17 * * * *` tick checks
+  its data-branch publication under the existing global `rentgen-scrape` lock.
+  Missing, malformed, future or unreadable timing evidence fails closed.
+- A seven-day `cadence-attempt-opolskie` Actions artifact is saved before each
+  Opolskie attempt. Failed scrapes also receive a 72-hour automatic cooldown;
+  manual dispatch remains an explicit bypass. Unavailable attempt history or
+  failed marker upload prevents portal work.
+- `queue: max` preserves pending Śląskie/manual runs when hourly ticks arrive.
+  Every expensive/publishing step is gated. No-op checks skip Pages deployment;
+  its gate checks that the triggering run's data-push step succeeded.
+- The picker displays each published region's cadence. Śląskie remains twice
+  daily, disabled regions remain disabled, and no concurrent matrix is added.
+
+**Local verification:** 345 offline tests; production validator on both frozen
+published trees; real Chromium recovery against the live site; scheduler dry
+read against GitHub metadata; JavaScript syntax and whitespace checks. Actionlint
+1.7.12 passes with only its unsupported `concurrency.queue` diagnostic excluded;
+`queue: max` is verified against current GitHub documentation and covered by the
+workflow contract test. See the audit for commands and exact limits.
+
+**Next accepted check (pending):** check this impending push's commit once in
+[Actions](https://github.com/110kc3/rentgen-ofert/actions?query=branch%3Amain) next
+session. Audit its Śląskie refresh/deploy, then the first automatically due
+Opolskie refresh: marker creation, pre-request tests, schema-2 validation, source
+continuity, runtime, exact `data-opolskie` staging and sibling preservation. Check
+a following hourly no-op skips portal work and Pages deployment. The first
+Opolskie refresh should be due because the last published pilot is September 4.
+Do not wait or poll CI after pushing.
+
+**Cohort acceptance remains open:** start seven healthy days from the first
+successful scheduled Opolskie publication, with at least three successful
+Opolskie cycles, stable contributing sources, no critical photo deferrals,
+warm runtimes ≤180 minutes (preferred ≤150), isolated regional branches and
+freshness consistent with 72 hours plus tick/queue/runtime delay. A failed or
+missed cycle needs investigation and restarts the healthy observation period.
+No next region is selected. The existing P4 storage work remains outside this
+batch; [POLAND_ROLLOUT.md](POLAND_ROLLOUT.md) owns its gates.
+
+**Audit findings / unselected follow-ups:** the identity veto increases card
+counts partly because county/town labels and street-number suffixes can describe
+the same place differently. Historical per-offer address provenance and some
+floor encodings also remain incomplete. Record these as precision limits;
+automatic history splitting or a new parser/identity repair batch is not selected.
+There are no owner-only blockers for the implemented scheduler.
+
+## Historical (2026-09-06) — review fixes and original verification handoff
 
 The owner selected the four P1 findings, then the remaining three P2 fixes
 from the 2026-09-05 review. All seven are implemented. Tailscale is excluded

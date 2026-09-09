@@ -18,7 +18,8 @@ name: Update listings
 
 on:
   schedule:
-    - cron: "0 6,18 * * *"   # 06:00 and 18:00 UTC, every day
+    - cron: "0 6,18 * * *"   # Śląskie: 06:00 and 18:00 UTC
+    - cron: "17 * * * *"     # Opolskie: cheap hourly eligibility check, 72h after success
   workflow_dispatch:          # lets you run it manually from the Actions tab
     inputs:
       rcn:
@@ -49,12 +50,14 @@ on:
       - "tests/**"
       - "scripts/validate_data.py"
       - "scripts/region_storage.py"
+      - "scripts/schedule_region.py"
       - "site/regions.json"
       - "overrides.json"
       - ".github/workflows/update.yml"
 
 permissions:
   contents: write             # force-push the refreshed `data` branch
+  actions: read               # cadence attempt timestamps, including failed runs
 
 concurrency:
   # One scrape at a time, ACROSS regions — deliberately not per-region. The
@@ -65,6 +68,8 @@ concurrency:
   # comes, belongs in a matrix with `max-parallel` set explicitly.
   group: rentgen-scrape
   cancel-in-progress: false
+  # Preserve pending Śląskie/manual work when an hourly check arrives.
+  queue: max
 
 jobs:
   update:
@@ -76,13 +81,20 @@ jobs:
     # has had (every portal paginates deeper, OLX subdivides per town, and the
     # phash cache is cold for everything that was previously invisible).
     timeout-minutes: 350
-    env:
-      REGION: ${{ github.event.inputs.region || 'slaskie' }}
-      DATA_BRANCH: data-${{ github.event.inputs.region || 'slaskie' }}
     steps:
       - uses: actions/checkout@v4
 
+      # Runs inside rentgen-scrape: queued checks re-read the latest publication.
+      - name: Select region and check cadence
+        id: schedule
+        env:
+          SCHEDULE: ${{ github.event.schedule }}
+          REQUESTED_REGION: ${{ github.event.inputs.region }}
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -m scripts.schedule_region
+
       - uses: actions/setup-python@v5
+        if: steps.schedule.outputs.run == 'true'
         with:
           python-version: "3.12"
           cache: pip                                # reuse the pip download cache
@@ -94,9 +106,27 @@ jobs:
       # it against the canonical catalog first; disabled regions cannot be
       # started accidentally from the Actions form.
       - name: Validate requested region
+        if: steps.schedule.outputs.run == 'true'
         run: python -m scraper.regions --region "$REGION" --require-enabled
 
+      # Record the attempt before any portal work. A failure still gets a 72h
+      # cooldown; artifact creation failure prevents scraping. Metadata from a
+      # successful data push remains the primary cadence anchor.
+      - name: Prepare Opolskie attempt marker
+        if: steps.schedule.outputs.run == 'true' && env.REGION == 'opolskie'
+        run: date -u +%Y-%m-%dT%H:%M:%SZ > "$RUNNER_TEMP/cadence-attempt.txt"
+
+      - name: Record Opolskie attempt
+        if: steps.schedule.outputs.run == 'true' && env.REGION == 'opolskie'
+        uses: actions/upload-artifact@v4
+        with:
+          name: cadence-attempt-opolskie
+          path: ${{ runner.temp }}/cadence-attempt.txt
+          retention-days: 7
+          if-no-files-found: error
+
       - name: Pull this region's data + caches from its data branch
+        if: steps.schedule.outputs.run == 'true'
         # Remote absence is checked explicitly. Transport/authentication,
         # fetch, incomplete history and extraction failures abort publication.
         run: python -m scripts.region_storage restore "$REGION"
@@ -105,6 +135,7 @@ jobs:
       # outside the working tree so validation can reject a categorical outage
       # before the orphan branch is staged or force-pushed.
       - name: Preserve previous publication metadata
+        if: steps.schedule.outputs.run == 'true'
         run: |
           previous_meta="$RUNNER_TEMP/previous-meta-$REGION.json"
           if test -f "site/data/$REGION/meta.json"; then
@@ -116,14 +147,17 @@ jobs:
           fi
 
       - name: Install runtime + test dependencies
+        if: steps.schedule.outputs.run == 'true'
         run: pip install -r scraper/requirements-test.txt
 
       # This suite is fixture-only/offline. A parser/schema regression must fail
       # before the job spends a single request from the portals' shared budget.
       - name: Run offline test gate
+        if: steps.schedule.outputs.run == 'true'
         run: python -m pytest -q
 
       - name: Scrape listings
+        if: steps.schedule.outputs.run == 'true'
         env:
           RENTGEN_REGION: ${{ env.REGION }}
           # NO RENTGEN_MAX_PAGES here on purpose. It used to be pinned to "50",
@@ -137,6 +171,7 @@ jobs:
         run: python -u -m scraper.main   # -u: unbuffered logs, visible while running
 
       - name: Validate generated data + source continuity + publish run summary
+        if: steps.schedule.outputs.run == 'true'
         env:
           ALLOW_SOURCE_REGRESSION: ${{ github.event.inputs.allow_source_regression || 'false' }}
         run: |
@@ -150,6 +185,7 @@ jobs:
           python -m scripts.validate_data "site/data/$REGION" "${validation_args[@]}"
 
       - name: Push refreshed data (single-commit per-region data branch)
+        if: steps.schedule.outputs.run == 'true'
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
