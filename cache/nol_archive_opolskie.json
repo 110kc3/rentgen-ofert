@@ -1,0 +1,22 @@
+{
+ "by_type": {
+  "flat": {
+   "archived": 5742,
+   "capped": [],
+   "current": 1000,
+   "failed": [],
+   "pages": 288
+  },
+  "house": {
+   "archived": 2324,
+   "capped": [],
+   "current": 601,
+   "failed": [],
+   "pages": 152
+  }
+ },
+ "complete": true,
+ "records": 8066,
+ "refreshed": "2026-09-18",
+ "schema": 1
+}
