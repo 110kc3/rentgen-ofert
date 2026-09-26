@@ -28,7 +28,9 @@ from __future__ import annotations
 
 import datetime as dt
 import gzip
+import hashlib
 import json
+import math
 import os
 import pathlib
 import re
@@ -38,6 +40,7 @@ import xml.etree.ElementTree as ET
 from .identity import fold as _fold, street_match
 
 WFS = "https://mapy.geoportal.gov.pl/wss/service/rcn"
+NS_WFS = "{http://www.opengis.net/wfs/2.0}"
 NS_MS = "{http://mapserver.gis.umn.edu/mapserver}"
 PAGE = 2000
 MAX_AGE_DAYS = 7          # re-pull the snapshot when older than this
@@ -53,6 +56,17 @@ BUD_PROPS = ("teryt,dok_data,tran_rodzaj_rynku,tran_rodzaj_trans,tran_cena_brutt
              "bud_id_budynku")
 
 HEADERS = {"User-Agent": "rentgen-ofert (+https://github.com/) requests"}
+
+# Immutable, last healthy evidence before the 2026-09-24 empty-cache incident.
+# Restore only this cache, never the old listing history or published payload.
+RECOVERY = {
+    "24": {
+        "ref": "027bcc45f7b92c5e58e3a194d644146d4c463d6e",
+        "path": "cache/rcn_slaskie.json.gz",
+        "sha256": "0ff615f76e6d47b24a5da7e11c47baf5a3d07deef2543b7af54a073b90457879",
+        "counts": {"lokale": 198439, "budynki": 465807},
+    },
+}
 
 
 # ---- WFS fetch --------------------------------------------------------------
@@ -82,24 +96,72 @@ def _get_page(session, typename, flt, props, start):
     return r.content
 
 
-def _parse_members(xml_bytes, tag):
-    """Yield {field: text} dicts for every <ms:{tag}> feature in a GML page."""
+def _get_total(session, typename, flt):
+    """A hits query supplies the total omitted from normal live responses."""
+    params = {"service": "WFS", "version": "2.0.0", "request": "GetFeature",
+              "typeNames": typename, "filter": flt, "resultType": "hits"}
+    response = session.get(WFS + "?" + urllib.parse.urlencode(params),
+                           headers=HEADERS, timeout=120)
+    response.raise_for_status()
+    root = ET.fromstring(response.content)
+    if (root.tag != f"{NS_WFS}FeatureCollection"
+            or root.get("numberReturned") != "0"
+            or root.findall(f"{NS_WFS}member")):
+        raise ValueError("RCN: invalid WFS hits response")
+    value = root.attrib["numberMatched"]
+    if value == "unknown":
+        return None
+    total = int(value)
+    if total < 0:
+        raise ValueError("RCN: negative WFS total")
+    return total
+
+
+def _parse_page(xml_bytes, tag):
+    """Validate the envelope/counts before exposing any rows to the compactor."""
     root = ET.fromstring(xml_bytes)
-    if root.tag.endswith("ExceptionReport"):
-        raise RuntimeError("WFS exception: " + ET.tostring(root, encoding="unicode")[:300])
-    for feat in root.iter(f"{NS_MS}{tag}"):
+    if root.tag != f"{NS_WFS}FeatureCollection":
+        raise ValueError("RCN: expected WFS 2.0 FeatureCollection")
+    members = root.findall(f"{NS_WFS}member")
+    returned = int(root.attrib["numberReturned"])
+    matched = root.get("numberMatched")
+    total = None if matched == "unknown" else int(matched)
+    if (returned != len(members) or returned < 0
+            or (total is not None and total < returned)):
+        raise ValueError("RCN: inconsistent WFS feature counts")
+    rows = []
+    ids = []
+    for member in members:
+        if len(member) != 1 or member[0].tag != f"{NS_MS}{tag}":
+            raise ValueError(f"RCN: unexpected feature in {tag} page")
+        feat = member[0]
         row = {}
         for child in feat:
-            name = child.tag.rsplit("}", 1)[-1]
-            if name in ("msGeometry", "boundedBy"):
-                continue
-            row[name] = (child.text or "").strip()
-        yield row
+            name = child.tag.rsplit("}", 1)[-1].lower()
+            if name not in ("msgeometry", "boundedby"):
+                row[name] = (child.text or "").strip()
+        rows.append(row)
+        ids.append(feat.get("{http://www.opengis.net/gml/3.2}id"))
+    return rows, total, bool(root.get("next")), ids
+
+
+def _parse_members(xml_bytes, tag):
+    return iter(_parse_page(xml_bytes, tag)[0])
+
+
+def _market(value):
+    value = _fold(value)
+    markets = {"": None, "p": "p", "w": "w", "pierwotny": "p",
+               "wtorny": "w", "rynekpierwotny": "p", "rynekwtorny": "w"}
+    if value not in markets:
+        raise ValueError(f"RCN: unknown market value {value!r}")
+    return markets[value]
 
 
 def _to_f(v):
     try:
-        return float(v)
+        value = float(v)
+        return value if math.isfinite(value) else None
     except (TypeError, ValueError):
         return None
 
@@ -141,7 +203,7 @@ def _compact_lok(row):
     msc, ul, nr = _addr(row.get("lok_adres"))
     out = {"d": date, "c": round(price), "a": area,
            "izb": _to_i(row.get("lok_liczba_izb")), "kond": _to_i(row.get("lok_nr_kond")),
-           "rynek": (row.get("tran_rodzaj_rynku") or "")[:1] or None,  # p/w
+           "rynek": _market(row.get("tran_rodzaj_rynku")),  # p/w
            "msc": msc, "ul": ul, "nr": nr}
     dz = _parcel(row.get("lok_id_lokalu"))
     if dz:
@@ -160,7 +222,7 @@ def _compact_bud(row):
     msc, ul, nr = _addr(row.get("bud_adres"))
     out = {"d": date, "c": round(price), "a": area,
            "grunt": _to_f(row.get("nier_pow_gruntu")),
-           "rynek": (row.get("tran_rodzaj_rynku") or "")[:1] or None,
+           "rynek": _market(row.get("tran_rodzaj_rynku")),
            "msc": msc, "ul": ul, "nr": nr}
     dz = _parcel(row.get("bud_id_budynku"))
     if dz:
@@ -170,28 +232,60 @@ def _compact_bud(row):
 
 def fetch(session, typename, flt, props, tag, compact, log=print):
     out, start = [], 0
-    while True:
+    page_hashes = set()
+    expected_total = _get_total(session, typename, flt)
+    # Never interpret a short page or missing next link as EOF: the live
+    # service can return both. Continue to a validated empty page when the
+    # total is unknown. A repeated page means startIndex is being ignored.
+    for _ in range(10000):
         page = _get_page(session, typename, flt, props, start)
-        n = 0
-        # dedupe per page only: the WFS emits duplicate rows per linked object
-        # within one response, but two genuinely distinct deeds CAN be
-        # field-identical (mirrored new-build units sold the same day) — a
-        # pull-wide key would collapse those and undercount the benchmarks
+        rows, total, has_next, ids = _parse_page(page, tag)
+        n = len(rows)
+        if expected_total is None:
+            expected_total = total
+        if (total is not None and total != expected_total) or (
+                expected_total is not None and start + n > expected_total):
+            raise ValueError(f"RCN {tag}: changing/inconsistent total "
+                             f"({expected_total} -> {total}, offset {start}, returned {n})")
+        if not n:
+            if has_next or (expected_total is not None and start != expected_total):
+                raise ValueError(f"RCN {tag}: premature empty page")
+            break
+        signature = hashlib.sha256(
+            json.dumps([ids, rows], sort_keys=True).encode()).digest()
+        if signature in page_hashes:
+            raise ValueError(f"RCN {tag}: repeated page at {start}")
+        page_hashes.add(signature)
+        fields = set().union(*(row.keys() for row in rows))
+        required = {"dok_data", "tran_rodzaj_rynku", "tran_rodzaj_trans"}
+        required.add("lok_pow_uzyt" if tag == "lokale" else "bud_adres")
+        prices = {"tran_cena_brutto",
+                  "lok_cena_brutto" if tag == "lokale" else "bud_cena_brutto"}
+        if not required <= fields or not prices & fields:
+            raise ValueError(f"RCN {tag}: missing expected fields")
+        # Dedupe within each page only: distinct deeds in different pages can
+        # legitimately have identical compact values.
         seen = set()
-        for row in _parse_members(page, tag):
-            n += 1
+        for row in rows:
             c = compact(row)
             if c:
                 key = json.dumps(c, sort_keys=True, ensure_ascii=False)
-                if key in seen:
-                    continue
-                seen.add(key)
-                out.append(c)
-        if n:
-            log(f"  rcn {tag}: {start + n} fetched, {len(out)} kept")
-        if n < PAGE:
-            break
+                if key not in seen:
+                    seen.add(key)
+                    out.append(c)
         start += n
+        log(f"  rcn {tag}: {start} fetched, {len(out)} kept")
+        if expected_total is not None and start == expected_total:
+            if has_next:
+                raise ValueError(f"RCN {tag}: next link beyond declared total")
+            break
+    else:
+        raise ValueError(f"RCN {tag}: pagination limit exceeded")
+    if not out:
+        raise ValueError(f"RCN {tag}: no usable transactions")
+    final_total = _get_total(session, typename, flt)
+    if final_total is not None and final_total != start:
+        raise ValueError(f"RCN {tag}: final total {final_total} != fetched {start}")
     return out
 
 
@@ -224,30 +318,99 @@ def save_snapshot(path, data):
     os.replace(tmp, p)
 
 
-def refresh(cache_path, session, teryt_prefix="24", today=None, force=False, log=print):
-    """Load the cached RCN snapshot, re-pulling from the WFS when stale.
+def validate_snapshot(snap, previous=None):
+    """Both supported provincial layers must contain usable deed evidence.
 
-    Returns {"fetched": date, "lokale": [...], "budynki": [...]} or None when
-    no snapshot exists and the service is unreachable.
+    A >20% drop in either complete layer requires investigation, not automatic
+    replacement. It is intentionally a publication safety gate, not a claim
+    that the source can never legitimately remove records.
+    """
+    if not isinstance(snap, dict):
+        raise ValueError("RCN: missing snapshot")
+    dt.date.fromisoformat(snap["fetched"])
+    for layer in ("lokale", "budynki"):
+        rows = snap.get(layer)
+        if not isinstance(rows, list) or not rows:
+            raise ValueError(f"RCN: empty or missing {layer}")
+        for row in rows:
+            if (not isinstance(row, dict) or not row.get("d")
+                    or (_to_f(row.get("c")) or 0) <= 0):
+                raise ValueError(f"RCN: malformed {layer} transaction")
+            dt.date.fromisoformat(row["d"])
+            if layer == "lokale" and (_to_f(row.get("a")) or 0) <= 0:
+                raise ValueError(f"RCN: invalid {layer} area")
+            if row.get("rynek") not in (None, "p", "w"):
+                raise ValueError(f"RCN: invalid {layer} market")
+        if previous and len(rows) < len(previous[layer]) * 0.8:
+            raise ValueError(f"RCN: {layer} count fell by more than 20% "
+                             f"({len(previous[layer])} -> {len(rows)})")
+
+
+def recover_snapshot(session, teryt_prefix, log=print):
+    recovery = RECOVERY.get(teryt_prefix)
+    if not recovery:
+        return None
+    url = ("https://raw.githubusercontent.com/110kc3/rentgen-ofert/"
+           + recovery["ref"] + "/" + recovery["path"])
+    response = session.get(url, headers=HEADERS, timeout=120)
+    response.raise_for_status()
+    if hashlib.sha256(response.content).hexdigest() != recovery["sha256"]:
+        raise ValueError("RCN: recovery cache checksum mismatch")
+    snap = json.loads(gzip.decompress(response.content))
+    validate_snapshot(snap)
+    if {k: len(snap[k]) for k in recovery["counts"]} != recovery["counts"]:
+        raise ValueError("RCN: recovery cache counts mismatch")
+    log(f"RCN: recovered last-good evidence from {recovery['ref']}")
+    return snap
+
+
+def refresh(cache_path, session, teryt_prefix="24", today=None, force=False, log=print):
+    """Use a verified cache; failed refreshes retain evidence and report degradation.
+
+    No usable fallback returns None. The caller must stop publication in that
+    case. Health is exposed separately so cached evidence remains immutable.
     """
     today = today or dt.date.today().isoformat()
     snap = load_snapshot(cache_path)
-    if snap and not force:
+    try:
+        validate_snapshot(snap)
+    except (ValueError, KeyError, TypeError):
+        snap = None
+    refresh.last_health = {"status": "unavailable", "fetched": None,
+                           "counts": {}, "error": None}
+    if snap is None and teryt_prefix in RECOVERY:
         try:
-            age = (dt.date.fromisoformat(today)
-                   - dt.date.fromisoformat(snap.get("fetched", "1970-01-01"))).days
-        except ValueError:
-            age = MAX_AGE_DAYS + 1
-        if age < MAX_AGE_DAYS:
+            snap = recover_snapshot(session, teryt_prefix, log=log)
+            save_snapshot(cache_path, snap)
+            refresh.last_health["recovered_from"] = RECOVERY[teryt_prefix]["ref"]
+        except Exception as exc:
+            log(f"RCN: last-good recovery failed ({exc}); attempting fresh pull")
+    if snap:
+        age = (dt.date.fromisoformat(today) - dt.date.fromisoformat(snap["fetched"])).days
+        refresh.last_health.update(fetched=snap["fetched"],
+                                   counts={k: len(snap[k]) for k in ("lokale", "budynki")})
+        if 0 <= age < MAX_AGE_DAYS and not force:
+            refresh.last_health["status"] = "healthy"
             return snap
     try:
         log(f"RCN: pulling transactions for teryt {teryt_prefix}* (this takes minutes) ...")
         lok, bud = fetch_all(session, teryt_prefix, log=log)
-        snap = {"fetched": today, "lokale": lok, "budynki": bud}
-        save_snapshot(cache_path, snap)
+        candidate = {"fetched": today, "lokale": lok, "budynki": bud}
+        validate_snapshot(candidate, previous=snap)
+        # If the recovery download failed, its audited counts still prevent a
+        # tiny but non-empty pull from silently replacing the poisoned cache.
+        if snap is None and teryt_prefix in RECOVERY:
+            for layer, count in RECOVERY[teryt_prefix]["counts"].items():
+                if len(candidate[layer]) < count * 0.8:
+                    raise ValueError(f"RCN: {layer} below recovery count floor")
+        save_snapshot(cache_path, candidate)
+        refresh.last_health.update(status="healthy", fetched=today,
+                                   counts={"lokale": len(lok), "budynki": len(bud)})
         log(f"RCN: snapshot saved ({len(lok)} lokale, {len(bud)} budynki)")
-        return snap
+        return candidate
     except Exception as exc:
+        refresh.last_health.update(status="degraded" if snap else "unavailable",
+                                   error=str(exc))
         log(f"RCN: refresh failed ({exc}); using previous snapshot" if snap
             else f"RCN: refresh failed ({exc}); no snapshot available")
         return snap

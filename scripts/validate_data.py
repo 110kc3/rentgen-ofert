@@ -12,6 +12,7 @@ missing, stale or mis-sharded file.
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import gzip
 import hashlib
 import json
@@ -152,6 +153,52 @@ def validate_source_continuity(current_sources: dict, previous_meta=None,
             "(use --allow-source-regression only for an intentional reset)"
         )
     return result
+
+
+def validate_rcn(meta, stats, previous=None):
+    """Fail closed on lost RCN evidence, independently of portal overrides."""
+    health = meta.get("rcn_health")
+    previous = previous or {}
+    if previous.get("rcn_health") is not None:
+        _require(isinstance(health, dict), "RCN health metadata disappeared")
+    if health is not None:
+        _require(isinstance(health, dict), "RCN health must be an object")
+        status = health.get("status")
+        _require(status in ("healthy", "degraded", "disabled"),
+                 "RCN snapshot unavailable; publication refused")
+        if status != "disabled":
+            counts = health.get("counts") or {}
+            _require(all(type(counts.get(k)) is int and counts[k] > 0
+                         for k in ("lokale", "budynki")),
+                     "RCN snapshot layers must both be populated")
+            try:
+                age = (dt.date.fromisoformat(meta["updated"][:10])
+                       - dt.date.fromisoformat(health["fetched"])).days
+            except (TypeError, ValueError, KeyError):
+                raise DataValidationError("RCN snapshot date is invalid") from None
+            _require(age >= 0, "RCN snapshot date is in the future")
+            _require(status != "healthy" or age < 7,
+                     "RCN stale snapshot must report degraded health")
+            _require(status != "degraded" or bool(health.get("error")),
+                     "RCN degraded health requires a reason")
+            _require(isinstance(meta.get("rcn"), dict), "RCN matching summary missing")
+            _require(isinstance(stats, dict) and bool(stats.get("towns")),
+                     "RCN benchmarks missing or empty")
+            _require((meta.get("rcn_stats") or {}).get("towns") == len(stats["towns"]),
+                     "RCN benchmark count does not match metadata")
+            old_counts = (previous.get("rcn_health") or {}).get("counts") or {}
+            for layer in ("lokale", "budynki"):
+                _require(counts[layer] >= old_counts.get(layer, 0) * 0.8,
+                         f"RCN {layer} snapshot count fell by more than 20%")
+    metrics = (("rcn", "matched"), ("rcn_stats", "towns"),
+               ("rcn_stats", "gap_pairs"), (None, "sold_confirmed"))
+    for group, key in metrics:
+        old = (previous.get(group) or {}) if group else previous
+        new = (meta.get(group) or {}) if group else meta
+        if old.get(key, 0) > 0:
+            _require(new.get(key, 0) > 0,
+                     f"RCN continuity regression: {key} disappeared")
+    return health
 
 
 def validate_data_dir(data_dir, *, previous_meta=None,
@@ -417,6 +464,8 @@ def validate_data_dir(data_dir, *, previous_meta=None,
         previous_meta,
         allow_regression=allow_source_regression,
     )
+    summary["rcn_health"] = validate_rcn(
+        meta, parsed.get(root / "rcnstats.json"), previous_meta)
     return summary
 
 
@@ -440,6 +489,13 @@ def github_summary(summary: dict) -> str:
             f"{int(source.get('current') or 0):,} | "
             f"{int(source.get('served_unique') or 0):,} | {pct} |")
     continuity = summary.get("continuity")
+    rcn_health = summary.get("rcn_health")
+    if rcn_health:
+        counts = rcn_health.get("counts") or {}
+        lines.extend(["", f"**RCN:** {rcn_health['status']}; snapshot "
+                      f"{rcn_health.get('fetched') or 'none'}; "
+                      f"{counts.get('lokale', 0):,} flats / "
+                      f"{counts.get('budynki', 0):,} buildings."])
     if continuity:
         regressions = continuity["regressions"]
         if not continuity["has_previous"]:

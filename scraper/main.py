@@ -328,16 +328,21 @@ def run() -> int:
     # (locality/street/rooms) to match on; the affected cards are re-enriched.
     rcn_stats = None
     snap = None
+    rcn_health = {"status": "disabled", "fetched": None, "counts": {}, "error": None}
     rcn_started = time.monotonic()
     if rcn_mode != "0":
         teryt = REGION_CONFIG["teryt"]
         snap = rcn.refresh(RCN_CACHE, http, teryt_prefix=teryt, today=today,
                            force=(rcn_mode == "force"))
+        rcn_health = rcn.refresh.last_health
+        if snap is None:
+            raise RuntimeError("No usable RCN snapshot; refusing to publish without transaction evidence")
         if snap:
             rcn.match(records, snap)
             # town/size-bucket deed benchmarks + ask-vs-sold gap for the
             # dashboard's "cena vs transakcje RCN" comparison
             rcn_stats = rcnstats.build(snap, records, today)
+            rcn_stats["source"] = rcn_health
     history.reenrich(listings)   # always: also drops the transient _rec links
     phase_seconds["rcn"] = round(time.monotonic() - rcn_started, 1)
 
@@ -376,6 +381,7 @@ def run() -> int:
     # Market time series for the "Statystyki" page (works without RCN too —
     # the deed lines just stay empty then).
     mstats = marketstats.build(records, snap, today)
+    mstats["rcn_health"] = rcn_health
     (DATA_DIR / "stats.json").write_text(
         json.dumps(mstats, ensure_ascii=False, indent=0), encoding="utf-8")
 
@@ -403,6 +409,7 @@ def run() -> int:
         "geocoded": geocoded,
         "archive": len(archive),
         "rcn": getattr(rcn.match, "last_funnel", None),
+        "rcn_health": rcn_health,
         "rcn_stats": {"towns": len(rcn_stats["towns"]),
                       "gap_pairs": (rcn_stats["gap"].get("all") or {}).get("n", 0)}
                      if rcn_stats else None,

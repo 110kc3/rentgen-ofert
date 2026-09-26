@@ -6,20 +6,18 @@ to grow deliberately to all 16 Polish voivodeships. It attempts **Otodom**, **OL
 and presents it on one searchable page. No application server: a GitHub Actions
 job scrapes, writes static JSON, and GitHub Pages displays it.
 
-**2026-09-09 update:** the seven review fixes have completed a production
-and browser audit. The latest checked Śląskie publication contains **29,945**
-properties from **52,225** raw offers, uses manifest schema 2 and took **114.9
-minutes**, with no photo deferrals/unresolved groups. Replaying unchanged deed
-evidence explains the reduction from 73 confirmed-sale records to 15. All 21
-sampled same-day offer-price changes retained their later value. Live Chromium
-checks recovered detail HTTP failures and archive network failures through the
-visible retry controls.
+**2026-09-26 update:** the RCN P0 repair handles changed GML field names and
+market values, validates pagination and prevents empty or sharply reduced
+snapshots from replacing good evidence. It recovers the last verified deed
+cache when needed and reconciles it against the latest listing history. Failed
+refreshes retain the prior evidence, with its date and degraded status visible
+on the site; no usable snapshot stops publication. RCN continuity now has its
+own publication gate. See the [recovery audit](docs/audits/2026-09-26-rcn-recovery.md)
+for local verification and production limitations.
 
-The identity audit also found conservative extra cards where portals disagree
-about town/county labels or include building numbers in street names. Old
-conflated histories remain preserved because they lack per-offer address
-provenance. These are documented precision limits, not evidence of market
-growth. See [the dated audit](docs/audits/2026-09-09-production.md).
+The [September 9 audit](docs/audits/2026-09-09-production.md) documents remaining
+identity precision limits: county/town labels, street-number suffixes and old
+conflated histories without per-offer provenance. These repairs are unselected.
 
 **Opolskie now has a serial 72-hour cadence in code.** An hourly check at minute
 17 UTC reads the last successful publication; it does no portal work until
@@ -31,9 +29,10 @@ the hourly tick, serialization and GitHub scheduling delays. Manual runs remain
 available, and changing Opolskie's catalog cadence to `manual` pauses its timer.
 Checks that publish no data do not deploy Pages.
 
-The impending push and first scheduled Opolskie run are **pending verification**.
-The next gate is seven healthy days for this two-region cohort before any
-expansion. [TODO.md](TODO.md) owns the handoff. OLX remains blocked after its
+The scheduler has run in production. The RCN repair push and resulting recovery
+are **pending production verification**. The seven-healthy-day cohort gate
+remains open after the RCN incident and observed weekly runtimes above 180
+minutes. [TODO.md](TODO.md) owns the handoff. OLX remains blocked after its
 bounded probe, and Otodom's serving cap means coverage remains explicitly
 partial. Małopolskie stays disabled with its data branch recoverable.
 
@@ -503,7 +502,7 @@ RENTGEN_MAX_PAGES=3 RENTGEN_DELAY=0.3 python -m scraper.main
 | `RENTGEN_OTODOM_BANDS` | 0 | `1` explicitly tests Otodom bands after its full unbanded baseline; never enabled by default |
 | `RENTGEN_VERIFY_MAX` | 300 | stale listings URL-verified per run (`0` disables) |
 | `RENTGEN_DELIST_BUDGET_MIN` | 10 | max minutes the delist sweep may spend (`0` = unlimited); unasked records retry next run |
-| `RENTGEN_RCN` | 1 | `0` skips RCN; `force` re-pulls the transaction snapshot now |
+| `RENTGEN_RCN` | 1 | `force` refreshes the snapshot; `0` skips RCN for local diagnostics, but publication refuses to discard previously positive RCN evidence |
 | `RENTGEN_GEO` | 1 | `0` skips geocoding listings for the map view |
 | `RENTGEN_GEO_MAX` | 500 | max new UUG geocoder lookups per run (cache does the rest) |
 | `RENTGEN_NOL_TOWNS` | 60 | max nieruchomości-online town sub-domains per region |

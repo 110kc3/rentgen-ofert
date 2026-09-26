@@ -1,5 +1,17 @@
 # Whole-Poland rollout: status and next tasks
 
+> **P0 recovery update 2026-09-26:** the September 24 Silesian RCN refresh
+> replaced healthy deed evidence with an empty cache despite green CI. The
+> parser/cache/publication guards and isolated cache recovery are now repaired;
+> [local recovery evidence](docs/audits/2026-09-26-rcn-recovery.md) is separate
+> from pending post-push production verification. Scheduler operation and no-op
+> deployment suppression have been observed. Seven healthy cohort days remain
+> unaccepted after this incident and weekly runtimes above 180 minutes.
+> [TODO.md](TODO.md) owns the next check. Identity/runtime fixes and expansion
+> remain unselected. Earlier “P0 accepted” references below describe the original
+> regional rollout, not this new RCN incident.
+
+
 > **Code/audit update 2026-09-09:** the production audit of `092d8de` is
 > complete with documented identity precision limits. Both live regional payloads
 > validate; real Chromium retries recover. Opolskie's serial 72-hour scheduler

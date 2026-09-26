@@ -259,7 +259,7 @@ def test_invalid_snapshot_fails_before_retracting_any_claim():
 
 def test_rcn_refresh_failure_preserves_cached_evidence(tmp_path, monkeypatch):
     path = tmp_path / "rcn.json.gz"
-    snapshot = {"fetched": "2026-06-01", "lokale": [_tx()], "budynki": []}
+    snapshot = {"fetched": "2026-06-01", "lokale": [_tx()], "budynki": [_tx()]}
     rcn.save_snapshot(path, snapshot)
 
     def unavailable(*args, **kwargs):
@@ -269,3 +269,229 @@ def test_rcn_refresh_failure_preserves_cached_evidence(tmp_path, monkeypatch):
     assert rcn.refresh(path, None, today="2026-09-05", log=lambda *a: None) == snapshot
     assert rcn.refresh(tmp_path / "missing.gz", None, today="2026-09-05",
                        log=lambda *a: None) is None
+
+
+def _page(rows=1, *, total="unknown", next_page=False, ident=1, uppercase=False):
+    import xml.etree.ElementTree as ET
+    root = ET.fromstring(GML_PAGE)
+    member = root.find(f"{rcn.NS_WFS}member")
+    root.remove(member)
+    root.set("numberReturned", str(rows))
+    root.set("numberMatched", str(total))
+    if next_page:
+        root.set("next", "https://example.test/next")
+    for i in range(rows):
+        copy = ET.fromstring(ET.tostring(member))
+        copy[0].set("{http://www.opengis.net/gml/3.2}id", str(ident + i))
+        if uppercase:
+            for child in copy[0]:
+                child.tag = rcn.NS_MS + child.tag.rsplit("}", 1)[-1].upper()
+                if child.tag.endswith("TRAN_RODZAJ_RYNKU"):
+                    child.text = "rynekWtorny"
+        root.append(copy)
+    return ET.tostring(root)
+
+
+@pytest.mark.parametrize("value,expected", [
+    ("pierwotny", "p"), ("wtórny", "w"), ("rynekPierwotny", "p"),
+    ("rynekWtorny", "w"), (None, None), ("", None),
+])
+def test_market_vocabularies(value, expected):
+    row = next(rcn._parse_members(_page(uppercase=True), "lokale"))
+    row["tran_rodzaj_rynku"] = value
+    assert rcn._compact_lok(row)["rynek"] == expected
+    building = dict(row, bud_adres="MSC:Gliwice;UL:Polna;NR_PORZ:1")
+    assert rcn._compact_bud(building)["rynek"] == expected
+
+
+def test_unknown_market_fails_closed():
+    with pytest.raises(ValueError, match="unknown market"):
+        rcn._market("newUnsupportedEnum")
+
+
+@pytest.mark.parametrize("page", [
+    b"<html />", b"<ExceptionReport />", b"<broken",
+    _page().replace(b'numberReturned="1"', b'numberReturned="2"'),
+    _page().replace(b"lokale", b"unexpected"),
+])
+def test_invalid_wfs_pages_are_not_empty_evidence(page):
+    with pytest.raises(Exception):
+        list(rcn._parse_members(page, "lokale"))
+
+
+def _fetch_pages(monkeypatch, pages, totals=(None, None)):
+    totals = iter(totals)
+    monkeypatch.setattr(rcn, "_get_total", lambda *a: next(totals))
+    starts = []
+    pages = iter(pages)
+    def get_page(*args):
+        starts.append(args[-1])
+        return next(pages)
+    monkeypatch.setattr(rcn, "_get_page", get_page)
+    rows = rcn.fetch(None, "ms:lokale", "", rcn.LOK_PROPS, "lokale",
+                     rcn._compact_lok, log=lambda *a: None)
+    return rows, starts
+
+
+def test_short_pages_without_next_links_are_not_eof(monkeypatch):
+    rows, starts = _fetch_pages(monkeypatch, [
+        _page(2), _page(1, ident=3, uppercase=True), _page(0, total=3),
+    ])
+    # Per-page duplicates collapse; identical deeds on different pages survive.
+    assert len(rows) == 2
+    assert starts == [0, 2, 3]
+    assert all(row["rynek"] == "w" for row in rows)
+
+
+def test_known_total_can_appear_after_unknown_total(monkeypatch):
+    rows, starts = _fetch_pages(monkeypatch, [_page(), _page(total=2, ident=2)])
+    assert len(rows) == 2 and starts == [0, 1]
+
+
+@pytest.mark.parametrize("pages,reason", [
+    ([_page(), _page()], "repeated page"),
+    ([_page(total=3), _page(0, total=3)], "premature empty"),
+    ([_page(total=3), _page(total=4, ident=2)], "inconsistent total"),
+    ([_page(total=1, next_page=True)], "next link beyond"),
+    ([_page(0, next_page=True)], "premature empty"),
+    ([_page(0)], "no usable transactions"),
+    ([_page().replace(b"dok_data", b"unknown_date")], "missing expected fields"),
+])
+def test_incomplete_or_changed_pages_fail_closed(monkeypatch, pages, reason):
+    with pytest.raises(ValueError, match=reason):
+        _fetch_pages(monkeypatch, pages)
+
+
+def _snapshot(n=10, fetched="2026-09-17"):
+    return {"fetched": fetched, "lokale": [_tx(msc="Gliwice" if i == 0 else f"Town{i}") for i in range(n)],
+            "budynki": [_tx()] * n}
+
+
+@pytest.mark.parametrize("failure", ["empty", "shrunk", "interrupted", "save"])
+def test_failed_refresh_preserves_cache_bytes_and_reports_degraded(tmp_path, monkeypatch, failure):
+    path = tmp_path / "rcn.json.gz"
+    previous = _snapshot()
+    rcn.save_snapshot(path, previous)
+    original = path.read_bytes()
+    def fetch(*args, **kwargs):
+        if failure == "interrupted":
+            raise OSError("second layer interrupted")
+        if failure == "empty":
+            return [], []
+        return [_tx()] * (7 if failure == "shrunk" else 11), [_tx()] * 11
+    monkeypatch.setattr(rcn, "fetch_all", fetch)
+    if failure == "save":
+        def fail_save(*args):
+            raise OSError("disk full")
+        monkeypatch.setattr(rcn, "save_snapshot", fail_save)
+    assert rcn.refresh(path, None, today="2026-09-26") == previous
+    assert path.read_bytes() == original
+    assert rcn.refresh.last_health["status"] == "degraded"
+    assert rcn.refresh.last_health["error"]
+    rec = _rec()
+    rcn.match([rec], previous, log=lambda *a: None)
+    assert rec["sales"]
+
+
+def test_recent_poisoned_cache_recovers_before_failed_refresh(tmp_path, monkeypatch):
+    path = tmp_path / "rcn.json.gz"
+    rcn.save_snapshot(path, {"fetched": "2026-09-26", "lokale": [], "budynki": []})
+    baseline = _snapshot()
+    monkeypatch.setattr(rcn, "recover_snapshot", lambda *a, **k: baseline)
+    monkeypatch.setattr(rcn, "fetch_all", lambda *a, **k: ([], []))
+    assert rcn.refresh(path, None, today="2026-09-26") == baseline
+    assert rcn.load_snapshot(path) == baseline
+    assert rcn.refresh.last_health["status"] == "degraded"
+    assert rcn.refresh.last_health["recovered_from"] == rcn.RECOVERY["24"]["ref"]
+
+
+def test_healthy_cache_skips_network_and_other_region_does_not_use_recovery(tmp_path, monkeypatch):
+    def unexpected(*args, **kwargs):
+        pytest.fail("unexpected network call")
+    monkeypatch.setattr(rcn, "fetch_all", unexpected)
+    monkeypatch.setattr(rcn, "recover_snapshot", unexpected)
+    path = tmp_path / "cache.gz"
+    rcn.save_snapshot(path, _snapshot(fetched="2026-09-26"))
+    assert rcn.refresh(path, None, teryt_prefix="16", today="2026-09-26")
+    assert rcn.refresh.last_health["status"] == "healthy"
+    monkeypatch.setattr(rcn, "fetch_all", lambda *a, **k: ([], []))
+    assert rcn.refresh(tmp_path / "missing.gz", None, teryt_prefix="16", today="2026-09-26") is None
+    assert rcn.refresh.last_health["status"] == "unavailable"
+
+
+def test_recovery_checksum_is_required(monkeypatch):
+    class Session:
+        def get(self, *args, **kwargs):
+            return self
+        def raise_for_status(self):
+            pass
+        content = b"not the audited snapshot"
+    with pytest.raises(ValueError, match="checksum"):
+        rcn.recover_snapshot(Session(), "24")
+
+
+def test_successful_refresh_replaces_cache_atomically(tmp_path, monkeypatch):
+    path = tmp_path / "cache.gz"
+    previous = _snapshot()
+    rcn.save_snapshot(path, previous)
+    monkeypatch.setattr(rcn, "fetch_all", lambda *a, **k: ([_tx()] * 12, [_tx()] * 11))
+    candidate = rcn.refresh(path, None, today="2026-09-26")
+    assert candidate == rcn.load_snapshot(path)
+    assert candidate["fetched"] == "2026-09-26"
+    assert rcn.refresh.last_health == {
+        "status": "healthy", "fetched": "2026-09-26",
+        "counts": {"lokale": 12, "budynki": 11}, "error": None,
+    }
+
+
+def test_hits_total_verifies_terminal_page_without_empty_request(monkeypatch):
+    rows, starts = _fetch_pages(monkeypatch, [_page(), _page(ident=2)], totals=(2, 2))
+    assert len(rows) == 2 and starts == [0, 1]
+
+
+def test_hits_total_change_rejects_completed_pull(monkeypatch):
+    with pytest.raises(ValueError, match="final total"):
+        _fetch_pages(monkeypatch, [_page()], totals=(1, 2))
+
+
+@pytest.mark.parametrize("response,expected", [
+    (_page(0, total=123), 123), (_page(0), None),
+])
+def test_hits_response_parsing(response, expected):
+    class Session:
+        def get(self, url, **kwargs):
+            assert 'resultType=hits' in url
+            self.content = response
+            return self
+        def raise_for_status(self):
+            pass
+    assert rcn._get_total(Session(), 'ms:lokale', '') == expected
+
+
+@pytest.mark.parametrize("response", [b'<html/>', _page(1), _page(0, total=-1)])
+def test_hits_rejects_invalid_responses(response):
+    class Session:
+        content = response
+        def get(self, *args, **kwargs): return self
+        def raise_for_status(self): pass
+    with pytest.raises(ValueError):
+        rcn._get_total(Session(), 'ms:lokale', '')
+
+
+def test_building_cache_allows_zero_area_as_unreported():
+    snapshot = _snapshot(1)
+    snapshot['budynki'][0]['a'] = 0
+    rcn.validate_snapshot(snapshot)
+    snapshot['lokale'][0]['a'] = 0
+    with pytest.raises(ValueError, match='area'):
+        rcn.validate_snapshot(snapshot)
+
+
+def test_no_recovery_and_small_fresh_pull_cannot_bypass_known_baseline(tmp_path, monkeypatch):
+    def unavailable(*args, **kwargs): raise OSError('no recovery download')
+    monkeypatch.setattr(rcn, 'recover_snapshot', unavailable)
+    monkeypatch.setattr(rcn, 'fetch_all', lambda *a, **k: ([_tx()], [_tx()]))
+    path = tmp_path / 'cache.gz'
+    assert rcn.refresh(path, None, today='2026-09-26') is None
+    assert not path.exists()
+    assert rcn.refresh.last_health['status'] == 'unavailable'

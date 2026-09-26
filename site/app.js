@@ -230,8 +230,12 @@ function renderStats(meta) {
     ? `<span class="coverage-health ${escapeHtml(cov.status)}">Pokrycie źródeł: ` +
       (unhealthy.length ? unhealthy.map(escapeHtml).join(" · ") : "pełne") + `</span>`
     : "";
+  const rcnHealth = meta.rcn_health;
+  const rcnNotice = rcnHealth && rcnHealth.status === "degraded"
+    ? `<span class="coverage-health partial">RCN: odświeżenie nie powiodło się — używamy danych pobranych ${escapeHtml(rcnHealth.fetched)}.</span>`
+    : "";
   $("#stats").innerHTML =
-    `<b>${PLN.format(meta.count || 0)}</b> ofert · ${bySrc}${rel}${arch}${gap} · zaktualizowano ${when}${health}`;
+    `<b>${PLN.format(meta.count || 0)}</b> ofert · ${bySrc}${rel}${arch}${gap} · zaktualizowano ${when}${health}${rcnNotice}`;
 }
 
 function healthLabel(status) {

@@ -316,3 +316,79 @@ def test_source_continuity_rejects_malformed_previous_metadata(tmp_path):
     with pytest.raises(validate_data.DataValidationError,
                        match="previous meta.coverage must be an object"):
         validate_data.validate_data_dir(root, previous_meta={})
+
+
+def _rcn_meta():
+    return {
+        "updated": "2026-09-26T12:00:00+00:00",
+        "rcn_health": {"status": "healthy", "fetched": "2026-09-26",
+                       "counts": {"lokale": 100, "budynki": 200}, "error": None},
+        "rcn": {"matched": 15}, "rcn_stats": {"towns": 1, "gap_pairs": 5},
+        "sold_confirmed": 5,
+    }
+
+
+@pytest.mark.parametrize("group,key", [
+    ("rcn", "matched"), ("rcn_stats", "towns"),
+    ("rcn_stats", "gap_pairs"), (None, "sold_confirmed"),
+])
+def test_rcn_evidence_cannot_disappear(group, key):
+    import copy
+    previous = _rcn_meta()
+    current = copy.deepcopy(previous)
+    (current[group] if group else current)[key] = 0
+    with pytest.raises(validate_data.DataValidationError, match="RCN"):
+        validate_data.validate_rcn(current, {"towns": {"gliwice": {}}}, previous)
+
+
+def test_rcn_guard_catches_incident_with_legacy_metadata_and_ignores_source_override(tmp_path):
+    root = _dataset(tmp_path)
+    previous = _meta(root)
+    previous.update(rcn={"matched": 2849}, rcn_stats={"towns": 63, "gap_pairs": 13},
+                    sold_confirmed=15)
+    current = _meta(root)
+    current.update(rcn={"matched": 0}, rcn_stats={"towns": 0, "gap_pairs": 0},
+                   sold_confirmed=0)
+    (root / "meta.json").write_text(json.dumps(current))
+    with pytest.raises(validate_data.DataValidationError, match="RCN continuity"):
+        validate_data.validate_data_dir(root, previous_meta=previous,
+                                        allow_source_regression=True)
+
+
+@pytest.mark.parametrize("change,reason", [
+    ({"status": "unavailable"}, "unavailable"),
+    ({"counts": {"lokale": 0, "budynki": 20}}, "populated"),
+    ({"fetched": "2026-09-17"}, "stale"),
+    ({"fetched": "2026-09-27"}, "future"),
+    ({"fetched": "broken"}, "invalid"),
+    ({"status": "degraded", "error": None}, "reason"),
+])
+def test_rcn_health_must_reflect_usable_evidence(change, reason):
+    meta = _rcn_meta()
+    meta["rcn_health"].update(change)
+    with pytest.raises(validate_data.DataValidationError, match=reason):
+        validate_data.validate_rcn(meta, {"towns": {"gliwice": {}}})
+
+
+def test_degraded_rcn_is_reported_without_losing_previous_evidence(tmp_path):
+    root = _dataset(tmp_path)
+    current = _meta(root)
+    current.update(_rcn_meta())
+    current["rcn_health"].update(status="degraded", fetched="2026-09-17", error="bad page")
+    (root / "meta.json").write_text(json.dumps(current))
+    (root / "rcnstats.json").write_text(json.dumps({"towns": {"gliwice": {}}}))
+    summary = validate_data.validate_data_dir(root)
+    assert "**RCN:** degraded; snapshot 2026-09-17" in validate_data.github_summary(summary)
+
+
+def test_rcn_count_collapse_and_empty_benchmarks_fail():
+    previous = _rcn_meta()
+    current = _rcn_meta()
+    current["rcn_health"]["counts"]["budynki"] = 159
+    with pytest.raises(validate_data.DataValidationError, match="more than 20%"):
+        validate_data.validate_rcn(current, {"towns": {"gliwice": {}}}, previous)
+    with pytest.raises(validate_data.DataValidationError, match="benchmarks"):
+        validate_data.validate_rcn(previous, {"towns": {}})
+    current.pop("rcn_health")
+    with pytest.raises(validate_data.DataValidationError, match="disappeared"):
+        validate_data.validate_rcn(current, {}, previous)

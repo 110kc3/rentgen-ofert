@@ -1,9 +1,55 @@
 # TODO — rentgen-ofert
 
 > Keep this file and `README.md` updated after each change.
-> Last updated: 2026-09-09
+> Last updated: 2026-09-26
 
-## Current (2026-09-09) — production audit complete; Opolskie schedule implemented
+## Current (2026-09-26) — P0 RCN repair and recovery
+
+The owner selected the RCN P0 from the September 25 production review. On
+September 24, a changed WFS response produced an empty cache that was published
+as success, removing all Silesian deed matches and benchmarks. Portal source
+continuity alone did not catch this. The [recovery audit](docs/audits/2026-09-26-rcn-recovery.md)
+records the evidence, replay and limits.
+
+Completed implementation:
+- Normalize GML field-name casing and explicitly map both old and new market
+  values. Validate WFS envelopes, returned counts, layer schema and pagination;
+  reject repeated pages, unfinished pulls and empty layers.
+- Preserve the previous cache on failure, including failed writes. Reject a
+  drop greater than 20% in either layer. A corrupt/missing Silesian cache first
+  recovers the checksum-pinned September 17 cache from the last healthy data
+  ref; listing history always comes from the latest regional publication.
+- Publish RCN health, snapshot date and layer counts separately from portal
+  coverage. Failed refreshes retain verified evidence and display its date on
+  listings/statistics pages. No usable snapshot stops publication.
+- The publication gate rejects lost matches, benchmarks, gap pairs or confirmed
+  sales relative to a positive baseline. The portal-source override cannot
+  bypass RCN checks. A legitimate source reset needs investigation and an
+  explicitly reviewed migration; there is no automatic RCN-reset switch.
+
+**Local verification:** 396 offline tests; recovery replay of all 57,392 current
+history records / 3,702,897 observations; 2,902 restored matches, 63 benchmark
+towns, 13 gap pairs and 15 confirmed sales. Payload validation and real Chromium
+checks pass; see the audit for commands and limits. The code push and resulting
+production recovery/deploy are **pending verification**. The live flat layer
+passed, but the building pull timed out after 396,000 features; the incomplete
+snapshot was rejected. Recovery is verified using the September 17 fallback,
+while a complete fresh WFS snapshot remains unverified.
+
+**Next accepted check:** check this push's commit once next session in
+[Actions](https://github.com/110kc3/rentgen-ofert/actions?query=branch%3Amain).
+Inspect `rcn_health`, both layer counts, restored benchmarks/sale claims and
+current-history preservation, then the deployed pages. A degraded fallback is
+safe recovery, not a healthy fresh WFS pull. Do not wait or poll after pushing.
+
+The September 9 scheduler push is now observed in production: regional updates
+and no-op deploy suppression ran successfully. The seven-healthy-day cohort
+acceptance remains open: the RCN incident and observed weekly runtimes above
+180 minutes prevent treating green workflows as acceptance. Identity/floor/
+locality repairs and runtime work from the review remain unselected. No next
+region, direct data-branch rewrite or manual workflow dispatch is part of P0.
+
+## Historical (2026-09-09) — production audit complete; Opolskie schedule implemented
 
 The owner selected the production audit and serial 72-hour Opolskie scheduler.
 The [dated audit](docs/audits/2026-09-09-production.md) records the production

@@ -83,6 +83,9 @@ async function boot() {
     return;
   }
   $("#stats").innerHTML = `dane z ${esc(state.data.built || "—")} · oferty tygodniowo (od startu narzędzia) · akty notarialne miesięcznie (RCN/GUGiK)`;
+  if (state.data.rcn_health && state.data.rcn_health.status === "degraded") {
+    $("#stats").innerHTML += `<span class="coverage-health partial">RCN: odświeżenie nie powiodło się — używamy danych pobranych ${esc(state.data.rcn_health.fetched)}.</span>`;
+  }
   const towns = Object.keys(state.data.weekly.towns || {});
   $("#town").innerHTML = `<option value="">Całe województwo</option>` +
     towns.map((t) => `<option value="${esc(t)}">${esc(t)}</option>`).join("");
