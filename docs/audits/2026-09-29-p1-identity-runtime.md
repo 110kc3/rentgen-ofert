@@ -135,7 +135,7 @@ For the photo benchmark, load the baseline `normalize.py` with the current
 `compatible` predicate, build listing dictionaries from history snapshots and
 `hashes`, and compare sorted group membership before timing interpretation.
 
-## Pending production acceptance
+## Original production-verification handoff
 
 The impending P1 push and its data publication/deployment remain **pending**.
 Check the commit once next session; do not wait or poll CI after pushing. Inspect
@@ -145,3 +145,60 @@ preservation. Observe an ordinary and weekly/RCN-refresh run at **≤180 minutes
 preferably ≤150**. Local speedup and a bounded archive slice do not establish that
 end-to-end target. The seven-healthy-day cohort gate remains open; no expansion
 is selected. The canonical next check lives in [TODO.md](../../TODO.md).
+
+## Production follow-up — September 29
+
+Checked `31d271cddae989c42b2bbb76aa41ff759d315063` once on continuation. The
+push-triggered scrape [36538655200](https://github.com/110kc3/rentgen-ofert/actions/runs/36538655200)
+and its data deployment [36547243890](https://github.com/110kc3/rentgen-ofert/actions/runs/36547243890)
+succeeded. The subsequent scheduled Silesian scrape
+[36568321119](https://github.com/110kc3/rentgen-ofert/actions/runs/36568321119)
+and deployment [36579144419](https://github.com/110kc3/rentgen-ofert/actions/runs/36579144419)
+also succeeded. Both scrapes passed 442 tests and full generated-payload
+validation, including the compressed history, before publication.
+
+The latest frozen ref is `ce7c68a6e99ffd4647c77d1533c45e62ab904e58`, published
+at 13:58:06 UTC. The live metadata/index/manifest agree: **30,367 cards / 52,024
+raw offers**, manifest version `4eeece3a604284fc577e`, healthy RCN with the same
+September 26 layer counts, **3,232 matches / 60 benchmark towns / 59 gap pairs /
+67 confirmed sales**. The deployed listing and statistics routes return HTTP 200
+for both regions. This follow-up checks live HTTP/data and recorded CI; it does
+not claim a new interactive browser audit.
+
+| Metric | Pre-P1 publication | Latest P1 publication |
+|---|---:|---:|
+| Total scraper runtime | 111.3 min | 88.9 min |
+| Dedupe + history preparation | 1,654.7 s (combined timer) | 270.0 + 8.4 = 278.4 s |
+| History update | 444.7 s | 44.7 s |
+| Current Otodom | 16,042 | 16,088 |
+| Current Gratka | 12,560 | 12,542 |
+| Current Morizon | 12,559 | 12,539 |
+| Current n-online | 10,848 | 10,855 |
+| Recognized county labels used as current locality | 2,672 | 0 |
+
+The baseline Otodom total is derived from the pre-P1 source counts, and all
+four positive sources pass `validate_source_continuity` with no override or
+regressions. OLX remains blocked. Critical photo deferrals, unresolved size
+groups and photo backlog are zero. County-label counts compare the frozen
+current indexes with the shared allowlist, not old historical snapshots.
+A live scraper changes inputs between runs; these observed timings are not a
+controlled performance experiment, but the ordinary runtime meets the preferred
+150-minute gate.
+
+All 76 files in the new Silesian data tree pass `region_storage._allowed` for
+Śląskie. Opolskie remains byte-identical at ref
+`024ec06d559c9630be2af5993a430aacbb6780c8`; its live version is
+`213e3a66272095f960ae` with 3,705 cards. Hourly check
+[36543243297](https://github.com/110kc3/rentgen-ofert/actions/runs/36543243297)
+correctly skipped portal work and logged its next eligible refresh as
+**2026-10-01 01:16:17 UTC**. Queue time on that run must not be mistaken for a
+37-minute Opolskie scrape.
+
+**Remaining acceptance:** both P1 scrapes used cached archives, last refreshed
+September 24. The bounded archive cycle is first due October 1; there is no
+production evidence yet for partial checkpoints, resumption or completion.
+The next weekly RCN refresh is due October 3 from the September 26 snapshot.
+These maintenance runtimes and the next P1 Opolskie publication remain pending,
+as does the seven-healthy-day cohort gate. No manual workflow was dispatched.
+The documentation follow-up push has no new scraper changes; any resulting
+Actions verification remains pending, with no post-push waiting or polling.

@@ -37,14 +37,31 @@ newly recognized room/floor evidence and one resolves prior ambiguity. A
 250-record / 1,780-hash photo benchmark preserves all 242 groups while falling
 from 2.887 s to 0.066 s. This is a local kernel sample, not a total-run forecast.
 
-**Next accepted check (pending):** this P1 push, data publication and deployment
-are pending verification in [Actions](https://github.com/110kc3/rentgen-ofert/actions?query=branch%3Amain).
-Check this commit once next session: current source continuity, RCN health and
-changed claims, the new dedupe timing, archive cursor advancement across runs,
-eventual cycle completion and sibling-region isolation. Observe ordinary and
-weekly/RCN-refresh runtimes ≤180 minutes (preferred ≤150). Do not wait or poll
-CI after pushing. The last pre-P1 ordinary runtime was 111.3 minutes; the prior
-weekly runs exceeded 180 minutes, so that acceptance is still open.
+**Production verification (September 29 follow-up):** `31d271c`
+passed its push-triggered scrape/deploy and a subsequent scheduled scrape/deploy.
+Both scrapes passed all 442 tests and payload validation. Latest frozen Silesian
+ref `ce7c68a6e99ffd4647c77d1533c45e62ab904e58` is served live: 30,367 cards /
+52,024 raw offers, healthy RCN, 3,232 matches, 60 benchmark towns, 59 gap pairs
+and 67 confirmed sales. All four contributing sources retain continuity; critical
+photo deferrals and unresolved size groups are zero. County-labeled current
+cards fell from 2,672 to zero. The ordinary run took **88.9 minutes**, below the
+preferred 150-minute gate; dedupe plus history preparation fell from 1,654.7 s
+to 278.4 s, and history update from 444.7 s to 44.7 s. The 76-file regional tree
+passes the exact path allowlist. Opolskie remains at its unchanged September 28
+ref, and its hourly check correctly skipped before October 1 eligibility.
+See the [audit follow-up](docs/audits/2026-09-29-p1-identity-runtime.md#production-follow-up-september-29).
+
+**Next accepted checks (still pending):** observe the automatic Silesian archive
+cycle when due **October 1**: partial metrics, cursor advancement, saved history,
+eventual completion and unchanged sibling branches. Its old September 24 state
+is still cached, so neither P1 run exercised maintenance. Observe the next due
+weekly RCN refresh (October 3 from the September 26 snapshot) and confirm total
+runtime ≤180 minutes, preferred ≤150. Verify P1 on Opolskie's next automatically
+eligible refresh, **October 1 01:16:17 UTC**, subject to queue/runtime delays.
+Do not dispatch a workflow merely to accelerate these checks. Check completed
+runs once next session in [Actions](https://github.com/110kc3/rentgen-ofert/actions?query=branch%3Amain);
+never wait or poll after pushing. This verification-only documentation push has
+no new scraper implementation; any resulting Actions verification is pending.
 
 The seven-healthy-day cohort gate remains open. There is no owner-only blocker
 for this implementation. No next region, automatic history split, manual data

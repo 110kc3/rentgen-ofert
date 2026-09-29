@@ -8,7 +8,7 @@ job scrapes, writes static JSON, and GitHub Pages displays it.
 
 **2026-09-29 update:** the RCN P0 recovery is verified in production: Śląskie
 has a fresh healthy snapshot (200,895 flat / 473,617 building records), 3,027
-matched properties and restored benchmarks. The selected P1 repairs normalize
+matched properties in the pre-P1 baseline and restored benchmarks. The selected P1 repairs normalize
 floor enums, county breadcrumbs and street/building-number variants while
 retaining known contradictions and unknown values. Old conflated histories are
 not automatically split.
@@ -29,13 +29,17 @@ the hourly tick, serialization and GitHub scheduling delays. Manual runs remain
 available, and changing Opolskie's catalog cadence to `manual` pauses its timer.
 Checks that publish no data do not deploy Pages.
 
-The scheduler and RCN recovery have run successfully in production. This P1
-push and its ordinary/weekly runtime improvement are **pending production
-verification**. The seven-healthy-day cohort gate
-remains open after the RCN incident and observed weekly runtimes above 180
-minutes. [TODO.md](TODO.md) owns the handoff. OLX remains blocked after its
-bounded probe, and Otodom's serving cap means coverage remains explicitly
-partial. Małopolskie stays disabled with its data branch recoverable.
+The scheduler, RCN recovery and P1 identity/runtime changes are verified in
+ordinary Silesian production runs. The latest September 29 publication has
+3,232 RCN matches, 67 confirmed sales and **88.9-minute runtime**; all four
+contributing sources retain continuity and critical photo deferrals are zero.
+County-labeled current cards fell from 2,672 to zero. Archive maintenance is
+next due October 1 and the weekly RCN refresh October 3: their resumption,
+completion and total runtime remain **pending production verification**. The
+seven-healthy-day cohort gate remains open. [TODO.md](TODO.md) owns the handoff.
+OLX remains blocked after its bounded probe, and Otodom's serving cap means
+coverage remains explicitly partial. Małopolskie stays disabled with its data
+branch recoverable.
 
 ```
 GitHub Actions (cron) → python -m scraper.main → site/data/<region>/*.json

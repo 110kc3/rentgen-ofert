@@ -5,8 +5,9 @@
 > floors, county breadcrumbs and building numbers; accelerate photo matching;
 > and bound archive maintenance to resumable 15-minute slices after current
 > stock collection. [The dated audit](docs/audits/2026-09-29-p1-identity-runtime.md)
-> records local replay and benchmark evidence. Post-push publication, archive
-> cycle completion and ordinary/weekly runtimes ≤180 minutes (preferred ≤150)
+> records replay and production evidence. Two P1 scrapes/deploys passed; the
+> latest ordinary runtime is 88.9 minutes with stable sources and healthy RCN.
+> Archive cycle completion and weekly runtimes ≤180 minutes (preferred ≤150)
 > remain pending. Seven healthy cohort days remain unaccepted. [TODO.md](TODO.md)
 > owns the next check. No new region is selected. Earlier “P0 accepted” references
 > below describe the original regional rollout, not the September RCN incident.
@@ -57,7 +58,7 @@ seven-healthy-day observation remains open after the September RCN incident.
 | Deploy overlay for multiple region branches | Proven live for three refs / two enabled regions | Deploys overlay all isolated refs, then publish only enabled Śląskie and Opolskie; disabled Małopolskie remains recoverable and absent. |
 | Portal coverage | Collection floor and continuity accepted | Corrected Otodom floor is 15.8–15.9k; subsequent guarded schedules retain it and the latest yielded 16,015. OLX's one-probe blocked policy remains stable. |
 | Coverage KPI | Truthful and protective | Schema v2 reports source state; P0.7 compares it with preserved metadata before push. Synthetic 15,949→0 rejection plus repeated production passes cover the failure and positive paths. |
-| Per-region runtime | P1 implemented; production verification pending | Latest pre-P1 Śląskie ordinary run: 111.3 min; weekly runs exceeded 180 min. Archive slices and faster matching need ordinary/weekly confirmation at ≤180 min, preferred ≤150. |
+| Per-region runtime | P1 ordinary Silesian run accepted; weekly verification pending | September 29 P1 ordinary run: 88.9 min, down from 111.3 min. Archive maintenance is next due October 1; weekly RCN refresh October 3. Their ≤180 min / preferred ≤150 gate remains open. |
 | Region picker and durable regional URLs | Proven live for two enabled regions | National picker, stable listing/statistics paths, scoped state and discovery expose Śląskie plus the data-backed Opolskie pilot. |
 | Per-region metadata / OG / sitemap / llms.txt | Proven live | Canonical/JSON-LD documents parse and discovery contains only data-backed published regions. |
 | CI region matrix / cadence | 72-hour serial scheduler observed; cohort gate open | Opolskie eligibility is checked hourly against publication and attempt timestamps, under the global lock. Śląskie retains its twice-daily schedule. No concurrent portal access. |
