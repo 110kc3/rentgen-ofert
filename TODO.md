@@ -1,9 +1,56 @@
 # TODO — rentgen-ofert
 
 > Keep this file and `README.md` updated after each change.
-> Last updated: 2026-09-26
+> Last updated: 2026-09-29
 
-## Current (2026-09-26) — P0 RCN repair and recovery
+## Current (2026-09-29) — identity and runtime P1s implemented
+
+The owner selected the two P1s from the September review after requesting a
+pull and production check. `main` was already current at `0c6db2c`. P0 is now
+verified in production: its update/deploy succeeded, including a fresh WFS
+snapshot with 200,895 flat / 473,617 building transactions. The September 29
+Silesian publication has 3,027 RCN matches, 60 benchmark towns, 51 gap pairs and
+55 confirmed sales. The [P1 audit](docs/audits/2026-09-29-p1-identity-runtime.md)
+records exact refs, run links, replay and limits.
+
+Completed implementation:
+- Share known floor normalization across photo identity and RCN, including
+  Otodom enums and OLX `floor_3` values; retain unknowns. Remove recognized
+  county suffixes from current locality breadcrumbs. Normalize street/building
+  formatting while retaining known building and numbered-street contradictions.
+  No automatic splitting or remapping of old conflated history.
+- Test attribute contradictions before expensive gallery comparisons; use integer
+  bit counting and bounded address caches. Separate dedupe from the misleading
+  combined history-preparation timer.
+- Finish the current n-online pass first, then spend at most a 15-minute
+  maintenance budget on due archives. Resume regional town/type/page cursors
+  on later runs, retry failed pages without losing progress, and advance the
+  refresh date only after completion. Persist progress after history is saved;
+  existing isolated publication stages both. `force` stays bounded; `skip`
+  preserves pending work. Partial cycle metrics are explicit.
+
+**Local verification:** 442 offline tests and whitespace checks pass. Frozen
+58,022-record RCN replay reproduces the 3,027-match / 55-sale baseline, then
+produces 3,214 matched properties / 67 derived sale claims under the new rules.
+All seven removed sale claims contradict a now-known floor; 18 additions use
+newly recognized room/floor evidence and one resolves prior ambiguity. A
+250-record / 1,780-hash photo benchmark preserves all 242 groups while falling
+from 2.887 s to 0.066 s. This is a local kernel sample, not a total-run forecast.
+
+**Next accepted check (pending):** this P1 push, data publication and deployment
+are pending verification in [Actions](https://github.com/110kc3/rentgen-ofert/actions?query=branch%3Amain).
+Check this commit once next session: current source continuity, RCN health and
+changed claims, the new dedupe timing, archive cursor advancement across runs,
+eventual cycle completion and sibling-region isolation. Observe ordinary and
+weekly/RCN-refresh runtimes ≤180 minutes (preferred ≤150). Do not wait or poll
+CI after pushing. The last pre-P1 ordinary runtime was 111.3 minutes; the prior
+weekly runs exceeded 180 minutes, so that acceptance is still open.
+
+The seven-healthy-day cohort gate remains open. There is no owner-only blocker
+for this implementation. No next region, automatic history split, manual data
+branch rewrite, workflow dispatch or P4 storage change is selected.
+
+## Historical (2026-09-26) — P0 RCN repair and recovery
 
 The owner selected the RCN P0 from the September 25 production review. On
 September 24, a changed WFS response produced an empty cache that was published

@@ -37,7 +37,7 @@ import re
 import urllib.parse
 import xml.etree.ElementTree as ET
 
-from .identity import fold as _fold, street_match
+from .identity import fold as _fold, street_match, street_parts, known_floor, building_number
 
 WFS = "https://mapy.geoportal.gov.pl/wss/service/rcn"
 NS_WFS = "{http://www.opengis.net/wfs/2.0}"
@@ -438,7 +438,8 @@ def _candidates(rec, rows_by_town):
         if town and town in rows_by_town:
             rows = rows_by_town[town]
             break
-    pinned_nr = bool(snap.get("nr")) or bool(snap.get("dzialka_id"))
+    pinned_nr = bool(snap.get("nr") or street_parts(snap.get("street"))[1]
+                     or snap.get("dzialka_id"))
     out = []
     for r in rows:
         if r.get("a") is None:
@@ -451,20 +452,9 @@ def _candidates(rec, rows_by_town):
     return out, snap
 
 
-_FLOOR_WORDS = {"parter": 0, "suterena": -1, "poddasze": None}
-
-
 def _floor_int(v):
-    """Portal floors arrive as int, "3", "parter", "> 10", None."""
-    if v is None:
-        return None
-    if isinstance(v, (int, float)):
-        return int(v)
-    t = str(v).strip().lower()
-    if t in _FLOOR_WORDS:
-        return _FLOOR_WORDS[t]
-    m = re.search(r"-?\d+", t)
-    return int(m.group()) if m else None
+    """Shared exact-floor normalization; ranges/attics remain unknown."""
+    return known_floor(v)
 
 
 def _decimal_area(area):
@@ -499,13 +489,16 @@ def _score(rec, snap, r, is_flat, unique=False):
     # NOTE: a parcel MISmatch is not decisive on its own — parcels get
     # renumbered over the years (real case: a 2008 deed on działka 974 whose
     # address sits on today's działka 1506). Street+number agreement wins.
-    street = snap.get("street")
+    street, embedded_nr = street_parts(snap.get("street"))
     # building numbers compare space-free: '13 A' and '13A' are the same door
-    nr = _fold(str(snap.get("nr"))).replace(" ", "") if snap.get("nr") else None
-    if street and r.get("ul") and street_match(street, r["ul"]):
-        if nr and r.get("nr"):
+    nr = snap.get("nr") or embedded_nr
+    nr = building_number(nr) if nr else None
+    deed_street, deed_embedded_nr = street_parts(r.get("ul"))
+    deed_nr = r.get("nr") or deed_embedded_nr
+    if street and deed_street and street_match(street, deed_street):
+        if nr and deed_nr:
             # street AND building number known on both sides -> decisive
-            return (2, True) if _fold(str(r["nr"])).replace(" ", "") == nr else (0, False)
+            return (2, True) if building_number(deed_nr) == nr else (0, False)
         if r.get("a") is None:
             return 0, False    # area-less deed needs the number to be sure
         return 2, True

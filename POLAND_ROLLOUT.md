@@ -1,15 +1,15 @@
 # Whole-Poland rollout: status and next tasks
 
-> **P0 recovery update 2026-09-26:** the September 24 Silesian RCN refresh
-> replaced healthy deed evidence with an empty cache despite green CI. The
-> parser/cache/publication guards and isolated cache recovery are now repaired;
-> [local recovery evidence](docs/audits/2026-09-26-rcn-recovery.md) is separate
-> from pending post-push production verification. Scheduler operation and no-op
-> deployment suppression have been observed. Seven healthy cohort days remain
-> unaccepted after this incident and weekly runtimes above 180 minutes.
-> [TODO.md](TODO.md) owns the next check. Identity/runtime fixes and expansion
-> remain unselected. Earlier “P0 accepted” references below describe the original
-> regional rollout, not this new RCN incident.
+> **P1 update 2026-09-29:** P0 recovery and a fresh healthy RCN snapshot are
+> verified in production. The selected identity/runtime P1s now normalize known
+> floors, county breadcrumbs and building numbers; accelerate photo matching;
+> and bound archive maintenance to resumable 15-minute slices after current
+> stock collection. [The dated audit](docs/audits/2026-09-29-p1-identity-runtime.md)
+> records local replay and benchmark evidence. Post-push publication, archive
+> cycle completion and ordinary/weekly runtimes ≤180 minutes (preferred ≤150)
+> remain pending. Seven healthy cohort days remain unaccepted. [TODO.md](TODO.md)
+> owns the next check. No new region is selected. Earlier “P0 accepted” references
+> below describe the original regional rollout, not the September RCN incident.
 
 
 > **Code/audit update 2026-09-09:** the production audit of `092d8de` is
@@ -46,8 +46,8 @@ cold/warm pilot passed; the project is still not ready for a 16-voivodeship
 schedule.** Guarded Śląskie runs retain the positive source baseline with normal
 count drift. Małopolskie remains recoverable but disabled. Opolskie's 29.9-minute
 cold and 14.3-minute warm scrapes proved source stability, convergence and
-isolation. Its selected serial 72-hour scheduler is now implemented; first-run verification
-and the seven-day observation remain open.
+isolation. Its serial 72-hour scheduler is observed in production; the
+seven-healthy-day observation remains open after the September RCN incident.
 
 | Area | Status | Evidence / gap |
 |---|---|---|
@@ -57,10 +57,10 @@ and the seven-day observation remain open.
 | Deploy overlay for multiple region branches | Proven live for three refs / two enabled regions | Deploys overlay all isolated refs, then publish only enabled Śląskie and Opolskie; disabled Małopolskie remains recoverable and absent. |
 | Portal coverage | Collection floor and continuity accepted | Corrected Otodom floor is 15.8–15.9k; subsequent guarded schedules retain it and the latest yielded 16,015. OLX's one-probe blocked policy remains stable. |
 | Coverage KPI | Truthful and protective | Schema v2 reports source state; P0.7 compares it with preserved metadata before push. Synthetic 15,949→0 rejection plus repeated production passes cover the failure and positive paths. |
-| Per-region runtime | Opolskie accepted | Latest Śląskie took 90.8 minutes, corrective Małopolskie 110.9, cold Opolskie 29.9 and warm Opolskie 14.3; all pass 150 preferred / 180 required. |
+| Per-region runtime | P1 implemented; production verification pending | Latest pre-P1 Śląskie ordinary run: 111.3 min; weekly runs exceeded 180 min. Archive slices and faster matching need ordinary/weekly confirmation at ≤180 min, preferred ≤150. |
 | Region picker and durable regional URLs | Proven live for two enabled regions | National picker, stable listing/statistics paths, scoped state and discovery expose Śląskie plus the data-backed Opolskie pilot. |
 | Per-region metadata / OG / sitemap / llms.txt | Proven live | Canonical/JSON-LD documents parse and discovery contains only data-backed published regions. |
-| CI region matrix / cadence | 72-hour serial scheduler implemented; production acceptance pending | Opolskie eligibility is checked hourly against publication and attempt timestamps, under the global lock. Śląskie retains its twice-daily schedule. No concurrent portal access. |
+| CI region matrix / cadence | 72-hour serial scheduler observed; cohort gate open | Opolskie eligibility is checked hourly against publication and attempt timestamps, under the global lock. Śląskie retains its twice-daily schedule. No concurrent portal access. |
 | Nationwide data hosting | Not decided | Current Śląskie + Opolskie data serves about 125.4 MiB; the larger retained Małopolskie measurement keeps the nationwide capacity warning intact. |
 
 **Rollout decision (2026-09-09):** Śląskie and Opolskie form the selected

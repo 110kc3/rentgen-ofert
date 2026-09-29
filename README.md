@@ -6,18 +6,18 @@ to grow deliberately to all 16 Polish voivodeships. It attempts **Otodom**, **OL
 and presents it on one searchable page. No application server: a GitHub Actions
 job scrapes, writes static JSON, and GitHub Pages displays it.
 
-**2026-09-26 update:** the RCN P0 repair handles changed GML field names and
-market values, validates pagination and prevents empty or sharply reduced
-snapshots from replacing good evidence. It recovers the last verified deed
-cache when needed and reconciles it against the latest listing history. Failed
-refreshes retain the prior evidence, with its date and degraded status visible
-on the site; no usable snapshot stops publication. RCN continuity now has its
-own publication gate. See the [recovery audit](docs/audits/2026-09-26-rcn-recovery.md)
-for local verification and production limitations.
+**2026-09-29 update:** the RCN P0 recovery is verified in production: Śląskie
+has a fresh healthy snapshot (200,895 flat / 473,617 building records), 3,027
+matched properties and restored benchmarks. The selected P1 repairs normalize
+floor enums, county breadcrumbs and street/building-number variants while
+retaining known contradictions and unknown values. Old conflated histories are
+not automatically split.
 
-The [September 9 audit](docs/audits/2026-09-09-production.md) documents remaining
-identity precision limits: county/town labels, street-number suffixes and old
-conflated histories without per-offer provenance. These repairs are unselected.
+The runtime P1 checks cheap identity contradictions before gallery hashes,
+uses integer bit counting, and gives n-online archive maintenance a resumable
+15-minute budget after the complete current-offer pass. Deduplication now has
+its own phase timer. See the [P1 audit](docs/audits/2026-09-29-p1-identity-runtime.md)
+for frozen-data verification and production limits.
 
 **Opolskie now has a serial 72-hour cadence in code.** An hourly check at minute
 17 UTC reads the last successful publication; it does no portal work until
@@ -29,8 +29,9 @@ the hourly tick, serialization and GitHub scheduling delays. Manual runs remain
 available, and changing Opolskie's catalog cadence to `manual` pauses its timer.
 Checks that publish no data do not deploy Pages.
 
-The scheduler has run in production. The RCN repair push and resulting recovery
-are **pending production verification**. The seven-healthy-day cohort gate
+The scheduler and RCN recovery have run successfully in production. This P1
+push and its ordinary/weekly runtime improvement are **pending production
+verification**. The seven-healthy-day cohort gate
 remains open after the RCN incident and observed weekly runtimes above 180
 minutes. [TODO.md](TODO.md) owns the handoff. OLX remains blocked after its
 bounded probe, and Otodom's serving cap means coverage remains explicitly
@@ -55,10 +56,10 @@ the Pages artifact.
 
 ## Poland rollout status
 
-As of 2026-09-09, **Śląskie and Opolskie are published**. Śląskie remains
+As of 2026-09-29, **Śląskie and Opolskie are published**. Śląskie remains
 scheduled twice daily. Opolskie passed its cold/warm pilot; its serial
-72-hour scheduler is implemented, with production acceptance pending. The
-seven-day cohort observation starts with its first successful scheduled refresh.
+72-hour scheduler is observed in production. The seven-healthy-day cohort
+acceptance remains open after the RCN incident and slow weekly runs.
 The completed Małopolskie pilot is disabled after passing its corrective gate;
 its isolated data branch is kept for a reversible re-enable, but no disabled
 tree belongs in the artifact.
@@ -204,16 +205,17 @@ development diary.
   Otodom/OLX/gratka/Morizon and per-city sub-domains on
   nieruchomości-online. `RENTGEN_REGION` must name an entry in
   `site/regions.json` whose `enabled` flag is true. Opolskie has an isolated
-  data branch and a serial 72-hour cadence, checked hourly; the first automatic
-  refresh and seven-day observation remain to be accepted.
+  data branch and a serial 72-hour cadence, checked hourly and observed in
+  production; the seven-healthy-day observation remains open.
   Małopolskie passed its cold and corrective warm gates, then was disabled as a
   completed disposable pilot; its branch remains recoverable.
   Every listing keeps its **town (locality)**, and the dashboard has a searchable
   **town multi-select** filter.
 - Keeps archived / sold listings (e.g. nieruchomości-online *Ogłoszenie archiwalne*)
   out of the dashboard. Nieruchomości-online's normal crawl stops after the
-  active-results boundary; a separate weekly full harvest retains archived
-  rows as history evidence without paying that cost on every run (see below).
+  active-results boundary. When due, archive maintenance runs afterward for up
+  to 15 minutes per run and resumes its checkpoint on subsequent runs until
+  finished. Archived rows feed history without becoming current offers.
 - **Relist & price history.** Each run reuses known photo fingerprints, hashes
   covers needed for current dedupe first and attempts new history galleries
   within a time budget, recording price/date in
@@ -462,8 +464,8 @@ Then publish via **Actions tab → "Deploy site" → Run workflow** (pushes to a
 `data-*` branch can't trigger workflows themselves). The heavy **Update
 listings** workflow runs on its cron, on `scraper/**` changes, or manually
 (inputs: `rcn` — set `force` to re-pull the RCN transaction snapshot;
-`nol_archive` — `auto` uses the weekly cadence, `force` harvests now and `skip`
-does only the bounded current crawl; `region` — voivodeship slug, default
+`nol_archive` — `auto` starts a weekly archive cycle or resumes pending work,
+`force` starts/resumes a bounded slice now and `skip` pauses maintenance; `region` — voivodeship slug, default
 `slaskie`; `allow_source_regression` — a logged manual-only escape hatch for an
 intentional source removal/reset). Before contacting a portal it runs the
 offline tests. After scraping it validates every generated JSON/gzip file,
@@ -507,7 +509,26 @@ RENTGEN_MAX_PAGES=3 RENTGEN_DELAY=0.3 python -m scraper.main
 | `RENTGEN_GEO_MAX` | 500 | max new UUG geocoder lookups per run (cache does the rest) |
 | `RENTGEN_NOL_TOWNS` | 60 | max nieruchomości-online town sub-domains per region |
 | `RENTGEN_NOL_ARCHIVE` | auto | n-online archive harvest mode: `auto`, `force` or `skip` |
-| `RENTGEN_NOL_ARCHIVE_DAYS` | 7 | minimum days between automatic full n-online archive harvests |
+| `RENTGEN_NOL_ARCHIVE_DAYS` | 7 | days from a completed archive cycle before starting another; pending work resumes each run |
+| `RENTGEN_NOL_ARCHIVE_BUDGET_MIN` | 15 | positive finite maintenance budget after the current-offer pass, including forced archive runs |
+
+Archive progress lives in `cache/nol_archive_<region>.json` beside the regional
+history. Each slice persists seen portal IDs and the next page per town/type;
+failed pages retain their cursor and other towns can proceed. The checkpoint is
+saved only after history is saved and published through the existing isolated
+data-branch transaction. Schema-1 completed states remain readable; corrupt or
+foreign-region checkpoints fail closed. A partial slice reports `mode: partial`,
+pending partitions, elapsed time and cycle records; it preserves the last
+completed refresh date. Only draining the queue advances that date. `skip`
+preserves the checkpoint. Changing `RENTGEN_TYPES` during an active cycle must
+include its pending types.
+
+The maintenance session has no retries; each request timeout is at most 30
+seconds and no greater than the remaining budget. The deadline is checked
+between requests, so an in-flight response/parse can overrun it. This is not a
+hard total-job deadline. Portal page numbers can shift between runs; the cycle
+is a best-effort traversal, not a frozen archive snapshot. Current stock is
+recollected fully on every run and existing history is retained.
 
 **Rate limiting (HTTP 429/405):** the scraper backs off and retries automatically —
 Otodom phrases its refusals as `405 Not Allowed`, so that counts as one too.

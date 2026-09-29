@@ -16,6 +16,7 @@ import requests
 from . import bands, coverage
 from .normalize import otodom_rooms, region_slug, take_unseen, to_int
 from .regions import portal_slug
+from .identity import known_floor
 
 BASE = "https://www.otodom.pl"
 # Whole-voivodeship search by default. RENTGEN_REGION is the canonical catalog
@@ -122,6 +123,7 @@ def parse_items(items, typ: str, region: str = REGION):
         ppm = it.get("pricePerSquareMeter") or {}
         images = it.get("images") or []
         slug = it.get("slug")
+        floor = known_floor(it.get("floorNumber"))
         out.append({
             "source": "otodom",
             "source_id": str(it["id"]) if it.get("id") is not None else None,
@@ -133,7 +135,7 @@ def parse_items(items, typ: str, region: str = REGION):
             "price_per_m2": ppm.get("value"),
             "rooms": otodom_rooms(it.get("roomsNumber")),
             "plot_area": it.get("terrainAreaInSquareMeters"),
-            "floor": it.get("floorNumber"),
+            "floor": floor if floor is not None else it.get("floorNumber"),
             "locality": (loc.get("city") or {}).get("name") if loc.get("city") else None,
             "district": (loc.get("district") or {}).get("name") if loc.get("district") else None,
             "street": (loc.get("street") or {}).get("name") if loc.get("street") else None,

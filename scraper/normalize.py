@@ -31,7 +31,7 @@ import unicodedata
 from collections import defaultdict
 
 from .regions import catalog
-from .identity import compatible
+from .identity import compatible, is_county
 
 OTODOM_ROOMS = {
     "ONE": 1, "TWO": 2, "THREE": 3, "FOUR": 4, "FIVE": 5,
@@ -75,6 +75,8 @@ def location_parts(location):
     parts = [p.strip() for p in (location or "").split(",") if p.strip()]
     if parts and parts[-1].lower() in VOIVODESHIPS:
         parts = parts[:-1]
+    while parts and is_county(parts[-1]):
+        parts.pop()
     return parts
 
 
@@ -316,7 +318,7 @@ def take_unseen(items, seen, key="url"):
 
 
 def _hamming(a, b):
-    return bin(a ^ b).count("1")
+    return (a ^ b).bit_count()
 
 
 def same_photos(a_hashes, b_hashes):
@@ -351,9 +353,9 @@ def _photo_clusters(members):
             if ri == rj:
                 continue
             left, right = groups[ri], groups[rj]
-            if (any(same_photos(a.get("phashes") or [], b.get("phashes") or [])
-                    for a in left for b in right)
-                    and all(compatible(a, b) for a in left for b in right)):
+            if (all(compatible(a, b) for a in left for b in right)
+                    and any(same_photos(a.get("phashes") or [], b.get("phashes") or [])
+                            for a in left for b in right)):
                 parent[ri] = rj
                 groups[rj].extend(left)
 

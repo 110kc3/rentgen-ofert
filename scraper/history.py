@@ -86,9 +86,9 @@ def _find(rec_index, typ, area, hashes, listing):
         (int(round(area)) - 1, int(round(area)), int(round(area)) + 1) if area is not None else (None,))]
     for b in buckets:
         for r in rec_index.get(b, []):
-            if not r.get("development") and same_photos(hashes, r.get("hashes", [])):
+            if not r.get("development"):
                 identity = dict(r.get("snapshot") or {}, type=r.get("type"))
-                if compatible(listing, identity):
+                if compatible(listing, identity) and same_photos(hashes, r.get("hashes", [])):
                     return r
     return None
 

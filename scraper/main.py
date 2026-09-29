@@ -32,10 +32,12 @@ Environment overrides (optional):
                         the cached snapshot when it's older than 7 days
     RENTGEN_GEO         "0" = skip geocoding listings for the map view
     RENTGEN_GEO_MAX     max new UUG geocoder lookups per run (default 500)
-    RENTGEN_NOL_ARCHIVE auto = refresh archived n-online ads every 7 days;
-                        force = refresh now; skip = current listings only
+    RENTGEN_NOL_ARCHIVE auto = start weekly archive cycle or resume pending work;
+                        force = start/resume now; skip = current listings only
     RENTGEN_NOL_ARCHIVE_DAYS
-                        archive refresh cadence in days (default 7)
+                        days after completed archive cycle (default 7)
+    RENTGEN_NOL_ARCHIVE_BUDGET_MIN
+                        maintenance minutes after current stock (default 15)
 """
 from __future__ import annotations
 
@@ -108,6 +110,7 @@ def run() -> int:
     nol_archive_state = nieruchomosci_online.load_archive_state(
         NOL_ARCHIVE_STATE, DATA_DIR / "meta.json")
     nol_archive_mode = os.environ.get("RENTGEN_NOL_ARCHIVE", "auto")
+    pending_archive_state = None
     nol_archive_days = int(os.environ.get("RENTGEN_NOL_ARCHIVE_DAYS", "7"))
     # Resolve invalid operator input before the first portal request.
     nol_harvest_archive = nieruchomosci_online.archive_due(
@@ -142,8 +145,10 @@ def run() -> int:
                 harvest_archive=nol_harvest_archive,
                 archive_state=nol_archive_state,
                 today=today,
+                archive_budget_s=float(os.environ.get("RENTGEN_NOL_ARCHIVE_BUDGET_MIN", "15")) * 60,
+                archive_session=net.probe_session(),
             )
-            archive_action = ("full archive refresh" if nol_harvest_archive
+            archive_action = ("bounded archive refresh/resume" if nol_harvest_archive
                               else "current-only; archive cache "
                               + (nol_archive_state.get("refreshed") or
                                  "unavailable"))
@@ -152,8 +157,7 @@ def run() -> int:
             print(f"Scraping {name} ...")
             raw.extend(mod.scrape(**kwargs))
             if mod is nieruchomosci_online and mod.scrape.last_archive_state:
-                nieruchomosci_online.save_archive_state(
-                    NOL_ARCHIVE_STATE, mod.scrape.last_archive_state)
+                pending_archive_state = mod.scrape.last_archive_state
         except Exception as exc:  # one portal failing must not lose the others
             errors.append(f"{name}: {exc}")
             print(f"  !! {name} failed: {exc}", file=sys.stderr)
@@ -280,7 +284,7 @@ def run() -> int:
     phase_seconds["photos"] = round(time.monotonic() - photo_started, 1)
 
     # Portal-archived ads (n-online flags them) are history evidence, not offers.
-    history_started = time.monotonic()
+    dedupe_started = time.monotonic()
     archived_raw = [x for x in raw if x.get("archived")]
     raw = [x for x in raw if not x.get("archived")]
 
@@ -289,6 +293,8 @@ def run() -> int:
         allow_heuristic_fallback=photo_stats["heuristic_fallback_enabled"],
     )
     require_unique_urls(listings, "deduplicated properties")
+    phase_seconds["dedupe"] = round(time.monotonic() - dedupe_started, 1)
+    history_started = time.monotonic()
 
     # Lifecycle bookkeeping, in dependency order:
     #   1. ingest portal-archived ads (direct "this ad ended" evidence)
@@ -361,6 +367,8 @@ def run() -> int:
     write_started = time.monotonic()
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     history.save(hist_path, records)
+    if pending_archive_state is not None:
+        nieruchomosci_online.save_archive_state(NOL_ARCHIVE_STATE, pending_archive_state)
     link_same_size(listings)   # flag same-area duplicates/relists visible right now
     relisted = sum(1 for l in listings if l.get("relisted"))
 

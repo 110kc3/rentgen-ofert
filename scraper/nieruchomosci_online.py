@@ -4,7 +4,7 @@ Each town is a sub-domain (e.g. ``pyskowice.nieruchomosci-online.pl``) whose
 result pages embed a schema.org ``CollectionPage`` JSON-LD block. Rental
 listings are skipped. The portal orders current offers before archived
 ("OutOfStock"/"SoldOut") offers, so normal runs stop after a confirmed
-archive-only boundary. A less-frequent full harvest returns archived records
+archive-only boundary. A less-frequent, resumable harvest returns archived records
 with ``archived: True`` — main.py keeps them out of the dashboard but feeds
 them to the history store as evidence the ad ended (likely sold).
 
@@ -28,10 +28,12 @@ from __future__ import annotations
 import datetime as dt
 import json
 import os
+import copy
 import pathlib
 import re
 import time
 from collections import Counter
+from math import isfinite
 
 import requests
 
@@ -48,7 +50,7 @@ MAX_TOWNS = int(os.environ.get("RENTGEN_NOL_TOWNS", "60"))
 # avoiding the ~1,400 archive pages the old twice-daily walk consumed.
 ACTIVE_ARCHIVE_ONLY_PAGES = max(1, int(
     os.environ.get("RENTGEN_NOL_ARCHIVE_BOUNDARY_PAGES", "2")))
-ARCHIVE_STATE_SCHEMA = 1
+ARCHIVE_STATE_SCHEMA = 2
 
 # Hand-curated seed for śląskie: the cities with powiat rights plus major towns.
 # slug -> proper display name. The slug loses Polish diacritics, so a derived
@@ -151,9 +153,11 @@ def _state_from_meta(meta_path) -> dict:
 def load_archive_state(path, meta_path=None) -> dict:
     try:
         state = json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
-        return state if state.get("schema") == ARCHIVE_STATE_SCHEMA else {}
-    except (FileNotFoundError, TypeError, ValueError):
+    except FileNotFoundError:
         return _state_from_meta(meta_path) if meta_path else {}
+    if not isinstance(state, dict) or state.get("schema") not in (1, ARCHIVE_STATE_SCHEMA):
+        raise ValueError("invalid archive checkpoint schema")
+    return state
 
 
 def save_archive_state(path, state: dict):
@@ -178,6 +182,8 @@ def archive_due(state: dict, today, mode="auto", interval_days=7) -> bool:
         return False
     if mode != "auto":
         raise ValueError("RENTGEN_NOL_ARCHIVE must be auto, force or skip")
+    if (state.get("cycle") or {}).get("pending"):
+        return True
     try:
         refreshed = dt.date.fromisoformat(str(state.get("refreshed")))
     except (TypeError, ValueError):
@@ -336,17 +342,24 @@ def parse_offers(offers, typ: str, town: str = "", towns: dict = None,
 def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
            types=("house", "flat"), towns=None, harvest_archive=True,
            archive_state=None, today=None, archive_only_pages=None,
-           region=None):
+           region=None, archive_budget_s=None, archive_session=None):
     """`towns`: {slug: display} from resolve_towns(). Defaults to the region's
     seed list so the module still works standalone.
 
-    Normal pipeline runs pass ``harvest_archive=False`` and stop after two
-    archive-only result pages. A forced/cadenced full harvest keeps the legacy
-    behavior and returns archive rows for history ingestion.
+    Current passes stop after two archive-only result pages. Pipeline archive
+    passes collect current stock first, then use ``archive_budget_s`` to bound
+    resumable maintenance. Direct callers omitting the budget retain the full
+    legacy harvest behavior.
     """
     if towns is None:
         towns = SEED_TOWNS.get(os.environ.get("RENTGEN_REGION", "slaskie")) or {}
     region = region or os.environ.get("RENTGEN_REGION", "slaskie")
+    if harvest_archive and archive_budget_s is not None:
+        return _bounded_archive(
+            max_pages=max_pages, delay=delay, session=session, log=log,
+            types=types, towns=towns, archive_state=archive_state, today=today,
+            archive_only_pages=archive_only_pages, region=region,
+            budget_s=archive_budget_s, archive_session=archive_session)
     archive_only_pages = (ACTIVE_ARCHIVE_ONLY_PAGES if archive_only_pages is None
                           else max(1, int(archive_only_pages)))
     today = today or dt.date.today().isoformat()
@@ -413,6 +426,8 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
                 town_stats["pages"] += 1
                 current_batch = [b for b in all_batch if not b.get("archived")]
                 archived_batch = [b for b in all_batch if b.get("archived")]
+                if archived_batch:
+                    town_stats.setdefault("archive_start", page)
                 town_stats["served_current"] += len(current_batch)
                 town_stats["served_archived"] += len(archived_batch)
                 batch = all_batch if harvest_archive else current_batch
@@ -516,4 +531,127 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
         row["archive_harvest"] = info
     scrape.last_archive_state = archive_state
     scrape.last_coverage = cov
+    return out
+
+
+def _bounded_archive(*, max_pages, delay, session, log, types, towns,
+                     archive_state, today, archive_only_pages, region,
+                     budget_s, archive_session):
+    """Collect current stock first, then a resumable slice of archive work.
+
+    Checkpoint only through the caller's successful history publication. The
+    archive session must not inherit the live crawler's retry ladder.
+    """
+    from . import net
+    if not isfinite(budget_s) or budget_s <= 0:
+        raise ValueError("archive maintenance budget must be positive")
+    if not towns or not any(typ in PATHS for typ in types):
+        raise ValueError("archive maintenance needs towns and supported property types")
+    state = copy.deepcopy(archive_state or {})
+    if state.get("region") not in (None, region):
+        raise ValueError("archive checkpoint belongs to another region")
+    today = today or dt.date.today().isoformat()
+    out = scrape(max_pages=max_pages, delay=delay, session=session, log=log,
+                 types=types, towns=towns, harvest_archive=False,
+                 archive_state=state, today=today,
+                 archive_only_pages=archive_only_pages, region=region)
+    cov = scrape.last_coverage
+    live_ids = {(row["type"], row["source_id"]) for row in out}
+    rows_by_type = {row["type"]: row for row in cov}
+    state.update(schema=ARCHIVE_STATE_SCHEMA, region=region)
+    cycle = state.get("cycle")
+    if cycle and any(task["type"] not in rows_by_type for task in cycle["pending"]):
+        raise ValueError("archive checkpoint includes a property type omitted by this run")
+    if not cycle:
+        pending = []
+        for row in cov:
+            for town, detail in row["towns"].items():
+                if detail["stop"] in ("end", "empty") and not detail["served_archived"]:
+                    continue
+                pending.append({"type": row["type"], "town": town,
+                                "page": detail.get("archive_start", 1), "duplicates": 0})
+        cycle = {"started": today, "pending": pending, "seen": {},
+                 "pages": {}, "partitions": len(pending)}
+        state["cycle"] = cycle
+    pending = cycle["pending"]
+    seen = {typ: set(ids) for typ, ids in cycle["seen"].items()}
+    started = time.monotonic()
+    deadline = started + budget_s
+    archive_session = archive_session or net.probe_session()
+    errors = []
+    requests_count = 0
+    # Rotate failures to the end but never retry a failed partition this run.
+    failed = set()
+    while pending and time.monotonic() < deadline:
+        task = pending[0]
+        typ, town, page = task["type"], task["town"], task["page"]
+        key = (typ, town)
+        if key in failed:
+            break
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        base = f"https://{town}.nieruchomosci-online.pl/{PATHS[typ]}/"
+        url = base if page == 1 else f"{base}?p={page}"
+        requests_count += 1
+        try:
+            response = archive_session.get(url, headers=HEADERS, timeout=min(30, remaining))
+            response.raise_for_status()
+            batch = parse_offers(extract_offers(response.text), typ, town, towns, region=region)
+        except Exception as exc:
+            _, status = coverage.error_details(exc)
+            if status == 404:
+                pending.pop(0)
+            else:
+                errors.append({"type": typ, "town": town, "page": page,
+                               "http_status": status})
+                failed.add(key)
+                pending.append(pending.pop(0))
+            continue
+        cycle["pages"][typ] = cycle["pages"].get(typ, 0) + 1
+        archived = [row for row in batch if row.get("archived")]
+        fresh = take_unseen(archived, seen.setdefault(typ, set()), key="source_id")
+        fresh = [row for row in fresh if (typ, row["source_id"]) not in live_ids]
+        out.extend(fresh)
+        row = rows_by_type[typ]
+        row["archived"] += len(fresh)
+        row["listings"] += len(fresh)
+        keys = {coverage.listing_key(typ, item["source_id"]) for item in fresh}
+        row["_served_keys"] |= keys
+        row["_kept_keys"] |= keys
+        task["page"] += 1
+        task["duplicates"] = task["duplicates"] + 1 if archived and not fresh else 0
+        if not batch or task["duplicates"] >= 2:
+            pending.pop(0)
+        else:
+            time.sleep(min(delay, max(0, deadline - time.monotonic())))
+    cycle["seen"] = {typ: sorted(ids) for typ, ids in seen.items()}
+    elapsed = round(time.monotonic() - started, 1)
+    cycle["last_attempt"] = today
+    cycle["errors"] = errors
+    cycle_counts = {typ: len(ids) for typ, ids in seen.items()}
+    finished = not pending
+    if finished:
+        state.update(refreshed=today, complete=True, records=sum(cycle_counts.values()),
+                     by_type={row["type"]: {"archived": cycle_counts.get(row["type"], 0),
+                               "current": row["current"],
+                               "pages": cycle["pages"].get(row["type"], 0),
+                               "capped": [], "failed": []} for row in cov})
+        del state["cycle"]
+    for row in cov:
+        typ = row["type"]
+        row["archive_harvest"] = {
+            "mode": "refresh" if finished else "partial",
+            "complete": finished, "refreshed": state.get("refreshed"),
+            "records": int((state.get("by_type", {}).get(typ) or {}).get("archived", 0)),
+            "pending": sum(task["type"] == typ for task in pending),
+            "cycle_records": cycle_counts.get(typ, 0),
+            "cycle_started": cycle["started"],
+            "seconds": elapsed, "budget_seconds": budget_s,
+            "requests": requests_count, "errors": [e for e in errors if e["type"] == typ],
+        }
+    log(f"  n-online archive: {elapsed:.1f}s / {budget_s}s budget, "
+        f"{len(pending)} partitions pending, {sum(cycle_counts.values())} cycle records")
+    scrape.last_coverage = cov
+    scrape.last_archive_state = state
     return out

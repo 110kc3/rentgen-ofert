@@ -529,7 +529,9 @@ def summarise(rows, listings=None, expected_sources=None, expected_types=None) -
             refreshed = sorted(h.get("refreshed") for h in harvests.values()
                                if h.get("refreshed"))
             src["archive_harvest"] = {
-                "mode": ("refresh" if any(h.get("mode") == "refresh"
+                "mode": ("partial" if any(h.get("mode") == "partial"
+                                           for h in harvests.values())
+                         else "refresh" if any(h.get("mode") == "refresh"
                                             for h in harvests.values())
                          else "cached" if any(h.get("mode") == "cached"
                                                for h in harvests.values())
@@ -539,6 +541,13 @@ def summarise(rows, listings=None, expected_sources=None, expected_types=None) -
                 "complete": all(bool(h.get("complete"))
                                 for h in harvests.values()),
             }
+            for key in ("pending", "cycle_records"):
+                if any(key in h for h in harvests.values()):
+                    src["archive_harvest"][key] = sum(int(h.get(key) or 0) for h in harvests.values())
+            for key in ("seconds", "budget_seconds", "requests", "cycle_started"):
+                values = [h[key] for h in harvests.values() if key in h]
+                if values:
+                    src["archive_harvest"][key] = max(values)
             if refreshed:
                 src["archive_harvest"]["refreshed"] = refreshed[-1]
         by_source[source] = src
