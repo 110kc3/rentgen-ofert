@@ -1,9 +1,51 @@
 # TODO — rentgen-ofert
 
 > Keep this file and `README.md` updated after each change.
-> Last updated: 2026-09-29
+> Last updated: 2026-10-03
 
-## Current (2026-09-29) — identity and runtime P1s implemented
+## Current (2026-10-03) — archive throttling fixed; maintenance checks partly verified
+
+The owner selected **1) stop archive requests on throttling and expose the
+reason** and **2) complete archive/weekly-RCN maintenance verification**. The
+[dated audit](docs/audits/2026-10-03-archive-throttling.md) records the exact
+production refs, runs, local checkpoint replay and remaining limits.
+
+Completed implementation:
+- Stop the whole archive slice on its first HTTP 429, retaining the refused
+  cursor and all earlier rows/seen IDs. Do not probe remaining towns/types into
+  the refusal. The next scheduled attempt retries that page. Current-offer
+  collection still completes first; its source health remains separate.
+- Keep HTTP 404 and other-error handling intact. Record an explicit stop reason
+  and failed-request count; show archive progress and the reason in Actions.
+- **451 tests passed**, plus an offline replay of the actual 53-partition /
+  25,326-ID production checkpoint. One simulated 429 preserves every cursor;
+  simulated recovery completes the queue after a checkpoint save/reload.
+
+Verified production under `2aaa2dd` / P1 code `31d271c`:
+- Latest Silesian scrape/deploy passed October 2: 102.7 minutes, 30,392 cards /
+  51,999 raw offers, healthy RCN, 3,315 matches and 71 confirmed sales; no critical
+  photo deferrals or unresolved size groups. All four contributing sources remain.
+- Archive resumption works across four runs: pending partitions 108 → 57 → 56 →
+  53; cycle records 4,383 → 10,646 → 18,010 → 25,326. The latest 53 pending
+  partitions each returned 429, so live completion is not yet verified.
+- Opolskie's October 1 P1 refresh/deploy passed in 13.7 minutes, with 189 RCN
+  matches / 6 confirmed sales. It remains isolated on its own data branch.
+
+**Pending:** this fix's push and publication are unverified. Item 2 remains
+partly open: observe the next completed automatic archive slice, confirm no
+request cascade after 429 and persisted progress, then eventual completion and
+refresh-date advancement. Verify the next weekly RCN pull actually refreshes
+both layers (current Silesian snapshot remains September 26), with total runtime
+≤180 minutes, preferred ≤150. Opolskie's next eligibility is October 4 06:09:26
+UTC, subject to queue/runtime delay. Check completed runs once next session in
+[Actions](https://github.com/110kc3/rentgen-ofert/actions?query=branch%3Amain);
+never wait or poll after push, and do not manually dispatch to accelerate checks.
+
+The existing seven-healthy-day cohort gate remains open. No new region, history
+splitting, data-branch rewrite or P4 storage work is selected. There is no
+owner-only blocker; the remaining evidence depends on automatic production runs.
+
+## Historical (2026-09-29) — identity and runtime P1s implemented
 
 The owner selected the two P1s from the September review after requesting a
 pull and production check. `main` was already current at `0c6db2c`. P0 is now

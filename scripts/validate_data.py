@@ -488,6 +488,29 @@ def github_summary(summary: dict) -> str:
             f"| {name} | {source.get('status', 'unknown')} | "
             f"{int(source.get('current') or 0):,} | "
             f"{int(source.get('served_unique') or 0):,} | {pct} |")
+    for name, source in sorted(summary["sources"].items()):
+        archive = source.get("archive_harvest")
+        if not archive:
+            continue
+        detail = [archive.get("mode", "unknown"),
+                  f"recorded refresh {archive.get('refreshed') or 'none'}"]
+        if "pending" in archive:
+            detail.extend([f"{archive['pending']:,} partitions pending",
+                           f"{archive.get('cycle_records', 0):,} cycle records"])
+        if "seconds" in archive:
+            detail.append(f"{archive['seconds']:.1f}s / "
+                          f"{archive.get('budget_seconds', 0):.1f}s budget")
+        reason = {
+            "rate_limited": "paused after HTTP 429; cursor retained for next run",
+            "errors": "paused after request errors; failed cursors retained",
+            "budget": "maintenance budget reached; resumes next run",
+            "complete": "cycle complete",
+        }.get(archive.get("stop_reason"))
+        if reason:
+            detail.append(reason)
+        if archive.get("failed_requests"):
+            detail.append(f"{archive['failed_requests']:,} failed request(s)")
+        lines.extend(["", f"**Archive maintenance ({name}):** " + "; ".join(detail) + "."])
     continuity = summary.get("continuity")
     rcn_health = summary.get("rcn_health")
     if rcn_health:

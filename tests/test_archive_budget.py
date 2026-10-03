@@ -2,6 +2,7 @@
 import json
 import copy
 import pytest
+import requests
 from scraper import nieruchomosci_online as nol, coverage
 
 
@@ -32,15 +33,16 @@ class Pages:
         return Response()
 
 
-def run(monkeypatch,clock,archive,state=None,budget=1,towns=None,region='slaskie'):
+def run(monkeypatch,clock,archive,state=None,budget=1,towns=None,region='slaskie',
+        types=('flat',),today='2026-09-29'):
     monkeypatch.setattr(nol,'extract_offers',json.loads)
     monkeypatch.setattr(nol.time,'monotonic',clock.monotonic)
     monkeypatch.setattr(nol.time,'sleep',clock.sleep)
     current=Pages({1:[offer(1)],2:[offer(10,True)],3:[offer(11,True)]})
     result=nol.scrape(max_pages=20,delay=0,session=current,archive_session=archive,
-        types=('flat',),towns=towns or {'katowice':'Katowice'},region=region,
+        types=types,towns=towns or {'katowice':'Katowice'},region=region,
         harvest_archive=True,archive_state=state,archive_budget_s=budget,
-        today='2026-09-29',log=lambda *a:None)
+        today=today,log=lambda *a:None)
     return result,current,nol.scrape.last_archive_state
 
 
@@ -126,3 +128,72 @@ def test_failure_after_progress_resumes_failed_page(monkeypatch):
 def test_invalid_budget_fails_before_current_requests(monkeypatch,budget):
     with pytest.raises(ValueError,match='budget'):
         run(monkeypatch,Clock(),Pages({}),budget=budget)
+
+
+class HttpFailurePages(Pages):
+    def __init__(self, pages, clock, status, page):
+        super().__init__(pages, clock)
+        self.status, self.failure_page = status, page
+
+    def get(self, url, **kwargs):
+        result = super().get(url, **kwargs)
+        if self.calls[-1][1] == self.failure_page:
+            response = requests.Response()
+            response.status_code = self.status
+            response.raise_for_status()
+        return result
+
+
+@pytest.mark.parametrize('failure_page', [2, 3])
+def test_429_stops_all_towns_and_types_without_advancing_failed_cursor(
+        monkeypatch, tmp_path, failure_page):
+    clock = Clock()
+    archive = HttpFailurePages({2:[offer(10, True)]}, clock, 429, failure_page)
+    towns = {'katowice':'Katowice', 'gliwice':'Gliwice'}
+    old = {'schema':1, 'refreshed':'2026-09-18', 'records':99}
+    rows, current, state = run(monkeypatch, clock, archive, old, budget=50,
+                              towns=towns, types=('house', 'flat'))
+    assert len(current.calls) == 12  # all current town/type passes finished
+    assert [call[1] for call in archive.calls] == list(range(2, failure_page + 1))
+    assert state['refreshed'] == old['refreshed'] and state['records'] == 99
+    pending = state['cycle']['pending']
+    assert len(pending) == 4 and pending[0]['page'] == failure_page
+    assert all(task['page'] == 2 for task in pending[1:])
+    assert state['cycle']['stop_reason'] == 'rate_limited'
+    assert len(state['cycle']['errors']) == 1
+    assert sum(row['archived'] for row in rows) == failure_page - 2
+    summary = coverage.summarise(nol.scrape.last_coverage, listings=rows)
+    source = summary['by_source']['nieruchomosci-online']
+    assert source['status'] == 'healthy'  # current coverage is independent
+    assert source['archive_harvest']['stop_reason'] == 'rate_limited'
+    assert source['archive_harvest']['failed_requests'] == 1
+    assert source['archive_harvest']['requests'] == failure_page - 1
+
+    # A real JSON checkpoint round-trip must resume the refused page, retaining
+    # all evidence collected before throttling, then clear the stop reason.
+    path = tmp_path/'archive.json'
+    nol.save_archive_state(path, state)
+    next_archive = Pages({2:[offer(10, True)], 3:[offer(11, True)]}, clock)
+    _, _, finished = run(monkeypatch, clock, next_archive,
+                         nol.load_archive_state(path), budget=50,
+                         towns=towns, types=('house', 'flat'))
+    assert next_archive.calls[0][1] == failure_page
+    assert 'cycle' not in finished and finished['complete']
+    assert finished['refreshed'] == '2026-09-29' and finished['records'] == 4
+    assert all(r['archive_harvest']['stop_reason'] == 'complete'
+               for r in nol.scrape.last_coverage)
+    assert 'cycle' not in old
+
+
+@pytest.mark.parametrize('status,reason,pending_count', [
+    (404, 'complete', 0), (503, 'errors', 2),
+])
+def test_non_throttling_http_errors_keep_existing_town_policy(
+        monkeypatch, status, reason, pending_count):
+    clock = Clock()
+    archive = HttpFailurePages({}, clock, status, 2)
+    _, _, state = run(monkeypatch, clock, archive, budget=50,
+                      towns={'katowice':'Katowice', 'gliwice':'Gliwice'})
+    assert len(archive.calls) == 2
+    assert len(state.get('cycle', {}).get('pending', [])) == pending_count
+    assert nol.scrape.last_coverage[0]['archive_harvest']['stop_reason'] == reason

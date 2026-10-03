@@ -392,3 +392,42 @@ def test_rcn_count_collapse_and_empty_benchmarks_fail():
     current.pop("rcn_health")
     with pytest.raises(validate_data.DataValidationError, match="disappeared"):
         validate_data.validate_rcn(current, {}, previous)
+
+
+@pytest.mark.parametrize('reason,text', [
+    ('rate_limited', 'paused after HTTP 429; cursor retained for next run'),
+    ('errors', 'paused after request errors; failed cursors retained'),
+    ('budget', 'maintenance budget reached; resumes next run'),
+    ('complete', 'cycle complete'),
+])
+def test_run_summary_explains_archive_progress_separately_from_current_health(
+        tmp_path, reason, text):
+    root = _dataset(tmp_path)
+    meta = _meta(root)
+    meta['coverage']['by_source']['nieruchomosci-online'] = {
+        'status':'healthy', 'current':12, 'served_unique':12,
+        'archive_harvest':{
+            'mode':'partial' if reason != 'complete' else 'refresh',
+            'refreshed':'2026-09-24', 'stop_reason':reason,
+            'pending':53 if reason != 'complete' else 0, 'cycle_records':25326,
+            'seconds':529.5, 'budget_seconds':900, 'failed_requests':1,
+        },
+    }
+    (root/'meta.json').write_text(json.dumps(meta))
+    summary = validate_data.validate_data_dir(root)
+    markdown = validate_data.github_summary(summary)
+    assert '| nieruchomosci-online | healthy |' in markdown
+    assert '**Archive maintenance (nieruchomosci-online):**' in markdown
+    assert text in markdown and '25,326 cycle records' in markdown
+    assert '529.5s / 900.0s budget' in markdown
+    assert 'recorded refresh 2026-09-24' in markdown
+    assert '1 failed request(s)' in markdown
+
+
+def test_run_summary_accepts_legacy_archive_metadata(tmp_path):
+    summary = validate_data.validate_data_dir(_dataset(tmp_path))
+    summary['sources']['gratka']['archive_harvest'] = {
+        'mode':'cached', 'refreshed':'2026-09-24', 'records':99, 'complete':False}
+    markdown = validate_data.github_summary(summary)
+    assert 'cached; recorded refresh 2026-09-24' in markdown
+    assert 'HTTP 429' not in markdown and 'cycle complete' not in markdown

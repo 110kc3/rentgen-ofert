@@ -580,6 +580,7 @@ def _bounded_archive(*, max_pages, delay, session, log, types, towns,
     archive_session = archive_session or net.probe_session()
     errors = []
     requests_count = 0
+    stop_reason = None
     # Rotate failures to the end but never retry a failed partition this run.
     failed = set()
     while pending and time.monotonic() < deadline:
@@ -587,6 +588,7 @@ def _bounded_archive(*, max_pages, delay, session, log, types, towns,
         typ, town, page = task["type"], task["town"], task["page"]
         key = (typ, town)
         if key in failed:
+            stop_reason = "errors"
             break
         remaining = deadline - time.monotonic()
         if remaining <= 0:
@@ -605,6 +607,12 @@ def _bounded_archive(*, max_pages, delay, session, log, types, towns,
             else:
                 errors.append({"type": typ, "town": town, "page": page,
                                "http_status": status})
+                if status == 429:
+                    # Throttling is not evidence of a missing town. Stop the
+                    # whole maintenance slice without moving this cursor or
+                    # probing the remaining towns/types into the same refusal.
+                    stop_reason = "rate_limited"
+                    break
                 failed.add(key)
                 pending.append(pending.pop(0))
             continue
@@ -631,6 +639,8 @@ def _bounded_archive(*, max_pages, delay, session, log, types, towns,
     cycle["errors"] = errors
     cycle_counts = {typ: len(ids) for typ, ids in seen.items()}
     finished = not pending
+    stop_reason = "complete" if finished else (stop_reason or "budget")
+    cycle["stop_reason"] = stop_reason
     if finished:
         state.update(refreshed=today, complete=True, records=sum(cycle_counts.values()),
                      by_type={row["type"]: {"archived": cycle_counts.get(row["type"], 0),
@@ -642,6 +652,7 @@ def _bounded_archive(*, max_pages, delay, session, log, types, towns,
         typ = row["type"]
         row["archive_harvest"] = {
             "mode": "refresh" if finished else "partial",
+            "stop_reason": stop_reason,
             "complete": finished, "refreshed": state.get("refreshed"),
             "records": int((state.get("by_type", {}).get(typ) or {}).get("archived", 0)),
             "pending": sum(task["type"] == typ for task in pending),
@@ -651,7 +662,8 @@ def _bounded_archive(*, max_pages, delay, session, log, types, towns,
             "requests": requests_count, "errors": [e for e in errors if e["type"] == typ],
         }
     log(f"  n-online archive: {elapsed:.1f}s / {budget_s}s budget, "
-        f"{len(pending)} partitions pending, {sum(cycle_counts.values())} cycle records")
+        f"{len(pending)} partitions pending, {sum(cycle_counts.values())} cycle records; "
+        f"stop: {stop_reason}")
     scrape.last_coverage = cov
     scrape.last_archive_state = state
     return out

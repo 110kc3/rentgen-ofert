@@ -6,6 +6,14 @@ to grow deliberately to all 16 Polish voivodeships. It attempts **Otodom**, **OL
 and presents it on one searchable page. No application server: a GitHub Actions
 job scrapes, writes static JSON, and GitHub Pages displays it.
 
+**2026-10-03 update:** archive resumption and the first P1 Opolskie refresh
+are verified in production. The latest Silesian run took 102.7 minutes, but its
+53 remaining archive partitions returned HTTP 429. Maintenance now stops at
+the first 429, preserves the refused cursor and reports its reason/progress in
+Actions. This fix's production verification, live archive completion and a fresh
+weekly RCN pull remain pending. See the
+[maintenance audit](docs/audits/2026-10-03-archive-throttling.md).
+
 **2026-09-29 update:** the RCN P0 recovery is verified in production: Śląskie
 has a fresh healthy snapshot (200,895 flat / 473,617 building records), 3,027
 matched properties in the pre-P1 baseline and restored benchmarks. The selected P1 repairs normalize
@@ -30,16 +38,15 @@ available, and changing Opolskie's catalog cadence to `manual` pauses its timer.
 Checks that publish no data do not deploy Pages.
 
 The scheduler, RCN recovery and P1 identity/runtime changes are verified in
-ordinary Silesian production runs. The latest September 29 publication has
-3,232 RCN matches, 67 confirmed sales and **88.9-minute runtime**; all four
-contributing sources retain continuity and critical photo deferrals are zero.
-County-labeled current cards fell from 2,672 to zero. Archive maintenance is
-next due October 1 and the weekly RCN refresh October 3: their resumption,
-completion and total runtime remain **pending production verification**. The
-seven-healthy-day cohort gate remains open. [TODO.md](TODO.md) owns the handoff.
-OLX remains blocked after its bounded probe, and Otodom's serving cap means
-coverage remains explicitly partial. Małopolskie stays disabled with its data
-branch recoverable.
+ordinary Silesian production runs. The October 2 publication has 3,315 RCN
+matches, 71 confirmed sales and **102.7-minute runtime**, including partial
+archive maintenance. Sources retain continuity and critical photo deferrals
+are zero. Archive checkpoints resume correctly, but the cycle has not finished;
+the published RCN snapshot still dates from September 26. Those maintenance
+completion checks and the seven-healthy-day cohort gate remain open.
+[TODO.md](TODO.md) owns the handoff. OLX remains blocked after its bounded probe,
+and portal caps mean coverage remains explicitly partial. Małopolskie stays
+disabled with its data branch recoverable.
 
 ```
 GitHub Actions (cron) → python -m scraper.main → site/data/<region>/*.json
@@ -518,11 +525,15 @@ RENTGEN_MAX_PAGES=3 RENTGEN_DELAY=0.3 python -m scraper.main
 
 Archive progress lives in `cache/nol_archive_<region>.json` beside the regional
 history. Each slice persists seen portal IDs and the next page per town/type;
-failed pages retain their cursor and other towns can proceed. The checkpoint is
+failed pages retain their cursor. HTTP 429 stops the whole maintenance slice
+without probing remaining towns/types; the next scheduled attempt retries that
+page. Other request errors still allow other towns to proceed. The checkpoint is
 saved only after history is saved and published through the existing isolated
 data-branch transaction. Schema-1 completed states remain readable; corrupt or
 foreign-region checkpoints fail closed. A partial slice reports `mode: partial`,
-pending partitions, elapsed time and cycle records; it preserves the last
+pending partitions, elapsed time, cycle records and a stop reason
+(`rate_limited`, `errors`, `budget`, `complete`). Actions reports these separately
+from current-source health, including failed-request counts. It preserves the last
 completed refresh date. Only draining the queue advances that date. `skip`
 preserves the checkpoint. Changing `RENTGEN_TYPES` during an active cycle must
 include its pending types.

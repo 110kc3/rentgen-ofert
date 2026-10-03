@@ -548,6 +548,14 @@ def summarise(rows, listings=None, expected_sources=None, expected_types=None) -
                 values = [h[key] for h in harvests.values() if key in h]
                 if values:
                     src["archive_harvest"][key] = max(values)
+            reasons = {h.get("stop_reason") for h in harvests.values()}
+            for reason in ("rate_limited", "errors", "budget", "complete"):
+                if reason in reasons:
+                    src["archive_harvest"]["stop_reason"] = reason
+                    break
+            if any("errors" in h for h in harvests.values()):
+                src["archive_harvest"]["failed_requests"] = sum(
+                    len(h.get("errors") or []) for h in harvests.values())
             if refreshed:
                 src["archive_harvest"]["refreshed"] = refreshed[-1]
         by_source[source] = src
