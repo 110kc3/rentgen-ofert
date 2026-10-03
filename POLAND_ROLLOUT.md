@@ -1,13 +1,13 @@
 # Whole-Poland rollout: status and next tasks
 
-> **Maintenance update 2026-10-03:** P1 archive resumption and Opolskie's
-> October 1 publication are verified. Latest Silesian runtime with partial
-> maintenance is 102.7 minutes. All 53 remaining archive partitions returned 429;
-> the scraper now stops the whole slice at its first 429 and reports the reason
-> in Actions. The fix's publication, live archive completion and the next fresh
-> weekly RCN pull remain pending. [The maintenance audit](docs/audits/2026-10-03-archive-throttling.md)
-> records the evidence; [TODO.md](TODO.md) owns the remaining accepted checks.
-> Seven healthy cohort days and expansion remain unaccepted.
+> **Maintenance update 2026-10-03:** the first-429 archive stop is verified in
+> production: one failed request, retained cursor/seen IDs, 32,141 cycle records
+> and 50 partitions remaining. A fresh healthy RCN pull and total runtime of
+> 116.0 minutes pass the weekly preferred runtime gate. Final archive completion
+> remains pending; the next scheduled run was in progress at the single check.
+> [The maintenance audit](docs/audits/2026-10-03-archive-throttling.md) records the
+> evidence; [TODO.md](TODO.md) owns the remaining accepted check. Seven healthy
+> cohort days and expansion remain unaccepted.
 
 > **P1 update 2026-09-29:** P0 recovery and a fresh healthy RCN snapshot are
 > verified in production. The selected identity/runtime P1s now normalize known
@@ -67,7 +67,7 @@ seven-healthy-day observation remains open after the September RCN incident.
 | Deploy overlay for multiple region branches | Proven live for three refs / two enabled regions | Deploys overlay all isolated refs, then publish only enabled Śląskie and Opolskie; disabled Małopolskie remains recoverable and absent. |
 | Portal coverage | Collection floor and continuity accepted | Corrected Otodom floor is 15.8–15.9k; subsequent guarded schedules retain it and the latest yielded 16,015. OLX's one-probe blocked policy remains stable. |
 | Coverage KPI | Truthful and protective | Schema v2 reports source state; P0.7 compares it with preserved metadata before push. Synthetic 15,949→0 rejection plus repeated production passes cover the failure and positive paths. |
-| Per-region runtime | Ordinary and partial-archive runs pass; full maintenance verification pending | October 2 Śląskie: 102.7 min including partial archives; October 1 Opolskie: 13.7 min. Archive completion and a fresh weekly RCN pull still need ≤180 min / preferred ≤150 confirmation. |
+| Per-region runtime | Ordinary and weekly RCN runs pass; archive completion pending | October 3 Śląskie: 116.0 min including fresh RCN and partial archives; October 1 Opolskie: 13.7 min. Final archive traversal/completion remains open. |
 | Region picker and durable regional URLs | Proven live for two enabled regions | National picker, stable listing/statistics paths, scoped state and discovery expose Śląskie plus the data-backed Opolskie pilot. |
 | Per-region metadata / OG / sitemap / llms.txt | Proven live | Canonical/JSON-LD documents parse and discovery contains only data-backed published regions. |
 | CI region matrix / cadence | 72-hour serial scheduler observed; cohort gate open | Opolskie eligibility is checked hourly against publication and attempt timestamps, under the global lock. Śląskie retains its twice-daily schedule. No concurrent portal access. |

@@ -6,13 +6,13 @@ to grow deliberately to all 16 Polish voivodeships. It attempts **Otodom**, **OL
 and presents it on one searchable page. No application server: a GitHub Actions
 job scrapes, writes static JSON, and GitHub Pages displays it.
 
-**2026-10-03 update:** archive resumption and the first P1 Opolskie refresh
-are verified in production. The latest Silesian run took 102.7 minutes, but its
-53 remaining archive partitions returned HTTP 429. Maintenance now stops at
-the first 429, preserves the refused cursor and reports its reason/progress in
-Actions. This fix's production verification, live archive completion and a fresh
-weekly RCN pull remain pending. See the
-[maintenance audit](docs/audits/2026-10-03-archive-throttling.md).
+**2026-10-03 update:** the archive-throttling fix is verified in production:
+maintenance stopped after one HTTP 429, preserving the refused cursor and all
+32,141 seen archive IDs. Pending partitions fell from 53 to 50. A fresh healthy
+RCN pull also passed; total runtime was **116.0 minutes**, below the preferred
+150-minute gate. The fix's scrape/deploy passed 451 tests and payload validation.
+Final archive completion remains open while the next scheduled run is in progress.
+See the [maintenance audit](docs/audits/2026-10-03-archive-throttling.md).
 
 **2026-09-29 update:** the RCN P0 recovery is verified in production: Śląskie
 has a fresh healthy snapshot (200,895 flat / 473,617 building records), 3,027
@@ -38,12 +38,12 @@ available, and changing Opolskie's catalog cadence to `manual` pauses its timer.
 Checks that publish no data do not deploy Pages.
 
 The scheduler, RCN recovery and P1 identity/runtime changes are verified in
-ordinary Silesian production runs. The October 2 publication has 3,315 RCN
-matches, 71 confirmed sales and **102.7-minute runtime**, including partial
-archive maintenance. Sources retain continuity and critical photo deferrals
+ordinary Silesian production runs. The October 3 publication has 3,319 RCN
+matches, 74 confirmed sales and **116.0-minute runtime**, including partial
+archive maintenance and a fresh weekly RCN pull. Sources retain continuity and critical photo deferrals
 are zero. Archive checkpoints resume correctly, but the cycle has not finished;
-the published RCN snapshot still dates from September 26. Those maintenance
-completion checks and the seven-healthy-day cohort gate remain open.
+the published RCN snapshot is healthy and dated October 3. Final archive
+completion and the seven-healthy-day cohort gate remain open.
 [TODO.md](TODO.md) owns the handoff. OLX remains blocked after its bounded probe,
 and portal caps mean coverage remains explicitly partial. Małopolskie stays
 disabled with its data branch recoverable.

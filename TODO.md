@@ -31,15 +31,34 @@ Verified production under `2aaa2dd` / P1 code `31d271c`:
 - Opolskie's October 1 P1 refresh/deploy passed in 13.7 minutes, with 189 RCN
   matches / 6 confirmed sales. It remains isolated on its own data branch.
 
-**Pending:** this fix's push and publication are unverified. Item 2 remains
-partly open: observe the next completed automatic archive slice, confirm no
-request cascade after 429 and persisted progress, then eventual completion and
-refresh-date advancement. Verify the next weekly RCN pull actually refreshes
-both layers (current Silesian snapshot remains September 26), with total runtime
-≤180 minutes, preferred ≤150. Opolskie's next eligibility is October 4 06:09:26
-UTC, subject to queue/runtime delay. Check completed runs once next session in
-[Actions](https://github.com/110kc3/rentgen-ofert/actions?query=branch%3Amain);
-never wait or poll after push, and do not manually dispatch to accelerate checks.
+**Production follow-up (October 3):** `ed4bc24` passed its push-triggered
+[scrape](https://github.com/110kc3/rentgen-ofert/actions/runs/37106339461) and
+[deployment](https://github.com/110kc3/rentgen-ofert/actions/runs/37112884936).
+All 451 tests and full payload validation passed. A fresh healthy RCN snapshot
+contains 201,022 flat / 468,317 building transactions; the total run took
+**116.0 minutes**, meeting the preferred 150-minute gate. The live publication
+has 30,360 cards, 3,319 matched properties and 74 confirmed sales.
+
+The owner then selected archive verification and push. Comparing immutable
+checkpoints `a8984a6` → `50a6790` confirms 25,326 → 32,141 seen archive IDs and
+53 → 50 pending partitions. No seen ID disappeared and no remaining cursor
+rewound. The one refused cursor (`flat/rybnik/page 40`) remains at the queue
+head, with exactly one 429 recorded. The refresh date correctly stays September
+24 while the cycle is incomplete. All 76 regional files pass the allowlist.
+The [audit follow-up](docs/audits/2026-10-03-archive-throttling.md#production-follow-up)
+records the evidence. The throttle-fix publication and fresh weekly RCN/runtime
+checks are now verified.
+
+**Pending:** final live archive completion remains open: 50 partitions still
+need traversal before the refresh date can advance. Scheduled run
+[37119412659](https://github.com/110kc3/rentgen-ofert/actions/runs/37119412659)
+was in progress at the single follow-up check; do not treat it as passed or
+poll it. Check its completed result once next session, then eventual queue
+completion and sibling isolation. Opolskie's next eligibility is October 4
+06:09:26 UTC, subject to queue/runtime delay. This verification documentation
+push has no new scraper code; any resulting Actions verification is pending.
+Do not wait or poll after pushing or dispatch a manual workflow to accelerate
+acceptance.
 
 The existing seven-healthy-day cohort gate remains open. No new region, history
 splitting, data-branch rewrite or P4 storage work is selected. There is no

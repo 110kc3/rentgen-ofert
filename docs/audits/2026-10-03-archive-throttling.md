@@ -90,7 +90,7 @@ archive metadata remains readable.
   Runtime with partial archive maintenance is verified below the preferred
   150-minute threshold; completion and a fresh RCN pull are separate gates.
 
-## Remaining accepted verification
+## Original verification handoff
 
 Item 1 is implemented locally; its push/publication is **pending production
 verification**. Item 2 is **partially verified**: archive resumption and P1
@@ -102,3 +102,42 @@ Confirm both RCN layers refresh successfully and total runtime remains ≤180
 minutes, preferably ≤150. Then assess the existing seven-healthy-day cohort
 gate before any expansion. Do not wait/poll after pushing or dispatch a manual
 workflow to manufacture acceptance. [TODO.md](../../TODO.md) owns the handoff.
+
+## Production follow-up
+
+The owner selected archive verification and push. The completed fix-triggered
+[scrape 37106339461](https://github.com/110kc3/rentgen-ofert/actions/runs/37106339461)
+and [deployment 37112884936](https://github.com/110kc3/rentgen-ofert/actions/runs/37112884936)
+succeeded for `ed4bc246d6d486971b20be1a332701144651a382`. The scrape passed
+451 tests and full generated-payload validation. Latest immutable Silesian ref:
+`50a67902128ef3ad121cf5cf613b84f1f2bd8411`, published 09:22:56 UTC on October 3.
+The live metadata agrees: 30,360 cards, 3,319 matched properties, 74 confirmed
+sales and a fresh healthy October 3 RCN snapshot (201,022 flat / 468,317 building
+transactions). Total scraper runtime **6,957.3 s / 116.0 min** meets the preferred
+150-minute gate; RCN refresh/matching took 1,802.6 s. This closes the previously
+unobserved fresh weekly RCN/runtime check.
+
+Comparing the saved archive checkpoint against
+`a8984a674aeaf7fe96912d343854609676e41e50` gives:
+
+- All 25,326 previous seen IDs remain present; 6,815 new IDs raise the cycle
+  count to **32,141**. The production cycle still begins October 1.
+- Pending partitions fall **53 → 50**. Every remaining town/type/page cursor
+  is at or beyond its previous value; none rewound.
+- Exactly one failed request is recorded: HTTP 429 at `flat/rybnik/page 40`.
+  That cursor remains the queue head. Published metadata reports
+  `stop_reason: rate_limited`, `failed_requests: 1`, 217 requests and 404.6 seconds
+  of maintenance against its 900-second budget.
+- The refresh date remains September 24 and `complete` remains false. The
+  partial cycle cannot masquerade as a completed refresh.
+- The 76-file Silesian tree passes the existing region-storage allowlist.
+
+These checks verify real publication and persistence, complementing the prior
+synthetic checkpoint replay. No new scraper defect was observed. Final live
+archive completion is **still pending**, with 50 partitions remaining. Scheduled
+[37119412659](https://github.com/110kc3/rentgen-ofert/actions/runs/37119412659)
+was in progress at the single continuation check and was not polled. Inspect
+its completed result once next session, then eventual queue drain, refresh-date
+advancement and sibling isolation. This documentation push has no new scraper
+code; any resulting Actions verification remains pending. No manual workflow
+or data-branch change was performed.
