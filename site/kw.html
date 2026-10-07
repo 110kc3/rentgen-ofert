@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>Twoja lista KW — Rentgen ofert</title>
+  <meta name="description" content="Przeglądaj własne zestawienie numerów ksiąg wieczystych, adresów i źródeł. Plik pozostaje w przeglądarce.">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="kw.css?v=1">
+  <script src="kw.js?v=1" defer></script>
+</head>
+<body>
+  <main>
+    <nav aria-label="Nawigacja"><a href="./">← Rentgen ofert</a><a href="https://ekw.ms.gov.pl/eukw_ogol/menu.do" target="_blank" rel="noopener noreferrer">Otwórz EKW ↗</a></nav>
+    <header><p class="eyebrow">RENTGEN OFERT / KSIĘGI WIECZYSTE</p><h1>Twoja lista KW</h1>
+      <p class="lead">Adresy, numery ksiąg i ogłoszenia źródłowe w jednym miejscu.</p>
+      <p>Wczytaj własny plik <strong>records.json</strong> wyeksportowany ze sprawdz-kw. Dane pozostają w pamięci tej karty — odświeżenie strony je usuwa.</p>
+    </header>
+    <section class="import-panel" aria-label="Wczytaj zestawienie">
+      <label for="file">Wybierz plik z rekordami KW <span>JSON · do 4 MiB · do 1000 obserwacji</span></label>
+      <input id="file" type="file" accept=".json,application/json">
+      <button id="clear" type="button" disabled>Wyczyść dane</button>
+      <p id="message" role="status" aria-live="polite">Plik nie jest wysyłany na serwer ani zapisywany w przeglądarce.</p>
+    </section>
+    <aside class="notice"><strong>Numery ze źródeł wymagają sprawdzenia.</strong> Lista nie potwierdza aktualnej treści ksiąg ani prawa własności.
+      KW gruntu i księga macierzysta nie zastępują KW lokalu. Brak wyniku oznacza brak rekordu w Twoim pliku.</aside>
+    <section id="browser" hidden aria-label="Rekordy KW">
+      <div class="filters">
+        <label>Ulica, miasto lub KW<input id="query" type="search" placeholder="np. nazwa ulicy" autocomplete="off"></label>
+        <label>Nr budynku<input id="number" type="text" placeholder="Dokładny numer" autocomplete="off"></label>
+        <label>Nr lokalu<input id="unit" type="text" placeholder="Dokładny numer" autocomplete="off"></label>
+        <label>Rodzaj<select id="kind"><option value="">Wszystkie</option><option value="unit">Księgi lokali</option><option value="land">Księgi gruntów</option></select></label>
+      </div>
+      <p id="count" role="status" aria-live="polite"></p>
+      <p class="help">To przegląd obserwacji. Filtr ulicy pokazuje także sąsiednie adresy; numer budynku i lokalu muszą zgadzać się dokładnie.</p>
+      <div id="records" class="records"></div>
+      <p id="empty" hidden>Brak obserwacji dla tych filtrów. To nie oznacza, że nieruchomość nie ma KW.</p>
+    </section>
+    <section class="steps"><h2>Jak sprawdzić rekord</h2><ol>
+      <li>Otwórz ogłoszenie źródłowe i porównaj pełny adres oraz rodzaj księgi.</li>
+      <li>Skopiuj numer do oficjalnej przeglądarki EKW. Porównaj adres lokalu w treści księgi.</li>
+      <li>Gdy źródła podają różne numery, sprawdź każdy z nich. Lista nie wybiera zwycięzcy.</li>
+    </ol><p>Numery nie są automatycznie przypisywane do ofert. Sama ulica, powierzchnia lub numer jednostki RCN nie identyfikują mieszkania.</p></section>
+    <noscript>Włącz JavaScript, aby wczytać lokalny plik JSON.</noscript>
+  </main>
+</body>
+</html>

@@ -97,6 +97,8 @@ def test_generates_picker_catalog_stable_pages_and_discovery(tmp_path):
     assert 'class="region-size"' in picker
     assert 'current.searchParams.has("f")' in picker
     assert 'legacyDefault ? "slaskie"' in picker
+    assert 'href="kw.html"' in picker
+    assert 'href="kw.html"' in (tmp_path / "site/region/slaskie/index.html").read_text(encoding="utf-8")
 
     listing = (tmp_path / "site/region/slaskie/index.html").read_text(
         encoding="utf-8")

@@ -6,6 +6,15 @@ to grow deliberately to all 16 Polish voivodeships. It attempts **Otodom**, **OL
 and presents it on one searchable page. No application server: a GitHub Actions
 job scrapes, writes static JSON, and GitHub Pages displays it.
 
+**2026-10-07 update:** a [private-file KW viewer](https://110kc3.github.io/rentgen-ofert/kw.html)
+is connected from the national picker and regional listings. Select a `records.json`
+export from the separate sprawdz-kw index to browse addresses, flat/land KWs,
+parent references, dated sources and conflicting claims. Imports stay in tab
+memory: no upload or browser storage, and refresh clears them. Actual evidence
+is not committed to this public repo or attached automatically to offers.
+See [KW viewer usage and boundaries](docs/KW_VIEWER.md). Deployment of this
+change is pending the existing Pages workflow; the local browser checks passed.
+
 **2026-10-03 update:** the archive-throttling fix is verified in production:
 maintenance stopped after one HTTP 429, preserving the refused cursor and all
 32,141 seen archive IDs. Pending partitions fell from 53 to 50. A fresh healthy

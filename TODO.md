@@ -1,9 +1,36 @@
 # TODO — rentgen-ofert
 
 > Keep this file and `README.md` updated after each change.
-> Last updated: 2026-10-03
+> Last updated: 2026-10-07
 
-## Current (2026-10-03) — archive throttling fixed; maintenance checks partly verified
+## Current (2026-10-07) — private-file KW browsing implemented
+
+The owner requested a checkable list of sourced KW records and connection to
+rentgen-ofert. `site/kw.html` now imports the separate private index's version-1
+JSON export into tab memory. National and regional navigation link to it.
+The viewer filters street/KW, exact building and postal flat number, and register
+type; it shows original sources/dates, explicit parents and every conflicting
+observation. Copying a number is explicit. Refresh and Clear discard the data.
+No actual KW dataset, property research, credentials or owner details were added
+to this public repository. No automatic listing-to-KW association is implemented.
+
+Validation: **452 pytest tests passed**, including offline Node validation,
+filtering and conflict contracts and generated regional navigation. A later
+focused rerun also passed the asynchronous clear/newer-import race checks.
+Twenty Chromium checks passed with the locally held 15-record export, including
+desktop/mobile rendering, wrong-flat/unknown-address results, copying, unsafe
+source rejection, text escaping, file-size limit, no import-time network calls,
+no browser storage, refresh/clear and the companion offline HTML export.
+[Usage and evidence boundary](docs/KW_VIEWER.md) documents the connection.
+
+**Pending after push:** check the matching commit's existing Pages deployment
+once next session and then open `kw.html` from the published navigation. The
+[branch Actions page](https://github.com/110kc3/rentgen-ofert/actions?query=branch%3Amain)
+owns remote status; do not wait, poll or manually dispatch a workflow. No further
+KW feature is selected in this repo. Current-register verification and acquisition
+remain in the private index's queue. The archive checks below remain open.
+
+## Ongoing maintenance — archive throttling fixed; completion not yet verified
 
 The owner selected **1) stop archive requests on throttling and expose the
 reason** and **2) complete archive/weekly-RCN maintenance verification**. The
@@ -52,9 +79,10 @@ checks are now verified.
 **Pending:** final live archive completion remains open: 50 partitions still
 need traversal before the refresh date can advance. Scheduled run
 [37119412659](https://github.com/110kc3/rentgen-ofert/actions/runs/37119412659)
-was in progress at the single follow-up check; do not treat it as passed or
-poll it. Check its completed result once next session, then eventual queue
-completion and sibling isolation. Opolskie's next eligibility is October 4
+was checked once on October 7 and completed successfully for `ed4bc24`.
+Only its run status was checked in the KW work session: final archive queue
+completion and sibling isolation still need their own evidence. Do not infer
+those outcomes from the green run alone. Opolskie's next eligibility is October 4
 06:09:26 UTC, subject to queue/runtime delay. This verification documentation
 push has no new scraper code; any resulting Actions verification is pending.
 Do not wait or poll after pushing or dispatch a manual workflow to accelerate
