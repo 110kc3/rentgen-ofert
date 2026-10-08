@@ -1,9 +1,53 @@
 # TODO — rentgen-ofert
 
 > Keep this file and `README.md` updated after each change.
-> Last updated: 2026-10-07
+> Last updated: 2026-10-08
 
-## Current (2026-10-07) — private-file KW browsing implemented
+## Current (2026-10-08) — KW-only offer filter implemented
+
+The owner requested a dedicated button showing only flats/houses with a KW
+number. Regional listings now have **Tylko z KW**, alongside **Wczytaj KW**.
+Import the private evidence file directly on the listing page, then explicitly
+link a record from the card after confirming its full address. Cards show the
+linked number, source and a manual/unverified label. Remove/reassign actions
+update the filter immediately. Known city/type contradictions and multiple KWs
+for one evidence address are rejected. A flat cannot use a land/parent KW;
+a house can link the land register covering it.
+
+The live listing payload lacks reliable full building/postal-unit addresses.
+There is no automatic street/area/RCN guess and no pre-populated association to
+the existing private sample. The button filters explicit links, not all properties
+that legally have a register. Importing records alone creates zero links. This
+is a candidate-evidence convenience, not the verified provider gate.
+
+The filter composes with current/archive, type, price and other existing filters;
+its chip, reset and empty-state actions are wired. Records, associations and the
+KW toggle stay out of persistent storage and shared URLs. Refresh or Clear
+removes them; replacement imports discard earlier links. Pending file reads
+cannot restore cleared/superseded data. Mobile filter groups now wrap, and the
+large mobile toolbar scrolls with the page rather than covering the cards.
+
+Validation: **453 pytest tests passed**, including matching-scope/confirmation,
+conflict, filter-composition, reset, navigation and regression checks. A focused
+follow-up passed the actual listing-import Clear/replacement race test. **29
+Chromium checks passed** with synthetic offers and the privately held sample:
+flat/house linking, wrong-city exclusion, price/type/archive composition,
+unlink/reset/clear, unchanged normal listings, no KW leakage into requests,
+storage or URLs, no guessed links from 15 real records, desktop/mobile, refresh
+and the existing standalone viewer. No real property data is in this repo.
+
+Previous viewer commit `b7b645f` was checked once during this work:
+[37669419273](https://github.com/110kc3/rentgen-ofert/actions/runs/37669419273)
+completed successfully; [37669419294](https://github.com/110kc3/rentgen-ofert/actions/runs/37669419294)
+was still in progress at that check. It was not polled.
+
+**Pending after push:** check this filter commit's Actions and Pages result once
+next session, then verify the published regional button. [Actions](https://github.com/110kc3/rentgen-ofert/actions?query=branch%3Amain).
+Do not wait or manually dispatch. Further automatic KW acquisition/address
+verification remains owned by the private project. No additional KW feature is
+selected here; the existing archive-maintenance checks below remain open.
+
+## Historical (2026-10-07) — private-file KW browsing implemented
 
 The owner requested a checkable list of sourced KW records and connection to
 rentgen-ofert. `site/kw.html` now imports the separate private index's version-1

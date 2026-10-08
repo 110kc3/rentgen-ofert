@@ -19,7 +19,7 @@ function fixture(fetch) {
     inArchive: () => context.archiveMode,
     currentFilters: () => ({}), sorters: { newest: () => 0 }, passes: () => true,
     PLN: new Intl.NumberFormat('pl-PL'), emptyMessage: () => 'empty',
-    appendChunk() {}, watchSentinel() {}, syncLocalityLabel() {}, renderChips() {}, updateSegCounts() {},
+    appendChunk() {}, watchSentinel() {}, syncLocalityLabel() {}, renderChips() {}, updateSegCounts() {}, syncKWButton() {},
     offersRows: l => JSON.stringify(l.offers), tlBody: l => JSON.stringify(l.timeline),
   });
   vm.runInContext('let view = [], rendered = 0, moreObserver = null;\n' + loaders + rendering, context);

@@ -69,7 +69,8 @@
   }
   const api = { validate, conflicts, scope, matches, MAX_BYTES };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
-  if (!root.document) return;
+  root.RentgenKW = api;
+  if (!root.document || !root.document.getElementById('file')) return;
   const $ = id => root.document.getElementById(id);
   let records = [], conflictScopes = new Set(), generation = 0;
   const el = (tag, content, className) => {

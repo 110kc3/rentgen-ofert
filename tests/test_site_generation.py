@@ -99,6 +99,9 @@ def test_generates_picker_catalog_stable_pages_and_discovery(tmp_path):
     assert 'legacyDefault ? "slaskie"' in picker
     assert 'href="kw.html"' in picker
     assert 'href="kw.html"' in (tmp_path / "site/region/slaskie/index.html").read_text(encoding="utf-8")
+    regional_page = (tmp_path / "site/region/slaskie/index.html").read_text(encoding="utf-8")
+    assert 'id="kw-only"' in regional_page
+    assert regional_page.index('src="kw.js') < regional_page.index('src="kw-links.js') < regional_page.index('src="app.js')
 
     listing = (tmp_path / "site/region/slaskie/index.html").read_text(
         encoding="utf-8")

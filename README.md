@@ -6,6 +6,16 @@ to grow deliberately to all 16 Polish voivodeships. It attempts **Otodom**, **OL
 and presents it on one searchable page. No application server: a GitHub Actions
 job scrapes, writes static JSON, and GitHub Pages displays it.
 
+**2026-10-08 update:** regional listings now have a **Tylko z KW** button.
+Use **Wczytaj KW** to import your evidence file, then **Powiąż KW** on a card
+after checking its exact address. The filter shows only explicitly linked offers
+and combines with flat/house, price and archive filters. Flats require a unit KW;
+houses can use their land KW. Imported records and links stay in the current tab
+and disappear on refresh. Street-only matches are not inferred. See
+[the KW guide](docs/KW_VIEWER.md#filter-offers-with-a-kw).
+The implementation passed 453 tests and 29 browser checks; deployment after
+this push is pending the existing Pages workflow.
+
 **2026-10-07 update:** a [private-file KW viewer](https://110kc3.github.io/rentgen-ofert/kw.html)
 is connected from the national picker and regional listings. Select a `records.json`
 export from the separate sprawdz-kw index to browse addresses, flat/land KWs,

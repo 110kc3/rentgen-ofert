@@ -43,6 +43,28 @@ h1 { margin: 0; font-size: 22px; letter-spacing: -.02em; }
 }
 .group { display: inline-flex; gap: 4px; align-items: center; }
 .group > label { font-size: 12px; color: var(--muted); margin-right: 2px; }
+.kw-setup, .kw-card button, .kw-tools button, #kw-dialog button {
+  border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px;
+  background: var(--card); color: var(--text); cursor: pointer; font: inherit;
+}
+#kw-only.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.kw-setup { font-size: 12px; }
+.kw-tools { padding: 12px 16px; margin: 12px 0; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }
+.kw-tools summary { cursor: pointer; font-weight: 600; }
+.kw-tools input { max-width: 100%; }
+.kw-tools label { display: inline-block; margin: 4px 12px 8px 0; }
+.kw-card { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 12px; }
+.kw-card p { margin: 5px 0; }.kw-card a { color: var(--accent); }
+.kw-card code { white-space: nowrap; }.kw-caveat { color: var(--muted); }
+#kw-dialog { width: min(600px, calc(100% - 28px)); max-height: calc(100% - 40px); overflow: auto;
+  padding: 24px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--text); }
+#kw-dialog::backdrop { background: #0008; }
+#kw-dialog h2 { margin-top: 0; font-size: 20px; }
+#kw-record { display: block; width: 100%; max-width: 100%; margin: 8px 0; padding: 8px; background: var(--card); color: var(--text); }
+#kw-dialog a { color: var(--accent); }#kw-dialog p { font-size: 13px; }
+.kw-confirm-label { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; }
+.kw-dialog-actions { display: flex; gap: 12px; margin-top: 20px; }
+#kw-save { background: var(--accent); color: #fff; }#kw-save:disabled { opacity: .45; cursor: default; }
 .seg { display: inline-flex; background: var(--chip); border-radius: 8px; padding: 2px; }
 .seg button {
   border: 0; background: transparent; color: var(--muted); cursor: pointer;
@@ -238,6 +260,9 @@ a.region-card:hover { transform: translateY(-2px); border-color: var(--accent); 
   .region-card .region-health.blocked { color: #fda29b; }
 }
 @media (max-width: 640px) {
+  .controls { position: static; }
+  .controls .group { max-width: 100%; }
+  .controls .seg { display: flex; flex-wrap: wrap; }
   .region-nav { display: flex; margin: 8px 0 0; }
   .picker-head { padding-top: 34px; }
 }

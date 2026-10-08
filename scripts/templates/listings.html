@@ -28,7 +28,7 @@
   <!-- jsonld:start -->
   <script type="application/ld+json">{}</script>
 <!-- jsonld:end -->
-  <link rel="stylesheet" href="styles.css?v=9">
+  <link rel="stylesheet" href="styles.css?v=10">
 </head>
 <body>
   <header>
@@ -91,6 +91,10 @@
         <button data-val="primary">Inwestycje</button>
       </div>
     </div>
+    <div class="group">
+      <button type="button" id="kw-only" class="mapbtn" aria-pressed="false" aria-describedby="kw-help">Tylko z KW</button>
+      <button type="button" id="kw-setup" class="kw-setup" aria-controls="kw-tools">Wczytaj KW</button>
+    </div>
     <div class="group" id="distance-group"><label id="distance-label">Odległość od {{ANCHOR_GENITIVE}} (orientacyjnie)</label>
       <select id="distance">
         <option value="all">całe województwo</option>
@@ -135,16 +139,38 @@
   </div>
 
   <main>
+    <details id="kw-tools" class="kw-tools">
+      <summary>Numery KW powiązane z ofertami</summary>
+      <p id="kw-help">Wczytaj records.json, a następnie użyj „Powiąż KW” na karcie oferty po sprawdzeniu jej pełnego adresu.
+        Filtr „Tylko z KW” pokaże powiązane mieszkania i domy. Powiązanie nie potwierdza aktualnej treści księgi.</p>
+      <label>Plik z rekordami KW <input id="kw-file" type="file" accept=".json,application/json"></label>
+      <button type="button" id="kw-clear" disabled>Usuń dane i powiązania KW</button>
+      <p id="kw-status" role="status">Dane i powiązania pozostają w tej karcie. Odświeżenie je usuwa.</p>
+      <a href="kw.html">Przeglądaj samą listę KW</a>
+    </details>
     <div class="chips" id="chips" hidden></div>
     <div id="map" hidden></div>
     <div class="grid" id="grid"></div>
   </main>
+
+  <dialog id="kw-dialog" aria-labelledby="kw-dialog-title">
+    <h2 id="kw-dialog-title">Powiąż KW z ofertą</h2>
+    <p id="kw-offer-title"></p>
+    <label>Adres i numer ze źródła <select id="kw-record"></select></label>
+    <div id="kw-evidence"></div>
+    <p id="kw-link-help">Dla mieszkania wybierz jego księgę lokalową; dla domu — księgę gruntu obejmującego dom.
+      Sama ulica, powierzchnia lub podobne zdjęcie nie wystarczają.</p>
+    <label class="kw-confirm-label"><input id="kw-confirm-address" type="checkbox"> Sprawdziłem pełny adres tej oferty i wybranego rekordu, w tym numer lokalu dla mieszkania.</label>
+    <div class="kw-dialog-actions"><button id="kw-save" type="button" disabled>Powiąż KW</button><button id="kw-cancel" type="button">Anuluj</button></div>
+  </dialog>
 
   <footer>
     rentgen-ofert · obsługiwane portale: Otodom, OLX, Gratka, Morizon i n-online · {{REGION_LABEL}} · odświeżane automatycznie przez GitHub Actions
   </footer>
 
   <script src="region-context.js?v=1"></script>
-  <script src="app.js?v=23"></script>
+  <script src="kw.js?v=2"></script>
+  <script src="kw-links.js?v=1"></script>
+  <script src="app.js?v=24"></script>
 </body>
 </html>

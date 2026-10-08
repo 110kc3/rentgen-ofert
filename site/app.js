@@ -84,7 +84,10 @@ function distOf(l) {
   return c ? haversine(ANCHOR.ll, c) : null;
 }
 
-const state = { all: [], archive: null, type: "all", source: "all", owner: "all", history: "all", market: "all", distance: "all", sort: "newest", localities: [] };
+const state = { all: [], archive: null, type: "all", source: "all", owner: "all", history: "all", market: "all", distance: "all", sort: "newest", localities: [], kwOnly: false };
+const kwLinks = RentgenKWLinks.create();
+const kwListing = l => ({ url: l.url, type: l.type, locality: normLoc(l.locality) });
+const kwOf = l => kwLinks.get(kwListing(l));
 let locOptions = [];                         // [ [name, count], ... ] sorted by count
 const FILTER_KEY = RentgenRegion.storageKey("rentgen.filters.v2", REGION);
 
@@ -184,6 +187,7 @@ async function boot() {
   buildSourceFilter();
   buildLocalityOptions();
   wireControls();
+  wireKW();
   wireLocality();
   wireChips();
   wirePinButtons();
@@ -361,6 +365,105 @@ function wireControls() {
   const dist = $("#distance"); if (dist) dist.addEventListener("change", (e) => { state.distance = e.target.value; apply(); });
 }
 
+// ---- private KW evidence and explicit per-offer associations ---------------
+// Never included in snapshot(), storage, URLs or outgoing requests.
+function syncKWButton() {
+  const button = $("#kw-only");
+  if (button) {
+    button.setAttribute("aria-pressed", String(state.kwOnly));
+    button.classList.toggle("active", state.kwOnly);
+  }
+}
+
+function kwBlock(l) {
+  if (!kwLinks.size || !l.url) return "";
+  const group = kwOf(l);
+  const button = `<button type="button" class="kw-attach">${group ? "Zmień KW" : "Powiąż KW"}</button>`;
+  if (!group) return `<div class="kw-card">${button}</div>`;
+  const record = group.records[0];
+  const sources = group.records.map(r => `<a href="${escapeHtml(r.source.url)}" target="_blank" rel="noopener noreferrer">Źródło ${escapeHtml(r.source.document_date || "bez daty")}</a>`).join(" · ");
+  return `<div class="kw-card"><strong>${record.register_type === "unit" ? "KW lokalu" : "KW gruntu domu"}:</strong>
+    <code>${escapeHtml(record.kw_number)}</code><p>${sources}</p>
+    <p class="kw-caveat">Powiązano ręcznie · aktualna treść księgi niesprawdzona</p>
+    ${button} <button type="button" class="kw-unlink">Usuń powiązanie</button></div>`;
+}
+
+function wireKW() {
+  const input = $("#kw-file"), dialog = $("#kw-dialog"), select = $("#kw-record"), confirmation = $("#kw-confirm-address");
+  if (!input || !dialog) return;
+  let generation = 0, target = null, choices = [];
+  const close = () => { dialog.close(); target = null; choices = []; };
+  const summary = () => { $("#kw-status").textContent = `Wczytano ${kwLinks.size} obserwacji. Powiązano ${kwLinks.linked} ofert. Dane znikną po odświeżeniu.`; };
+  const refresh = () => { summary(); render(); };
+  $("#kw-only").addEventListener("click", () => {
+    state.kwOnly = !state.kwOnly;
+    if (state.kwOnly && !kwLinks.size) $("#kw-tools").open = true;
+    render();
+  });
+  $("#kw-setup").addEventListener("click", () => { $("#kw-tools").open = true; input.click(); });
+  input.addEventListener("change", async () => {
+    const file = input.files[0]; if (!file) return;
+    const current = ++generation;
+    close(); kwLinks.clear(); $("#kw-clear").disabled = false; render();
+    $("#kw-status").textContent = "Odczytywanie pliku KW…";
+    try {
+      if (file.size > RentgenKW.MAX_BYTES) throw Error("Plik przekracza 4 MiB.");
+      const body = await file.text(); if (current !== generation) return;
+      kwLinks.load(JSON.parse(body));
+      state.kwOnly = false; // Show cards so their exact address can be checked before linking.
+      refresh();
+    } catch (error) {
+      if (current !== generation) return;
+      kwLinks.clear(); render();
+      $("#kw-status").textContent = `Nie wczytano pliku. ${error instanceof SyntaxError ? "Nieprawidłowy JSON." : error.message}`;
+    } finally { if (current === generation) input.value = ""; }
+  });
+  $("#kw-clear").addEventListener("click", () => {
+    generation++; close(); kwLinks.clear(); state.kwOnly = false; input.value = "";
+    $("#kw-clear").disabled = true; refresh();
+  });
+  function preview() {
+    confirmation.checked = false; $("#kw-save").disabled = true;
+    const group = choices.find(g => g.id === select.value), area = $("#kw-evidence");
+    area.replaceChildren();
+    if (!group) { area.textContent = "Brak zgodnych rekordów dla rodzaju i miejscowości tej oferty. Sprzeczne numery dla jednego adresu wymagają wyjaśnienia w źródłach."; return; }
+    for (const r of group.records) {
+      const p = document.createElement("p"), link = document.createElement("a");
+      link.href = r.source.url; link.target = "_blank"; link.rel = "noopener noreferrer";
+      link.textContent = `Sprawdź źródło (publikacja: ${r.source.document_date || "brak daty"}, odczyt: ${r.source.observed_at.slice(0, 10)})`;
+      p.append(link); area.append(p);
+    }
+  }
+  select.addEventListener("change", preview);
+  confirmation.addEventListener("change", () => { $("#kw-save").disabled = !confirmation.checked || !choices.some(g => g.id === select.value); });
+  $("#kw-cancel").addEventListener("click", close);
+  dialog.addEventListener("cancel", () => { target = null; choices = []; });
+  $("#kw-save").addEventListener("click", () => {
+    if (!target) return;
+    try { kwLinks.attach(target, select.value, confirmation.checked); close(); refresh(); }
+    catch (error) { $("#kw-evidence").textContent = error.message; }
+  });
+  $("#grid").addEventListener("click", event => {
+    const attach = event.target.closest(".kw-attach"), remove = event.target.closest(".kw-unlink");
+    if (!attach && !remove) return;
+    event.stopPropagation();
+    const url = event.target.closest(".card").dataset.href;
+    const listing = (inArchive() ? state.archive || [] : state.all).find(l => l.url === url);
+    if (!listing) return;
+    if (remove) { kwLinks.remove(kwListing(listing)); refresh(); return; }
+    target = kwListing(listing); choices = kwLinks.choices(target);
+    $("#kw-offer-title").textContent = listing.title || "Oferta bez tytułu";
+    select.replaceChildren(...choices.map(group => {
+      const r = group.records[0], a = r.address, option = document.createElement("option");
+      option.value = group.id;
+      option.textContent = `${a.city}, ${a.street} ${a.number}${a.unit ? "/" + a.unit : ""} — ${r.kw_number}`;
+      return option;
+    }));
+    const current = kwOf(listing); if (current) select.value = current.id;
+    preview(); dialog.showModal();
+  });
+}
+
 // ---- persistence (localStorage + shareable URL) ----------------------------
 
 function snapshot() {
@@ -422,6 +525,7 @@ function applySnapshot(s) {
 }
 
 function resetAll() {
+  state.kwOnly = false;
   ["type", "source", "owner", "history", "market"].forEach((k) => setSeg(k, "all"));
   state.distance = "all"; const d = $("#distance"); if (d) d.value = "all";
   state.sort = "newest"; const so = $("#sort"); if (so) so.value = "newest";
@@ -437,6 +541,7 @@ function resetAll() {
 
 function activeFilters() {
   const out = [];
+  if (state.kwOnly) out.push({ k: "kw", label: "Tylko z KW" });
   if (state.type !== "all") out.push({ k: "seg:type", label: "Typ: " + (TYPE_LABEL[state.type] || state.type) });
   if (state.source !== "all") out.push({ k: "seg:source", label: "Źródło: " + label(state.source) });
   if (state.owner !== "all") out.push({ k: "seg:owner", label: OWNER_LABEL[state.owner] || state.owner });
@@ -464,6 +569,7 @@ function activeFilters() {
  *  owner/market are skipped in archive mode because passes() ignores them there. */
 function filterDims() {
   const out = [];
+  if (state.kwOnly) out.push({ k: "kw", label: "Tylko z KW" });
   const arch = inArchive();
   if (state.type !== "all") out.push({ k: "seg:type", label: "Typ: " + (TYPE_LABEL[state.type] || state.type) });
   if (state.source !== "all") out.push({ k: "seg:source", label: "Źródło: " + label(state.source) });
@@ -483,9 +589,10 @@ function filterDims() {
  *  the duration of the count and restores it — passes() reads state directly. */
 function countWithout(pool, f, k) {
   const saved = { type: state.type, source: state.source, owner: state.owner,
-                  market: state.market, distance: state.distance };
+                  market: state.market, distance: state.distance, kwOnly: state.kwOnly };
   const g = { ...f };
   if (k.startsWith("seg:")) state[k.slice(4)] = "all";
+  else if (k === "kw") state.kwOnly = false;
   else if (k === "distance") state.distance = "all";
   else if (k === "loc:*") g.locs = null;
   else if (k === "num:min-price") g.minPrice = null;
@@ -512,6 +619,10 @@ function topTowns(rows, k) {
 
 function emptyMessage(pool, f) {
   const parts = [];
+  if (state.kwOnly) parts.push(`<p>Brak ofert z powiązanym numerem KW dla tych filtrów. ${kwLinks.size
+    ? 'Wyłącz „Tylko z KW”, aby powiązać rekord z konkretną ofertą po sprawdzeniu adresu.'
+    : 'Użyj „Wczytaj KW”, a następnie powiąż rekord z konkretną ofertą po sprawdzeniu adresu.'}
+    Brak powiązania nie oznacza braku księgi.</p>`);
 
   // "Sprzedane wg RCN" is the view most likely to look broken: it is a thin
   // slice to begin with, and in a town whose register has stopped it can never
@@ -586,6 +697,7 @@ function renderChips() {
 function clearFilter(k) {
   if (k === "__all__") { resetAll(); return; }
   if (k.startsWith("seg:")) setSeg(k.slice(4), "all");
+  else if (k === "kw") state.kwOnly = false;
   else if (k === "distance") { state.distance = "all"; const d = $("#distance"); if (d) d.value = "all"; }
   else if (k === "loc:*") { state.localities = []; renderLocalityList(($("#loc-search") || {}).value || ""); }
   else if (k.startsWith("loc:")) removeLocality(k.slice(4));
@@ -620,6 +732,7 @@ function currentFilters() {
 }
 
 function passes(l, f) {
+  if (state.kwOnly && !kwOf(l)) return false;
   const archiveMode = inArchive();
   if (state.history === "sold_rcn" && !l.sold) return false;
   // archive entries carry no development/is_private fields — the market and
@@ -871,6 +984,7 @@ function watchSentinel() {
 }
 
 function render() {
+  syncKWButton();
   if (inArchive() && !state.archive) {
     view = [];
     rendered = 0;
@@ -1447,6 +1561,7 @@ function card(l) {
       ${offersBlock(l)}
       ${negoBlock(l)}
       ${timelineBlock(l)}
+      ${kwBlock(l)}
       ${pinBlock(l)}
     </div>
   </div>`;
