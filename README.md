@@ -1,230 +1,54 @@
 # rentgen-ofert
 
 A regional house and flat *sale* listing aggregator, Śląskie-first and designed
-to grow deliberately to all 16 Polish voivodeships. It attempts **Otodom**, **OLX**, **gratka**,
-**Morizon** and **nieruchomości-online**, de-duplicates what the portals serve,
-and presents it on one searchable page. No application server: a GitHub Actions
-job scrapes, writes static JSON, and GitHub Pages displays it.
+to grow deliberately to all 16 Polish voivodeships. It attempts **Otodom**,
+**OLX**, **gratka**, **Morizon** and **nieruchomości-online**, de-duplicates
+what the portals serve, and presents it on a searchable static site.
 
-**2026-10-08 update:** regional listings now have a **Tylko z KW** button.
-Use **Wczytaj KW** to import your evidence file, then **Powiąż KW** on a card
-after checking its exact address. The filter shows only explicitly linked offers
-and combines with flat/house, price and archive filters. Flats require a unit KW;
-houses can use their land KW. Imported records and links stay in the current tab
-and disappear on refresh. Street-only matches are not inferred. See
-[the KW guide](docs/KW_VIEWER.md#filter-offers-with-a-kw).
-The implementation passed 453 tests and 29 browser checks; deployment after
-this push is pending the existing Pages workflow.
+**2026-10-17 status:** Śląskie and Opolskie are published, with serial portal
+access. Śląskie runs twice daily; Opolskie uses the implemented 72-hour cadence.
+Małopolskie is a completed, disabled pilot with its data branch retained.
+The KW viewer/filter deployments are verified, and both regional archive
+checkpoints are complete. Coverage remains partial; OLX's bounded probe is blocked.
 
-**2026-10-07 update:** a [private-file KW viewer](https://110kc3.github.io/rentgen-ofert/kw.html)
-is connected from the national picker and regional listings. Select a `records.json`
-export from the separate sprawdz-kw index to browse addresses, flat/land KWs,
-parent references, dated sources and conflicting claims. Imports stay in tab
-memory: no upload or browser storage, and refresh clears them. Actual evidence
-is not committed to this public repo or attached automatically to offers.
-See [KW viewer usage and boundaries](docs/KW_VIEWER.md). Deployment of this
-change is pending the existing Pages workflow; the local browser checks passed.
+RCN refreshes in the October 16 publications are **degraded**, retaining the
+October 3 Śląskie and September 28 Opolskie snapshots. The repair supports
+nested GML deed dates and falls back from a rejected WFS pull to GUGiK's official
+provincial GeoParquet exports. Both complete export layers must pass schema,
+region, unique-ID, download/footer and previous-count checks before replacing
+the cache. Provenance records source URLs, file hashes, raw counts and the
+WFS failure. PyArrow reads only the transaction matching fields in batches;
+raw exports and geometry are temporary, never published. A snapshot's `fetched`
+date records retrieval, not the dates when every county updated its deeds.
+Production verification of this repair is **pending after push**.
 
-**2026-10-03 update:** the archive-throttling fix is verified in production:
-maintenance stopped after one HTTP 429, preserving the refused cursor and all
-32,141 seen archive IDs. Pending partitions fell from 53 to 50. A fresh healthy
-RCN pull also passed; total runtime was **116.0 minutes**, below the preferred
-150-minute gate. The fix's scrape/deploy passed 451 tests and payload validation.
-Final archive completion remains open while the next scheduled run is in progress.
-See the [maintenance audit](docs/audits/2026-10-03-archive-throttling.md).
+The seven-healthy-day / three-Opolskie-cycle gate remains open because the
+last three automatic Opolskie refreshes all retained degraded RCN evidence.
+[TODO.md](TODO.md) owns the next checks; the
+[October 17 audit](docs/audits/2026-10-17-rcn-exports.md) records frozen evidence
+and local verification. [POLAND_ROLLOUT.md](POLAND_ROLLOUT.md) owns future
+expansion gates. No further region or concurrent matrix is selected.
 
-**2026-09-29 update:** the RCN P0 recovery is verified in production: Śląskie
-has a fresh healthy snapshot (200,895 flat / 473,617 building records), 3,027
-matched properties in the pre-P1 baseline and restored benchmarks. The selected P1 repairs normalize
-floor enums, county breadcrumbs and street/building-number variants while
-retaining known contradictions and unknown values. Old conflated histories are
-not automatically split.
-
-The runtime P1 checks cheap identity contradictions before gallery hashes,
-uses integer bit counting, and gives n-online archive maintenance a resumable
-15-minute budget after the complete current-offer pass. Deduplication now has
-its own phase timer. See the [P1 audit](docs/audits/2026-09-29-p1-identity-runtime.md)
-for frozen-data verification and production limits.
-
-**Opolskie now has a serial 72-hour cadence in code.** An hourly check at minute
-17 UTC reads the last successful publication; it does no portal work until
-72 hours have elapsed. A small seven-day Actions artifact records each
-Opolskie attempt, so failures also wait 72 hours before automatic retry.
-Śląskie retains its 06:00/18:00 UTC schedule. The global scrape lock queues
-pending work instead of replacing it. Actual starts can be later because of
-the hourly tick, serialization and GitHub scheduling delays. Manual runs remain
-available, and changing Opolskie's catalog cadence to `manual` pauses its timer.
-Checks that publish no data do not deploy Pages.
-
-The scheduler, RCN recovery and P1 identity/runtime changes are verified in
-ordinary Silesian production runs. The October 3 publication has 3,319 RCN
-matches, 74 confirmed sales and **116.0-minute runtime**, including partial
-archive maintenance and a fresh weekly RCN pull. Sources retain continuity and critical photo deferrals
-are zero. Archive checkpoints resume correctly, but the cycle has not finished;
-the published RCN snapshot is healthy and dated October 3. Final archive
-completion and the seven-healthy-day cohort gate remain open.
-[TODO.md](TODO.md) owns the handoff. OLX remains blocked after its bounded probe,
-and portal caps mean coverage remains explicitly partial. Małopolskie stays
-disabled with its data branch recoverable.
+Regional listings include **Tylko z KW**. Import the separate private evidence
+file with **Wczytaj KW**, then explicitly **Powiąż KW** after checking the
+property's full address. Flats need a unit KW; houses can link their land KW.
+Data and links stay in tab memory and disappear on refresh; imported records
+alone infer no associations. See [the KW guide](docs/KW_VIEWER.md).
 
 ```
-GitHub Actions (cron) → python -m scraper.main → site/data/<region>/*.json
-        → force-pushed to the orphan `data-<region>` branch → GitHub Pages (main site/ + data overlay)
+GitHub Actions → python -m scraper.main → site/data/<region>/*.json
+        → isolated orphan data-<region> branch → GitHub Pages
 ```
 
-Scraped data and caches live on single-commit **`data-<region>` branches**,
-never in main's git history — main stays a few MB of code while a region's
-branch is force-pushed fresh each run (the price history lives *inside*
-`history.json.gz`, so old git versions of it carry no information). One branch
-per region because a shared one is what a second region would break: a healthy
-full-source Śląskie snapshot is ~181 MiB including caches and pipeline-only
-history, and
-every job would fetch, and force-push over, all of everyone's. A deploy overlays
-every `data-*` branch (plus the pre-split shared `data` branch, still read so
-the split needed no flag day), then includes only catalog-enabled regions in
-the Pages artifact.
+Each region owns its history/cache branch. Scrapes stage only that region;
+Pages overlays the branches and publishes only enabled regions. Failed source
+or RCN continuity checks preserve the previous publication. Opolskie hourly
+eligibility checks do no portal work until due; failed attempts also wait
+72 hours, no-op checks do not deploy, and the global lock queues work. Actual
+starts can be delayed by the hourly tick, serialization and GitHub scheduling.
 
-## Poland rollout status
-
-As of 2026-09-29, **Śląskie and Opolskie are published**. Śląskie remains
-scheduled twice daily. Opolskie passed its cold/warm pilot; its serial
-72-hour scheduler is observed in production. The seven-healthy-day cohort
-acceptance remains open after the RCN incident and slow weekly runs.
-The completed Małopolskie pilot is disabled after passing its corrective gate;
-its isolated data branch is kept for a reversible re-enable, but no disabled
-tree belongs in the artifact.
-One canonical catalog owns every region's label, TERYT prefix, enabled state,
-cadence, optional anchor and explicit per-portal slug. The deployed product is
-region-aware: `/` is generated as a national picker, published regions get stable
-`region/<slug>/` and `region/<slug>/stats/` pages, browser state is scoped by
-region, and discovery metadata is generated from complete, enabled data
-actually overlaid. Disabling a catalog entry suppresses its scrape and its
-artifact copy without deleting the recoverable data branch or a sibling.
-
-The corrected warm Śląskie runs `32967543284`, `33004188553` and `33007455916`
-completed in 90.0, about 89, and 85.5 minutes. Their bounded n-online phases
-took about 21.6–23.5 minutes and retained 10.86k current listings; every run
-passed the pre-request offline gate, generated-data validator, single-region
-branch push and Pages deploy. OLX still makes one bounded HTTP-403 probe. This
-accepts the warm P0 runtime and publication gate. Forced archive run
-`33047120282` then refreshed 47,754 archived n-online rows in 1,817 pages,
-named Katowice flats as its sole capped partition, had no failed towns and
-finished the whole scrape in 177.4 minutes. Active-only follow-up
-`33072698054` then finished in 79.6 minutes; n-online used 581 current-only
-pages in 20.5 minutes and left the freshly dated archive cache byte-for-byte
-unchanged. This closes the P0 archive-isolation gate. Exact evidence and the
-rollout decision are recorded in
-[`POLAND_ROLLOUT.md`](POLAND_ROLLOUT.md). The reversible pilot-unpublication
-audit is complete. Corrected P3 scout `33497077221` reached all 96 attempted
-non-OLX targets, left only OLX's bounded refusal/skips, and produced one common
-six-target ranking shape for all 16 regions. Opolskie remained the smallest
-signal. Cold run `33504082916` then passed in 29.9 minutes, created only
-`data-opolskie` at `e0f29a6`, and deploy `33514004545` published its 3,563
-properties beside Śląskie. Its cold photo backlog/deferrals were zero; Otodom
-flats remained partial and one unresolved two-ad group was safely kept
-separate. Warm run `33855228296` then passed in 14.3 minutes with stable source
-drift, 4,207 cache hits, only 45.6 seconds of photos and zero deferrals/backlog.
-Opolskie is accepted for serial 72-hour scheduling; no region matrix is enabled.
-P1 commit `4131f03` is also production-proven: direct deploy `33082048338`,
-regionalized scrape `33082048365` and automatic deploy `33090688420` all
-succeeded. The scrape passed all 224 offline tests, refreshed only
-`data-slaskie`, and the live picker, stable paths, unpublished/unknown routes
-and discovery metadata passed their HTTP/semantic checks.
-Cold Małopolskie pilot `33098785162` then passed the same gate, created only
-`data-malopolskie`, and deployed both regions in `33126428927`. It published
-40,811 unique properties from 61,883 current rows (79.6 MiB served), but its
-246.5-minute scrape spent the full 90-minute photo budget and deferred 36,830
-ads. Photo work is now ordered by current dedupe correctness, then persistent
-oldest-first history backlog; never-attempted ads precede repeated empty-gallery
-responses, and `meta.json` plus the CI summary expose each queue and deferral.
-Śląskie validation run `33135609107` then processed 41,659
-correctness-critical candidates with 43,559 cache hits, only 32 fetches and
-zero deferrals; its photo phase took 17.1 seconds and the complete scrape took
-92.0 minutes. Deploy `33144201326` published that baseline. Warm Małopolskie
-run `33161251008` then recovered full Morizon coverage and preserved every
-regional cache boundary, but missed the rollout gate: 203.1 minutes total,
-96.8 minutes in photos and 20,608 correctness-critical ads still deferred.
-Deploy `33174768425` published the mechanically valid data, but green CI is not
-pilot acceptance.
-
-The measured blocker was Otodom's detail pages (HTTP 403) rather than its image
-CDN: a live card image answered HTTP 200. Uncached correctness-critical ads now
-hash that already-scraped cover once, while history-only work keeps full
-galleries. Photo requests do not inherit the scraper's retry ladder, cover
-evidence is distinguished in the cache, and schema-2 metrics validate each
-cover/gallery and critical outcome. Push run `33188821781` and following
-schedule `33199167100` both passed on Śląskie; the latter completed in 91.8
-minutes with a 16.8-second photo phase and zero deferrals.
-
-That audit found one migration hole: 5,107 critical rows still had no hash even
-though deferrals were zero, because legacy negative *gallery* entries could
-return before the new cover path. Negative entries are now scope-aware and a
-gallery miss cannot suppress a first critical cover attempt. More importantly,
-photo-enabled normalization no longer treats any all-unresolved size group as
-permission to merge by size/price: those ads stay separate, exact portal-ID
-twins still merge, and schema-3 metadata reports the unresolved groups and
-validates that heuristic fallback is off. `RENTGEN_PHOTOS=0` is the only mode
-that explicitly enables the old heuristic. Push run `33242734428` and schedule
-`33252714173` validated that contract on Śląskie; the latter finished in 89.8
-minutes with a 14.9-second photo phase, 41,750/41,762 critical ads hashed, zero
-unresolved groups/deferrals and 28,253 unique properties from 51,810 raw rows.
-
-Corrective Małopolskie run `33257448934` then passed the pilot gate: 110.9
-minutes total, 9.1 minutes of photos, 48,476/48,483 critical ads hashed, zero
-unresolved groups/deferrals and 32,132 unique properties from a stable 63,596
-raw rows. It refreshed only `data-malopolskie` at `cba13c7`, retained the
-explicitly skipped archive and RCN cache byte-for-byte, and deploy
-`33262428730` published both regions. The unique-count reduction is exactly
-explained by six fewer raw ads and 1,220 additional evidence-backed merges.
-
-The following scheduled Śląskie run `33274226173` revealed the next safety
-gap. Otodom changed from 15,949 ads to a two-root HTTP-403 block; validation
-reported that health regression but still pushed `data-slaskie` and deploy
-`33277384177` replaced the healthy 28,253-property tree with 19,352 properties.
-This slice adds the missing previous-publication guard. The workflow preserves
-the prior `meta.json`; after the new payload passes structural validation, a
-formerly positive/non-blocked source becoming blocked/unknown or zero now fails
-before staging and force-push. First publications, persistent blocked sources
-and positive count drift pass. Intentional resets require the logged manual
-`allow_source_regression` override. The 255-test offline suite includes the
-observed Otodom 15,949→0 shape and workflow/deploy ordering. Push run
-`33299512978` recovered Otodom to 15,927 in 91.2 minutes; schedules
-`33309354137` and `33334689642` retained 15,891/15,947 in 93.3/87.6 minutes.
-All three validated 71 files, staged only 76 Śląskie paths, published zero
-photo deferrals/unresolved groups, refreshed only `data-slaskie`, and deployed
-successfully in `33303224401`, `33313477447` and `33338750925`. This accepts
-P0.7 and the complete P0 exit gate without inducing a real outage. Closeout
-deploys `33348260226` and `33353312262` then removed Małopolskie from the live
-artifact and discovery while preserving its branch. The intervening guarded
-Śląskie refresh `33348260244` completed in 95.4 minutes and published 28,277 /
-51,826 with zero photo deferrals or unresolved groups.
-
-The P3 scout is intentionally separate from production. A manual-only,
-read-permission workflow runs the 267-test offline gate, then makes at most one
-non-retrying request per region, region-wide source and property type (128
-targets). A source refusal stops further requests to that source, and a
-40-minute runtime budget leaves explicit skipped rows rather than losing a
-partial report to the workflow timeout. It writes one aggregate JSON artifact
-and a job summary, never a data branch, cache, photo, cron entry or matrix.
-Nieruchomości-online is explicitly excluded because it has no comparable
-region-wide search root. First run `33411783792` completed in 203.5 seconds:
-97 real requests produced 92 reachable rows, one OLX refusal followed by 31
-explicit skips, and four Otodom 404s. Those 404s were the house/flat pairs for
-`kujawsko-pomorskie` and `warminsko-mazurskie`; Otodom uses the explicit portal
-slugs `kujawsko--pomorskie` and `warminsko--mazurskie`. The catalog now records
-those forms while canonical slugs stay strict, and the summary ranks only
-regions with the same non-empty set of declared source/type targets. Corrected
-run `33497077221` then completed in 187.2 seconds with 96 `ok`, one OLX
-`blocked`, 31 explicit OLX skips, no 404/redirect/parser error and all 16
-regions comparable. Opolskie stayed last at 4,281 (4,275 in the first run),
-30.3% below next-smallest Świętokrzyskie. Its cold pilot then completed in 29.9
-minutes and its warm run in 14.3; both are accepted. The operating contract
-remains serial: new regions may move to a
-72-hour cadence only after cold/warm acceptance; Śląskie keeps its twice-daily
-schedule, and no concurrent matrix is justified yet.
-The audited status, evidence, decisions, acceptance gates and P0–P5 task order are
-in [`POLAND_ROLLOUT.md`](POLAND_ROLLOUT.md). `TODO.md` remains the detailed
-development diary.
+The [development history](docs/HISTORY.md) preserves dated implementation and
+production investigations. It is historical evidence, not the accepted queue.
 
 ## What it does
 
@@ -347,7 +171,7 @@ development diary.
   it. OLX also keeps its per-town subdivision, and bands stack on top of it —
   which is why an *empty* search must never look like a refusal: a village with
   no flats states no total and serves no ads, and reading that as overflow made
-  every empty band bisect into two more (see the 2026-08-10 entry in `TODO.md`).
+  every empty band bisect into two more (see the 2026-08-10 entry in `docs/HISTORY.md`).
   A portal can also simply refuse the bands. Otodom did so on the same seven
   upper flat bands throughout the affected runs, cutting its stable ~16.6k
   baseline to ~8.5k. Otodom therefore now runs the
@@ -469,7 +293,7 @@ Picker URL: `https://<your-username>.github.io/rentgen-ofert/`; a published
 dashboard lives at `.../rentgen-ofert/region/<slug>/`.
 
 > First push blocked by a `.git/index.lock`? Delete that file and commit again
-> (a stale lock was left behind — see TODO.md).
+> (a stale lock was left behind — see docs/HISTORY.md).
 
 ### B) Scrape locally, let CI only publish (fastest loop)
 
@@ -506,7 +330,7 @@ metadata before anything is staged or pushed.
 ### C) Run locally (dashboard preview)
 
 ```bash
-pip install -r scraper/requirements.txt   # requests + beautifulsoup4 + Pillow
+pip install -r scraper/requirements.txt   # requests + beautifulsoup4 + Pillow + PyArrow
 python -m scraper.main                     # scrape -> site/data/slaskie/{manifest,index,d/*,...}.json
 node scripts/update-summary.mjs            # build the picker + stable regional pages
 python -m http.server 8000 -d site         # then open http://localhost:8000
@@ -667,7 +491,8 @@ scraper/
   photomatch.py  cover-first/gallery perceptual hashing for same-property evidence
   cache.py       photo-hash cache (URL -> hashes + image URLs/scope), reused run-to-run
   delist.py      URL-verifies vanished listings before marking them "wycofane"
-  rcn.py         RCN (notarial-deed prices) WFS pull + probabilistic sale matching
+  rcn.py         RCN WFS pull + export fallback + probabilistic sale matching
+  rcn_exports.py validated official provincial GeoParquet ingestion
   rcnstats.py    deed zł/m² benchmarks + ask-vs-sold gap + per-town register
                  freshness (stale powiats) -> rcnstats.json
   marketstats.py weekly/monthly market time series -> stats.json (Statystyki page)
@@ -706,7 +531,8 @@ tests/         parser, crawl-boundary, payload, history, RCN, geo, site-generati
                and two-region storage-isolation tests
 .github/workflows/   update.yml (cron scrape) + deploy.yml (Pages publish)
 POLAND_ROLLOUT.md  current nationwide status, gates and ordered task plan
-TODO.md        detailed development diary + other pending work
+TODO.md        current accepted queue and verification handoff
+docs/HISTORY.md dated development diary and unselected historical ideas
 ```
 
 ## Notes on etiquette & law

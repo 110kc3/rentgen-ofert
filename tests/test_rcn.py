@@ -34,6 +34,20 @@ def test_parse_and_compact_lokale():
                  "rynek": "w", "msc": "Gliwice", "ul": "Adama Asnyka", "nr": "11"}
 
 
+def test_gml_temporal_deed_date_is_not_discarded():
+    page = GML_PAGE.replace("2021-07-13 02:00:00+02",
+                            "<gml:timePosition>2021-07-13</gml:timePosition>")
+    row = next(rcn._parse_members(page.encode(), "lokale"))
+    assert rcn._compact_lok(row)["d"] == "2021-07-13"
+
+
+def test_ambiguous_gml_temporal_deed_date_is_rejected():
+    page = GML_PAGE.replace("2021-07-13 02:00:00+02",
+                            "<gml:timePosition>2021-07-13</gml:timePosition>" * 2)
+    with pytest.raises(ValueError, match="date encoding"):
+        list(rcn._parse_members(page.encode(), "lokale"))
+
+
 def test_compact_drops_non_market_and_priceless():
     row = {"dok_data": "2021-01-01", "tran_cena_brutto": "100",
            "lok_pow_uzyt": "40", "tran_rodzaj_trans": "przetarg"}
@@ -41,6 +55,19 @@ def test_compact_drops_non_market_and_priceless():
     row2 = {"dok_data": "2021-01-01", "lok_pow_uzyt": "40",
             "tran_rodzaj_trans": "wolnyRynek"}
     assert rcn._compact_lok(row2) is None
+
+
+@pytest.mark.parametrize("price", [-100, 0, 0.01])
+def test_nonpositive_rounded_prices_are_not_usable_deeds(price):
+    row = {"dok_data": "2026-01-02", "tran_cena_brutto": str(price),
+           "lok_pow_uzyt": "40", "tran_rodzaj_trans": "wolnyRynek"}
+    assert rcn._compact_lok(row) is None
+    assert rcn._compact_bud(row) is None
+
+
+def test_negative_flat_area_is_not_a_usable_deed():
+    assert rcn._compact_lok({"dok_data": "2026-01-02", "tran_cena_brutto": "200000",
+                             "lok_pow_uzyt": "-40"}) is None
 
 
 def test_street_match():

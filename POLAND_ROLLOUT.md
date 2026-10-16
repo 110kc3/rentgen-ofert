@@ -1,84 +1,44 @@
-# Whole-Poland rollout: status and next tasks
+# Whole-Poland rollout: status and gates
 
-> **Maintenance update 2026-10-03:** the first-429 archive stop is verified in
-> production: one failed request, retained cursor/seen IDs, 32,141 cycle records
-> and 50 partitions remaining. A fresh healthy RCN pull and total runtime of
-> 116.0 minutes pass the weekly preferred runtime gate. Final archive completion
-> remains pending; the next scheduled run was in progress at the single check.
-> [The maintenance audit](docs/audits/2026-10-03-archive-throttling.md) records the
-> evidence; [TODO.md](TODO.md) owns the remaining accepted check. Seven healthy
-> cohort days and expansion remain unaccepted.
+Updated 2026-10-17. [TODO.md](TODO.md) owns accepted tasks and the next check;
+this document owns rollout decisions and future capacity/acceptance gates.
+The [development history](docs/HISTORY.md) preserves the former queue diary.
 
-> **P1 update 2026-09-29:** P0 recovery and a fresh healthy RCN snapshot are
-> verified in production. The selected identity/runtime P1s now normalize known
-> floors, county breadcrumbs and building numbers; accelerate photo matching;
-> and bound archive maintenance to resumable 15-minute slices after current
-> stock collection. [The dated audit](docs/audits/2026-09-29-p1-identity-runtime.md)
-> records replay and production evidence. Two P1 scrapes/deploys passed; the
-> latest ordinary runtime is 88.9 minutes with stable sources and healthy RCN.
-> Archive cycle completion and weekly runtimes ≤180 minutes (preferred ≤150)
-> remain pending. Seven healthy cohort days remain unaccepted. [TODO.md](TODO.md)
-> owns the next check. No new region is selected. Earlier “P0 accepted” references
-> below describe the original regional rollout, not the September RCN incident.
+## Current status
 
+**Keep the current two-region cohort until RCN health and the seven-day gate
+are verified.** No additional region, concurrent matrix or P4 infrastructure
+change is selected. Śląskie runs twice daily; Opolskie's implemented serial
+72-hour scheduler is observed in production. Małopolskie stays disabled with
+its isolated data ref recoverable at `cba13c7`.
 
-> **Code/audit update 2026-09-09:** the production audit of `092d8de` is
-> complete with documented identity precision limits. Both live regional payloads
-> validate; real Chromium retries recover. Opolskie's serial 72-hour scheduler
-> is implemented with hourly eligibility checks, a failed-attempt cooldown,
-> queued global serialization and no-op deploy suppression. The impending push
-> and first scheduled refresh remain pending production verification. Begin the
-> seven-day cohort observation only after that refresh succeeds. The owning
-> handoff is [TODO.md](TODO.md); the detailed evidence is the
-> [dated production audit](docs/audits/2026-09-09-production.md).
-> P4 storage/rollback work and additional regions remain outside this batch.
-> The dated snapshot below preserves the pre-review pilot evidence.
+| Area | Current evidence / remaining gate |
+|---|---|
+| Regional catalog, routes, state, branches and overlay | Implemented and production-proven for the published pair; disabled pilot remains absent. |
+| Source continuity | Four contributing portals retained; OLX blocked, Otodom partial. Overall coverage remains partial. |
+| Archive maintenance | Both saved checkpoints complete: Śląskie Oct 15 / 49,854 records; Opolskie Oct 13 / 7,822. Each branch passes its exact 76-file allowlist. |
+| Ordinary runtime | Oct 16: Śląskie 78.1 min, Opolskie 11.0 min; zero critical photo deferrals/backlog. These runs failed fresh RCN pulls and do not establish repaired maintenance runtime. |
+| RCN health | Both Oct 16 publications degraded; retained snapshots Oct 3 / Sep 28. GML date/export fallback repair is locally implemented, pending production verification. |
+| Cohort gate | Not accepted: automatic Opolskie runs Oct 10, 13 and 16 all retained degraded RCN evidence. Restart after repaired healthy publications in both regions; require seven healthy days / three automatic Opolskie cycles. |
+| KW UI | Existing viewer/filter scrape and Pages deployment verified. No further KW acquisition work selected here. |
+| Storage/capacity | P4 remains deferred; measure served bytes again after RCN recovery before selecting compaction or hosting work. |
 
-> Audited: 2026-09-04. Production is current through warm Opolskie run
-> `33855228296` and deploy `33856444810`; scheduled Śląskie run `33804201172`
-> remains its current regional ref, and Otodom is above the approved
-> 15.8–15.9k floor, runtime is 90.8 minutes, and photo deferrals/unresolved
-> groups remain zero. P0, P1 and the manual P2 pilot are accepted. The disabled
-> Małopolskie pilot remains recoverable but absent from the artifact. Corrected
-> P3 scout `33497077221` selected Opolskie; cold run `33504082916` passed its
-> audit and published the isolated pilot in `33514004545`. Warm run
-> `33855228296` passed the exit gate in 14.3 minutes with stable sources, zero
-> deferrals/backlog and exact archive/RCN cache reuse. Its automatic deploy is
-> `33856444810`. The serial 72-hour cadence is the next implementation slice;
-> no matrix or concurrent portal access is authorized.
-> This is the current source of truth for the nationwide rollout. `TODO.md`
-> retains the detailed development diary and older measurements.
+The [October 17 audit](docs/audits/2026-10-17-rcn-exports.md) records immutable
+refs, Actions runs, archive state, the RCN failure and local repair checks.
+Future rollout still requires ≤180-minute warm/maintenance runtimes (preferred
+≤150), regional isolation, healthy evidence, seven-day cohort observation and
+the existing storage/atomic-publication gates. Green CI using an old cache is
+not fresh RCN acceptance.
 
-## Executive status
+## Historical rollout evidence and future gates
 
-**The product is genuinely region-aware, P0 is accepted, and Opolskie's
-cold/warm pilot passed; the project is still not ready for a 16-voivodeship
-schedule.** Guarded Śląskie runs retain the positive source baseline with normal
-count drift. Małopolskie remains recoverable but disabled. Opolskie's 29.9-minute
-cold and 14.3-minute warm scrapes proved source stability, convergence and
-isolation. Its serial 72-hour scheduler is observed in production; the
-seven-healthy-day observation remains open after the September RCN incident.
+The dated measurements and implementation handoffs below preserve the original
+rollout investigations through early September, with later audit links. They
+are not a second current queue. Historical phrases such as “next slice”,
+“impending push” and “first scheduled run” apply to their source dates; current
+acceptance is summarized above. Unselected future tasks remain gated.
 
-| Area | Status | Evidence / gap |
-|---|---|---|
-| Region-scoped scraper output and caches | Ready | `site/data/<region>`, regional caches and exact branch staging are implemented. |
-| Canonical 16-region configuration | Proven live | `site/regions.json` is validated and owns Polish forms, TERYT, cadence, anchor and explicit portal slugs; the complete Śląskie path ran end to end. |
-| One data branch per region | Proven for three | `data-slaskie`, `data-malopolskie` and `data-opolskie` are isolated single-commit data/cache refs; each pilot touched only its branch. |
-| Deploy overlay for multiple region branches | Proven live for three refs / two enabled regions | Deploys overlay all isolated refs, then publish only enabled Śląskie and Opolskie; disabled Małopolskie remains recoverable and absent. |
-| Portal coverage | Collection floor and continuity accepted | Corrected Otodom floor is 15.8–15.9k; subsequent guarded schedules retain it and the latest yielded 16,015. OLX's one-probe blocked policy remains stable. |
-| Coverage KPI | Truthful and protective | Schema v2 reports source state; P0.7 compares it with preserved metadata before push. Synthetic 15,949→0 rejection plus repeated production passes cover the failure and positive paths. |
-| Per-region runtime | Ordinary and weekly RCN runs pass; archive completion pending | October 3 Śląskie: 116.0 min including fresh RCN and partial archives; October 1 Opolskie: 13.7 min. Final archive traversal/completion remains open. |
-| Region picker and durable regional URLs | Proven live for two enabled regions | National picker, stable listing/statistics paths, scoped state and discovery expose Śląskie plus the data-backed Opolskie pilot. |
-| Per-region metadata / OG / sitemap / llms.txt | Proven live | Canonical/JSON-LD documents parse and discovery contains only data-backed published regions. |
-| CI region matrix / cadence | 72-hour serial scheduler observed; cohort gate open | Opolskie eligibility is checked hourly against publication and attempt timestamps, under the global lock. Śląskie retains its twice-daily schedule. No concurrent portal access. |
-| Nationwide data hosting | Not decided | Current Śląskie + Opolskie data serves about 125.4 MiB; the larger retained Małopolskie measurement keeps the nationwide capacity warning intact. |
-
-**Rollout decision (2026-09-09):** Śląskie and Opolskie form the selected
-cohort. Opolskie's cold/warm pilot is accepted; its automatic scheduler now needs
-first-run verification and seven healthy days. `malopolskie` remains disabled
-and recoverable. No additional region or concurrent matrix is authorized.
-
-## Production snapshot
+## Historical production snapshot — September 2026
 
 ### Repository and deployment
 
@@ -653,17 +613,16 @@ approaches the limit.
 - Do not promise daily freshness for all 16 regions until the measured capacity
   supports it. Start with a documented slower cadence if necessary.
 
-## Prioritized task plan
+## Rollout gate plan — historical completions and deferred work
 
 ### P0 — make Śląskie a trustworthy rollout template
 
-No second scheduled region is added in this phase.
+The original P0 phase prohibited a second schedule until its gates passed.
 
-**Current pick-up point (2026-09-09):** the review fixes are production-audited
-with documented precision limits, and Opolskie's serial 72-hour scheduler is
-implemented. Check the impending push once, verify the first automatic Opolskie
-publication and no-op skip, then observe the cohort for seven healthy days.
-P0/P1 and the cold/warm pilot remain accepted; no additional region is selected.
+**Historical handoff (2026-09-09):** review fixes were audited and the serial
+Opolskie scheduler was implemented. Its automatic publications are now verified;
+the October 17 current status and TODO handoff own the remaining RCN and
+healthy-cohort acceptance. No additional region is selected.
 
 - [x] **P0.1 Redesign the coverage model and region health result.**
   - Record parent inventory total once per source/type.
@@ -1014,9 +973,11 @@ unpublication retained both Śląskie and the recoverable pilot branch.
   checks read publication metadata inside the global lock; seven-day attempt
   artifacts enforce the cooldown after failures. Pending runs are queued, and
   no-op updates cannot deploy. First production acceptance remains open.
-- [ ] Verify the first scheduled Opolskie run, then hold the cohort for at least
-  seven healthy days / three successful Opolskie cycles before selecting another
-  region. Use the current TODO handoff for exact checks and failure handling.
+- [x] Verify automatic Opolskie scheduling: observed in production, including
+  the October 10, 13 and 16 publications. Scheduling success does not accept RCN health.
+- [ ] Hold the repaired two-region cohort for at least seven healthy days /
+  three successful healthy automatic Opolskie cycles before selecting another
+  region. The October 17 assessment fails on degraded RCN; TODO owns the handoff.
 - [ ] Add regions in cohorts **1 → 2 → 4 → 8 → 16**, with at least seven days of
   healthy measurements before doubling.
 - [ ] Scale photo, geo and delist budgets per region/backlog instead of applying

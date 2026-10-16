@@ -139,7 +139,14 @@ def _parse_page(xml_bytes, tag):
         for child in feat:
             name = child.tag.rsplit("}", 1)[-1].lower()
             if name not in ("msgeometry", "boundedby"):
-                row[name] = (child.text or "").strip()
+                if name == "dok_data" and len(child):
+                    # GUGiK now encodes dates as GML temporal properties.
+                    positions = child.findall("{http://www.opengis.net/gml/3.2}timePosition")
+                    if len(child) != 1 or len(positions) != 1:
+                        raise ValueError("RCN: unsupported deed date encoding")
+                    row[name] = (positions[0].text or "").strip()
+                else:
+                    row[name] = (child.text or "").strip()
         rows.append(row)
         ids.append(feat.get("{http://www.opengis.net/gml/3.2}id"))
     return rows, total, bool(root.get("next")), ids
@@ -194,7 +201,7 @@ def _compact_lok(row):
     date = (row.get("dok_data") or "")[:10]
     price = _to_f(row.get("lok_cena_brutto")) or _to_f(row.get("tran_cena_brutto"))
     area = _to_f(row.get("lok_pow_uzyt"))
-    if not date or not price or not area:
+    if not date or price is None or round(price) <= 0 or area is None or area <= 0:
         return None
     if row.get("lok_funkcja") not in ("", None, "mieszkalna"):
         return None
@@ -215,7 +222,7 @@ def _compact_bud(row):
     date = (row.get("dok_data") or "")[:10]
     price = _to_f(row.get("bud_cena_brutto")) or _to_f(row.get("tran_cena_brutto"))
     area = _to_f(row.get("bud_pow_uzyt"))
-    if not date or not price:
+    if not date or price is None or round(price) <= 0:
         return None            # area may be missing — still useful by address
     if row.get("tran_rodzaj_trans") not in ("", None, "wolnyRynek"):
         return None
@@ -289,14 +296,28 @@ def fetch(session, typename, flt, props, tag, compact, log=print):
     return out
 
 
-def fetch_all(session, teryt_prefix="24", log=print):
-    """Pull flats + residential buildings for a voivodeship. Returns (lokale, budynki)."""
-    lok = fetch(session, "ms:lokale", _filter([_like("teryt", teryt_prefix + "*")]),
-                LOK_PROPS, "lokale", _compact_lok, log=log)
-    bud = fetch(session, "ms:budynki",
-                _filter([_like("teryt", teryt_prefix + "*"), _like("bud_rodzaj", "mieszkalny")]),
-                BUD_PROPS, "budynki", _compact_bud, log=log)
-    return lok, bud
+def fetch_all(session, teryt_prefix="24", log=print, details=None):
+    """Pull both layers; failed WFS traversals use GUGiK's complete exports.
+
+    Never combine an incomplete WFS layer with an export. The caller still
+    validates both candidate layers against the previous snapshot before save.
+    """
+    try:
+        lok = fetch(session, "ms:lokale", _filter([_like("teryt", teryt_prefix + "*")]),
+                    LOK_PROPS, "lokale", _compact_lok, log=log)
+        bud = fetch(session, "ms:budynki",
+                    _filter([_like("teryt", teryt_prefix + "*"), _like("bud_rodzaj", "mieszkalny")]),
+                    BUD_PROPS, "budynki", _compact_bud, log=log)
+        if details is not None:
+            details.update(kind="wfs", url=WFS)
+        return lok, bud
+    except Exception as exc:
+        log(f"RCN: WFS pull rejected ({exc}); trying official provincial exports")
+        from .rcn_exports import fetch_exports
+        lok, bud, source = fetch_exports(session, teryt_prefix, log=log)
+        if details is not None:
+            details.update(source, wfs_error=str(exc))
+        return lok, bud
 
 
 # ---- snapshot cache ---------------------------------------------------------
@@ -389,13 +410,18 @@ def refresh(cache_path, session, teryt_prefix="24", today=None, force=False, log
         age = (dt.date.fromisoformat(today) - dt.date.fromisoformat(snap["fetched"])).days
         refresh.last_health.update(fetched=snap["fetched"],
                                    counts={k: len(snap[k]) for k in ("lokale", "budynki")})
+        if snap.get("source"):
+            refresh.last_health["source"] = snap["source"]
         if 0 <= age < MAX_AGE_DAYS and not force:
             refresh.last_health["status"] = "healthy"
             return snap
     try:
         log(f"RCN: pulling transactions for teryt {teryt_prefix}* (this takes minutes) ...")
-        lok, bud = fetch_all(session, teryt_prefix, log=log)
+        details = {}
+        lok, bud = fetch_all(session, teryt_prefix, log=log, details=details)
         candidate = {"fetched": today, "lokale": lok, "budynki": bud}
+        if details:
+            candidate["source"] = details
         validate_snapshot(candidate, previous=snap)
         # If the recovery download failed, its audited counts still prevent a
         # tiny but non-empty pull from silently replacing the poisoned cache.
@@ -405,7 +431,11 @@ def refresh(cache_path, session, teryt_prefix="24", today=None, force=False, log
                     raise ValueError(f"RCN: {layer} below recovery count floor")
         save_snapshot(cache_path, candidate)
         refresh.last_health.update(status="healthy", fetched=today,
-                                   counts={"lokale": len(lok), "budynki": len(bud)})
+                                   counts={"lokale": len(lok), "budynki": len(bud)},
+                                   error=None)
+        refresh.last_health.pop("source", None)
+        if details:
+            refresh.last_health["source"] = details
         log(f"RCN: snapshot saved ({len(lok)} lokale, {len(bud)} budynki)")
         return candidate
     except Exception as exc:

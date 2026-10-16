@@ -12,9 +12,9 @@ Run that command in the sprawdz-kw checkout. The new directory contains the
 importable JSON, a standalone filterable HTML list and a Markdown table.
 The user can also read that Markdown table in their private repository. GitHub
 shows HTML source; download/open `index.html` locally to use the standalone list.
-No data file is hosted with this public site. The original implementation’s
-follow-up Actions statuses and the current filter deployment handoff are
-recorded in [TODO.md](../TODO.md).
+No data file is hosted with this public site. The viewer and filter deployments
+are verified as of October 17;
+[TODO.md](../TODO.md) owns the current project handoff.
 
 ## Filter offers with a KW
 
@@ -96,8 +96,10 @@ import/filter/copy/clear, empty browser storage, refresh/clear, desktop/mobile
 rendering without overflow, and the companion local HTML list. Real records,
 raw pages and screenshots remain outside this public repository.
 
-Remote CI/deployment is pending after push; check the matching commit once next
-session. The authoritative remaining queue is [TODO.md](../TODO.md).
+The original viewer deployment passed in
+[37669419273](https://github.com/110kc3/rentgen-ofert/actions/runs/37669419273).
+On October 17, the published navigation and `kw.html` returned HTTP 200.
+The authoritative remaining queue is [TODO.md](../TODO.md).
 
 ### Listing-filter verification — 2026-10-08
 
@@ -117,5 +119,9 @@ standalone-viewer regression. Real records and screenshots remain local.
 
 The browser check exposed an existing nowrap history-filter group on a 390 px
 screen. Mobile groups now wrap; the toolbar scrolls normally so it cannot cover
-the cards. Desktop sticky controls are preserved. Remote deployment after this
-filter push is pending; the canonical handoff remains in TODO.md.
+the cards. Desktop sticky controls are preserved. The filter commit `f5b7830` passed
+[scrape 37736507948](https://github.com/110kc3/rentgen-ofert/actions/runs/37736507948)
+and [deploy 37736507945](https://github.com/110kc3/rentgen-ofert/actions/runs/37736507945).
+On October 17, published Śląskie HTML contained all three KW controls and the
+viewer link. This HTTP/content verification does not claim a fresh interactive
+browser audit. The canonical project handoff remains in TODO.md.
