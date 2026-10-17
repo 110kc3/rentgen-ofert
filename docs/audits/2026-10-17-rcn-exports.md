@@ -166,3 +166,29 @@ substituted by local verification. No expansion or P4 migration is selected.
 
 Audit files, exports and replay inputs remain in `/tmp/rentgen-rcn-20261017/`;
 they are not production inputs or committed artifacts.
+
+## Production follow-up — October 17
+
+Commit `6fbb266865cc58d82d934bdfd9206c07fe48525f` passed
+[scrape 38982350853](https://github.com/110kc3/rentgen-ofert/actions/runs/38982350853)
+and [deploy 38988650534](https://github.com/110kc3/rentgen-ofert/actions/runs/38988650534).
+The run passed all 476 tests and publication validation, then updated only
+`data-slaskie` to `09aa75c472428a8a9378a34b1f8d686284118b08`. Its 76-file tree
+passes the regional allowlist. Live metadata and export hashes agree with the
+fresh local source: 315,432 flat / 576,596 building deeds, healthy RCN, 3,850
+matched properties and 112 confirmed archive sales. All four contributing
+sources remain, critical photo deferrals/backlog and unresolved groups are zero,
+and the complete archive checkpoint remains dated October 15.
+
+Total runtime was **4,691.0 seconds / 78.2 minutes**, including 289.7 seconds
+of RCN refresh/matching: below the preferred 150-minute gate. The cache date is
+October 16 because the job began before midnight; the logs place retrieval
+after midnight October 17. This verifies Silesian repair/publication/runtime.
+
+Opolskie is still unchanged at `a50362a7f49edf54dc9bdadbef7c3c2eb4e55a0b` and
+retains degraded September 28 evidence. The read-only scheduler decision skips
+until **October 19 22:15:19 UTC**, subject to its hourly tick and scheduling/
+queue delays. No workflow was dispatched. Both-region recovery and the seven-day
+cohort window remain open; its repaired two-region clock has not started.
+The owner subsequently selected the measured index/archive P4 slice; see
+[the payload contract and measurements](../PAYLOAD.md) and the current queue.

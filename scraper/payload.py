@@ -1,21 +1,12 @@
-"""Split the dashboard payload: slim grid index + lazy per-listing detail shards.
+"""Compact grid indexes and separate lazy current/archive detail shards.
 
-`listings.json` grew to ~40 MB, fetched with caching disabled on every visit —
-59% of it (timeline, photo_urls, offers, cheapest) is only visible after a
-card is expanded. Instead the pipeline now writes, per region:
+Schema 3 writes index.json + archive.json column tables, URL-keyed d/ shards,
+and content-keyed a/ archive shards. Its manifest version covers both indexes
+and every detail byte. Passing archive=None retains the legacy schema-2 writer
+for compatibility fixtures. See docs/PAYLOAD.md for the wire contract.
 
-    manifest.json   {"v": <content-hash>, "shards": N, "count": …}  (~100 B,
-                    fetched fresh each visit; everything else is fetched with
-                    ?v=<hash> so browsers cache it until the data changes)
-    index.json      one slim record per listing — every field the grid needs
-                    to filter, sort and paint card faces (~1/3 the size)
-    d/NN.json       N shards of detail records keyed by listing URL — offers,
-                    timeline, archived photo links… fetched only when a card's
-                    expandable section is opened
-
-A listing's shard is FNV-1a(url) % N, computed identically in site/app.js —
-keep the two implementations in sync. (URLs are ASCII; a non-ASCII URL would
-mis-shard in JS and merely fail to load details, never corrupt anything.)
+FNV-1a(key) % N matches site/app.js. Listing URLs and archive keys are ASCII;
+non-ASCII listing URLs remain outside the existing shard-hash contract.
 """
 from __future__ import annotations
 
@@ -23,6 +14,7 @@ import hashlib
 import json
 import os
 import pathlib
+import re
 from itertools import chain
 
 SHARDS = 64
@@ -73,19 +65,59 @@ def _write(path: pathlib.Path, text: str):
     os.replace(tmp, path)
 
 
-def content_version(index_bytes, shard_bytes):
-    """Schema-2 version covers every payload byte in numeric shard order."""
-    digest = hashlib.sha256(b"rentgen-payload-v2\0")
+def pack_rows(records):
+    """Column names once, trimmed rows; null cells mean an absent field."""
+    counts = {}
+    for record in records:
+        for key in record:
+            counts[key] = counts.get(key, 0) + 1
+    fields = sorted(counts, key=lambda key: (-counts[key], key))
+    rows = []
+    for record in records:
+        row = [record.get(key) for key in fields]
+        while row and row[-1] is None:
+            row.pop()
+        rows.append(row)
+    return {"schema": 1, "fields": fields, "rows": rows}
+
+
+def unpack_rows(value):
+    """Read both legacy object arrays and schema-1 column tables."""
+    if isinstance(value, list):
+        if any(not isinstance(row, dict) for row in value):
+            raise ValueError("invalid listing rows")
+        return value
+    if not isinstance(value, dict) or type(value.get("schema")) is not int or value["schema"] != 1:
+        raise ValueError("unsupported column table")
+    fields, rows = value.get("fields"), value.get("rows")
+    if (not isinstance(fields, list) or not isinstance(rows, list)
+            or any(not isinstance(key, str) or not re.fullmatch(r"[a-z][a-z0-9_]*", key)
+                   or key in ("constructor", "prototype") for key in fields)
+            or len(set(fields)) != len(fields)):
+        raise ValueError("invalid column table fields")
+    result = []
+    for row in rows:
+        if not isinstance(row, list) or len(row) > len(fields):
+            raise ValueError("invalid column table row")
+        result.append({fields[i]: cell for i, cell in enumerate(row) if cell is not None})
+    return result
+
+
+def content_version(index_bytes, shard_bytes, *, schema=2):
+    """Length-prefixed bytes in the schema's documented payload order."""
+    digest = hashlib.sha256(f"rentgen-payload-v{schema}\0".encode())
     for part in chain((index_bytes,), shard_bytes):
         digest.update(len(part).to_bytes(8, "big"))
         digest.update(part)
     return digest.hexdigest()[:20]
 
 
-def build(listings, data_dir, shards: int = SHARDS, log=print) -> str:
+def build(listings, data_dir, shards: int = SHARDS, log=print, archive=None) -> str:
     """Write manifest.json + index.json + d/NN.json under ``data_dir``.
 
     Returns the content-version hash."""
+    if archive is not None:
+        return _build_compact(listings, archive, data_dir, shards, log)
     data_dir = pathlib.Path(data_dir)
     ddir = data_dir / "d"
     ddir.mkdir(parents=True, exist_ok=True)
@@ -112,4 +144,55 @@ def build(listings, data_dir, shards: int = SHARDS, log=print) -> str:
            json.dumps({"schema": 2, "v": v, "shards": shards, "count": len(index)}))
     log(f"  payload: index {len(index_json)/1e6:.1f} MB + {shards} detail shards "
         f"{total/1e6:.1f} MB (v={v})")
+    return v
+
+
+def _build_compact(listings, archive, data_dir, shards, log):
+    """Schema 3 includes both compact indexes and both lazy detail namespaces."""
+    root = pathlib.Path(data_dir)
+    root.mkdir(parents=True, exist_ok=True)
+    indexes = {"index.json": [], "archive.json": []}
+    maps = {"d": [dict() for _ in range(shards)], "a": [dict() for _ in range(shards)]}
+    identities = {}
+    for listing in listings:
+        indexes["index.json"].append(_slim(listing))
+        key = listing["url"]
+        maps["d"][shard_of(key, shards)][key] = {
+            k: listing[k] for k in DETAIL_FIELDS if k in listing}
+    for listing in archive:
+        # Old histories can share a portal URL. Never overwrite their different
+        # timelines, and also preserve byte-identical historical rows separately.
+        encoded = json.dumps(listing, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+        digest = hashlib.sha256(encoded.encode()).hexdigest()[:20]
+        occurrence = identities.get(digest, 0)
+        identities[digest] = occurrence + 1
+        key = digest if not occurrence else f"{digest}-{occurrence}"
+        slim = _slim(listing)
+        for field in ("delisted", "sold"):
+            if listing.get(field) is not None:
+                slim[field] = listing[field]
+        slim["detail_key"] = key
+        indexes["archive.json"].append(slim)
+        maps["a"][shard_of(key, shards)][key] = {
+            k: listing[k] for k in DETAIL_FIELDS if k in listing}
+    parts = []
+    for name, rows in indexes.items():
+        text = json.dumps(pack_rows(rows), ensure_ascii=False, separators=(",", ":"))
+        _write(root / name, text)
+        parts.append(root / name)
+    for namespace, shard_maps in maps.items():
+        directory = root / namespace
+        directory.mkdir(exist_ok=True)
+        expected = {f"{i:02d}.json" for i in range(shards)}
+        for old in directory.glob("*.json"):
+            if old.name not in expected:
+                old.unlink()
+        for i, shard in enumerate(shard_maps):
+            text = json.dumps(shard, ensure_ascii=False, separators=(",", ":"))
+            _write(directory / f"{i:02d}.json", text)
+            parts.append(directory / f"{i:02d}.json")
+    v = content_version(parts[0].read_bytes(), (path.read_bytes() for path in parts[1:]), schema=3)
+    _write(root / "manifest.json", json.dumps({"schema": 3, "v": v, "shards": shards,
+           "count": len(listings), "archive": {"count": len(archive), "shards": shards}}))
+    log(f"  payload: compact current/archive indexes + {shards} detail shards each (v={v})")
     return v

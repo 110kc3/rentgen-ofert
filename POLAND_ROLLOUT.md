@@ -7,8 +7,8 @@ The [development history](docs/HISTORY.md) preserves the former queue diary.
 ## Current status
 
 **Keep the current two-region cohort until RCN health and the seven-day gate
-are verified.** No additional region, concurrent matrix or P4 infrastructure
-change is selected. Śląskie runs twice daily; Opolskie's implemented serial
+are verified.** The owner selected the measured P4 index/archive slice; no additional region,
+concurrent matrix or new hosting infrastructure is selected. Śląskie runs twice daily; Opolskie's implemented serial
 72-hour scheduler is observed in production. Małopolskie stays disabled with
 its isolated data ref recoverable at `cba13c7`.
 
@@ -18,10 +18,10 @@ its isolated data ref recoverable at `cba13c7`.
 | Source continuity | Four contributing portals retained; OLX blocked, Otodom partial. Overall coverage remains partial. |
 | Archive maintenance | Both saved checkpoints complete: Śląskie Oct 15 / 49,854 records; Opolskie Oct 13 / 7,822. Each branch passes its exact 76-file allowlist. |
 | Ordinary runtime | Oct 16: Śląskie 78.1 min, Opolskie 11.0 min; zero critical photo deferrals/backlog. These runs failed fresh RCN pulls and do not establish repaired maintenance runtime. |
-| RCN health | Both Oct 16 publications degraded; retained snapshots Oct 3 / Sep 28. GML date/export fallback repair is locally implemented, pending production verification. |
+| RCN health | Śląskie repair scrape/deploy passed: healthy 315,432 / 576,596 deeds, 3,850 matches, 112 archive sales, 78.2-minute runtime. Opolskie awaits its next eligible automatic refresh on Oct 19. |
 | Cohort gate | Not accepted: automatic Opolskie runs Oct 10, 13 and 16 all retained degraded RCN evidence. Restart after repaired healthy publications in both regions; require seven healthy days / three automatic Opolskie cycles. |
 | KW UI | Existing viewer/filter scrape and Pages deployment verified. No further KW acquisition work selected here. |
-| Storage/capacity | P4 remains deferred; measure served bytes again after RCN recovery before selecting compaction or hosting work. |
+| Storage/capacity | P4 column indexes and lazy archive details implemented/measured locally; storage push pending production verification. Full payload shrinks 6.84%; nationwide hosting/rollback gate remains open. |
 
 The [October 17 audit](docs/audits/2026-10-17-rcn-exports.md) records immutable
 refs, Actions runs, archive state, the RCN failure and local repair checks.
@@ -988,9 +988,12 @@ unpublication retained both Śląskie and the recoverable pilot branch.
 
 ### P4 — move the data ceiling before region four
 
-- [ ] Compact the grid index (column header + row arrays or equivalent) and
-  measure browser parse time and bytes, not just gzip size.
-- [ ] Shard the archive and lazy-load details, as current listings already do.
+- [x] Implement column-table indexes and measure bytes plus Chromium parse/decode
+  and a cold network case (October 17). Warm decoding adds CPU cost; see
+  [the measured payload contract](docs/PAYLOAD.md). Production verification remains open.
+- [x] Implement separate lazy archive details, preserving duplicate-URL histories,
+  retry behavior, old regional formats and publication guards. Local real-data
+  roundtrip/browser checks pass; production verification remains open.
 - [ ] Prototype versioned object storage: immutable data objects, a tiny mutable
   manifest, CORS, cache headers, atomic publish and rollback to the previous
   manifest.

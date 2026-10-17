@@ -379,7 +379,8 @@ def run() -> int:
 
     # dashboard payload: slim index + lazy detail shards (replaces the old
     # monolithic listings.json — see scraper/payload.py)
-    payload.build(listings, DATA_DIR)
+    archive = history.build_archive(records)
+    payload.build(listings, DATA_DIR, archive=archive)
     (DATA_DIR / "listings.json").unlink(missing_ok=True)   # pre-split leftover
 
     if rcn_stats:
@@ -392,11 +393,6 @@ def run() -> int:
     mstats["rcn_health"] = rcn_health
     (DATA_DIR / "stats.json").write_text(
         json.dumps(mstats, ensure_ascii=False, indent=0), encoding="utf-8")
-
-    # Delisted/sold properties -> their own feed for the "Archiwum" view.
-    archive = history.build_archive(records)
-    (DATA_DIR / "archive.json").write_text(
-        json.dumps(archive, ensure_ascii=False, indent=1), encoding="utf-8")
 
     by_source = {}
     for x in raw:

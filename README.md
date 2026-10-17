@@ -11,19 +11,26 @@ Małopolskie is a completed, disabled pilot with its data branch retained.
 The KW viewer/filter deployments are verified, and both regional archive
 checkpoints are complete. Coverage remains partial; OLX's bounded probe is blocked.
 
-RCN refreshes in the October 16 publications are **degraded**, retaining the
-October 3 Śląskie and September 28 Opolskie snapshots. The repair supports
-nested GML deed dates and falls back from a rejected WFS pull to GUGiK's official
-provincial GeoParquet exports. Both complete export layers must pass schema,
-region, unique-ID, download/footer and previous-count checks before replacing
-the cache. Provenance records source URLs, file hashes, raw counts and the
-WFS failure. PyArrow reads only the transaction matching fields in batches;
-raw exports and geometry are temporary, never published. A snapshot's `fetched`
-date records retrieval, not the dates when every county updated its deeds.
-Production verification of this repair is **pending after push**.
+**RCN recovery is verified on Śląskie:** commit `6fbb266` passed its scrape and
+Pages deploy, publishing healthy export-backed evidence with 3,850 matched
+properties and 112 confirmed archive sales in 78.2 minutes. Opolskie still
+retains its older snapshot until its next automatic eligible refresh (October
+19, subject to scheduling delays). Strict WFS checks remain; rejected pulls use
+both official GUGiK provincial GeoParquet exports, validated before atomic cache
+replacement. Source URLs, file hashes and raw counts are retained. PyArrow reads
+only matching fields in batches; raw exports stay temporary. Retrieval date does
+not assert that every county's underlying register is current.
+
+**P4 storage slice implemented:** the next publications use column-table current
+and archive indexes, with archive timelines/photos loaded from separate shards
+only when expanded. Older regional datasets remain readable. Frozen-data bytes,
+Chromium timings, compatibility and retry checks are in the
+[payload guide](docs/PAYLOAD.md). Production verification of this storage push
+is pending. Nationwide storage/rollback acceptance remains open.
 
 The seven-healthy-day / three-Opolskie-cycle gate remains open because the
 last three automatic Opolskie refreshes all retained degraded RCN evidence.
+The repaired two-region observation has not started.
 [TODO.md](TODO.md) owns the next checks; the
 [October 17 audit](docs/audits/2026-10-17-rcn-exports.md) records frozen evidence
 and local verification. [POLAND_ROLLOUT.md](POLAND_ROLLOUT.md) owns future
@@ -228,7 +235,9 @@ production investigations. It is historical evidence, not the accepted queue.
   hide them entirely with *Rynek: Wtórny* when hunting resale flats.
 - **Archiwum view.** The dashboard's "Archiwum / sprzedane" filter shows
   properties that left the market, with their last asking price, the RCN sale
-  price when matched, and the full timeline (`site/data/<region>/archive.json`).
+  price when matched, and the full timeline. Schema 3 reads archive faces from
+  `site/data/<region>/archive.json` and expands timeline/photo details from `a/`
+  shards; legacy full archive arrays remain supported.
 - **De-duplicates the same property across portals, including at different
   prices.** Candidates must share an exact size (type + area, + rooms for
   flats); then perceptual photo hashes (dHash) confirm identity before merging.
@@ -521,9 +530,10 @@ site/
   app.js  stats.js  region-context.js regional data/navigation/state clients
   styles.css  stats.css              dashboard, picker, map and SVG chart styles
   region/<slug>/                    generated stable listing/statistics pages
-  data/<region>/  manifest.json (content version) + index.json (slim grid) +
-                  d/NN.json (lazy detail shards, see scraper/payload.py),
-                  history.json.gz, archive.json, meta.json, rcnstats.json,
+  data/<region>/  manifest.json (content version) + index.json (compact grid) +
+                  archive.json (compact archive faces), d/NN.json + a/NN.json
+                  (lazy current/archive details, see docs/PAYLOAD.md),
+                  history.json.gz, meta.json, rcnstats.json,
                   stats.json   (generated each run; on the `data-<region>` branch —
                   one directory per voivodeship)
   data/regions.json                  deploy-derived counts/freshness/health/size

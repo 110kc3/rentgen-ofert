@@ -157,13 +157,16 @@ async function boot() {
       .then((r) => (r.ok ? r.json() : null)).catch(() => null);
     state.v = mf && mf.v ? `?v=${mf.v}` : "";
     state.shards = (mf && mf.shards) || 64;
+    state.archiveInfo = mf && mf.archive;
+    if (mf && ![1, 2, 3].includes(mf.schema || 1)) throw new Error("Unsupported payload");
     const [listings, meta, rcnstats] = await Promise.all([
       mf ? fetch(`${DATA}/index.json${state.v}`).then((r) => r.json())
          : fetch(`${DATA}/listings.json`, { cache: "no-store" }).then((r) => r.json()),
       fetch(`${DATA}/meta.json`, { cache: "no-store" }).then((r) => r.json()).catch(() => null),
       fetch(`${DATA}/rcnstats.json`, { cache: "no-store" }).then((r) => r.json()).catch(() => null),
     ]);
-    state.all = Array.isArray(listings) ? listings : [];
+    state.all = RentgenPayload.decode(listings);
+    if (mf && state.all.length !== mf.count) throw new Error("Listing count mismatch");
     if (!mf) for (const l of state.all) l._full = true;   // pre-split monolith
     state.byUrl = new Map(state.all.filter((l) => l.url).map((l) => [l.url, l]));
     state.rcnstats = rcnstats && rcnstats.towns ? rcnstats : null;
@@ -865,12 +868,21 @@ async function loadArchive() {
   if (state.archive) return state.archive;
   if (!archiveRequest) {
     archiveRequest = (async () => {
-      const response = await fetch(`${DATA}/archive.json`, { cache: "no-store" });
+      const response = await fetch(`${DATA}/archive.json${state.archiveInfo ? state.v || "" : ""}`, { cache: "no-store" });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const rows = await response.json();
-      if (!Array.isArray(rows) || rows.some((l) => !l || typeof l !== "object" || Array.isArray(l)))
-        throw new Error("Invalid archive");
-      for (const l of rows) l._full = true;
+      const raw = await response.json();
+      const rows = RentgenPayload.decode(raw);
+      if (Array.isArray(raw)) {
+        if (state.archiveInfo) throw new Error("Archive publication mismatch");
+        for (const l of rows) l._full = true;
+      } else {
+        if (state.archiveInfo && rows.length !== state.archiveInfo.count)
+          throw new Error("Archive count mismatch");
+        const keys = new Set(rows.map(l => l.detail_key));
+        if (keys.size !== rows.length || rows.some(l => typeof l.detail_key !== "string" || !l.detail_key))
+          throw new Error("Invalid archive detail keys");
+      }
+      state.archiveByKey = new Map(rows.filter(l => l.detail_key).map(l => [l.detail_key, l]));
       state.archive = rows;
       return rows;
     })().finally(() => { archiveRequest = null; });
@@ -890,24 +902,27 @@ function shardOf(url, n) {
 
 const shardCache = new Map();
 async function loadDetails(l) {
-  if (l._full || !l.url) return l;
-  const s = shardOf(l.url, state.shards || 64);
-  if (!shardCache.has(s)) {
-    const request = fetch(`${DATA}/d/${String(s).padStart(2, "0")}.json${state.v || ""}`)
+  const key = l.detail_key || l.url;
+  if (l._full || !key) return l;
+  const namespace = l.detail_key ? "a" : "d";
+  const n = l.detail_key ? (state.archiveInfo?.shards || state.shards || 64) : state.shards || 64;
+  const s = shardOf(key, n), cacheKey = `${namespace}/${s}`;
+  if (!shardCache.has(cacheKey)) {
+    const request = fetch(`${DATA}/${namespace}/${String(s).padStart(2, "0")}.json${state.v || ""}`)
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
       }).catch((error) => {
-        if (shardCache.get(s) === request) shardCache.delete(s);
+        if (shardCache.get(cacheKey) === request) shardCache.delete(cacheKey);
         throw error;
       });
-    shardCache.set(s, request);
+    shardCache.set(cacheKey, request);
   }
-  const request = shardCache.get(s);
+  const request = shardCache.get(cacheKey);
   const shard = await request;
-  const detail = shard && !Array.isArray(shard) && shard[l.url];
+  const detail = shard && !Array.isArray(shard) && shard[key];
   if (!detail || typeof detail !== "object" || Array.isArray(detail)) {
-    if (shardCache.get(s) === request) shardCache.delete(s);
+    if (shardCache.get(cacheKey) === request) shardCache.delete(cacheKey);
     throw new Error("Missing listing details");
   }
   Object.assign(l, detail);
@@ -917,7 +932,9 @@ async function loadDetails(l) {
 
 // Populate every expanded section from one successful detail load.
 async function fillCardDetails(cardEl) {
-  const l = state.byUrl && state.byUrl.get(cardEl.dataset.href);
+  const l = cardEl.dataset.detail
+    ? state.archiveByKey && state.archiveByKey.get(cardEl.dataset.detail)
+    : state.byUrl && state.byUrl.get(cardEl.dataset.href);
   if (!l || l._full) return;
   let message = cardEl.querySelector(".detail-load-status");
   if (!message) {
@@ -950,7 +967,7 @@ async function fillCardDetails(cardEl) {
 function wireLazyDetails() {
   $("#grid").addEventListener("toggle", (e) => {
     if (!e.target.open) return;
-    const cardEl = e.target.closest(".card[data-href]");
+    const cardEl = e.target.closest(".card[data-detail], .card[data-href]");
     if (cardEl) fillCardDetails(cardEl);
   }, true);
 }
@@ -1541,7 +1558,7 @@ function card(l) {
   const owner = l.is_private === true ? "prywatne" : l.is_private === false ? "biuro" : "";
   const badges = (l.sources || [l.source]).map((s) => `<span class="badge ${s}">${label(s)}</span>`).join("");
   const gone = !!l.delisted;
-  return `<div class="card${gone ? " gone" : ""}" ${l.url ? `data-href="${escapeHtml(l.url)}"` : ""}>
+  return `<div class="card${gone ? " gone" : ""}" ${l.url ? `data-href="${escapeHtml(l.url)}"` : ""} ${l.detail_key ? `data-detail="${escapeHtml(l.detail_key)}"` : ""}>
     <div class="thumb">${img}
       <div class="badges">${badges}</div>
       ${owner ? `<span class="tag-priv">${owner}</span>` : ""}

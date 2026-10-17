@@ -5,11 +5,12 @@ Updated 2026-10-17. This file owns accepted work and the next-session handoff.
 ideas. [POLAND_ROLLOUT.md](POLAND_ROLLOUT.md) owns expansion and capacity gates;
 its historical task lists do not authorize additional work.
 
-## Selected batch — RCN repair, documentation and stability assessment
+## Completed repair and selected stability/storage follow-up
 
-The owner selected review items 1, 2 and 3 on October 17 and authorized push.
-No additional region, concurrent matrix, P4 hosting migration, automatic KW
-acquisition, historical identity rewrite or manual workflow dispatch is selected.
+The owner selected review items 1–3, then continued items 3 and 4: stability
+verification and the measured P4 index/archive slice, with push authorized.
+No additional region, concurrent matrix, new hosting infrastructure, automatic
+KW acquisition, historical identity rewrite or manual workflow dispatch is selected.
 
 1. **RCN ingestion repair:** support GML temporal deed dates and use GUGiK's
    official provincial GeoParquet exports when a complete WFS pull fails.
@@ -30,35 +31,55 @@ acquisition, historical identity rewrite or manual workflow dispatch is selected
    Restart the observation only after the repaired code publishes a fresh,
    healthy snapshot in both regions. Time and successful CI alone are insufficient.
 
-## Verified production baseline — before this push
+## Verified RCN production recovery — October 17
 
-Main: `f5b7830df9d7f1cc7e79561608e0e6caf567d660`. Both regional publications
-are dated October 16; no production data branch was changed during this audit.
+Repair commit `6fbb266` passed [scrape 38982350853](https://github.com/110kc3/rentgen-ofert/actions/runs/38982350853)
+and [deploy 38988650534](https://github.com/110kc3/rentgen-ofert/actions/runs/38988650534).
+All 476 tests, payload/source/RCN validation and isolated branch publication
+passed. Śląskie ref `09aa75c472428a8a9378a34b1f8d686284118b08` is served live:
+31,063 cards / 52,198 raw offers, healthy export-backed RCN with 315,432 flat /
+576,596 building deeds, 3,850 matches, 112 confirmed archive sales and
+**78.2-minute total runtime**. Snapshot date is October 16, the job's start date;
+retrieval completed after midnight. Source hashes agree with the local audit.
+Archive checkpoint remains complete (Oct 15 / 49,854 records), with zero critical
+photo deferrals/backlog and no unresolved groups. Its 76-file branch is isolated.
 
-| Evidence | Śląskie | Opolskie |
-|---|---|---|
-| Frozen data ref | `7e2afd37c64336b1bf1d397ff300aebb2773affa` | `a50362a7f49edf54dc9bdadbef7c3c2eb4e55a0b` |
-| Cards / raw offers | 31,042 / 52,187 | 3,665 / 5,441 |
-| Scraper runtime | 78.1 min | 11.0 min |
-| RCN status / retained snapshot | degraded / Oct 3 | degraded / Sep 28 |
-| Archive checkpoint | complete, Oct 15, 49,854 records | complete, Oct 13, 7,822 records |
-| Critical photo deferrals / backlog | 0 / 0 | 0 / 0 |
+Opolskie remains unchanged at `a50362a7f49edf54dc9bdadbef7c3c2eb4e55a0b`:
+3,665 cards, degraded September 28 RCN and complete October 13 archives.
+Its next eligibility is **October 19 22:15:19 UTC**, subject to the hourly tick,
+queue and schedule delays. The repaired two-region stability clock has **not
+started**. Do not dispatch a workflow to accelerate it. Małopolskie remains
+disabled and recoverable at `cba13c7`.
 
-Both complete archive checkpoints have no failed/capped partitions or unfinished
-cursor queue. Each frozen branch has exactly 76 files, all passing its regional
-allowlist. Małopolskie remains disabled and recoverable at `cba13c7`.
-The KW filter's [scrape](https://github.com/110kc3/rentgen-ofert/actions/runs/37736507948)
-and [deployment](https://github.com/110kc3/rentgen-ofert/actions/runs/37736507945)
-succeeded; the live regional controls and standalone viewer return HTTP 200.
-KW acquisition/current-register verification remains in the private project.
+## P4 index/archive slice — implemented locally, publication pending
+
+The next automatic publications use schema 3: column-table current/archive
+faces, existing lazy current detail shards and new lazy archive detail shards.
+All filters, sold banners and per-record timelines are retained. Distinct archive
+histories sharing a portal URL get distinct detail keys. The reader supports
+old regional schemas during serial migration. Version/hash, file/count/key and
+deployment-completeness guards cover both detail namespaces; errors remain
+retryable. No hosting migration is included.
+
+On the frozen Silesian payload: raw current index 24.30 → 18.61 MB, archive entry
+17.85 → 1.30 MB, full payload 124.69 → 116.17 MB (6.84% smaller). Browser cold
+fetch/parse/decode improved slightly in the measured 8 Mbps/80 ms case, while
+warm decode costs about 27 ms more. This does not meet nationwide hosting
+capacity/rollback acceptance. [Payload contract and measurements](docs/PAYLOAD.md)
+record the protocol, browser checks and remaining P4 gates.
+Local verification: **492 tests**, 11 real Chromium checks, exact current-face
+and archive-detail roundtrips, and full frozen-payload/source/RCN validation
+(with the audit-only streaming history syntax check documented in the guide).
 
 ## Next accepted checks — after this push
 
-- [ ] Check this push's completed scrape and deployment once next session in
+- [x] Check repair commit `6fbb266` scrape/deploy and live Silesian RCN recovery.
+- [ ] Check this storage push's completed scrape and deployment once next session in
   [Actions](https://github.com/110kc3/rentgen-ofert/actions?query=branch%3Amain).
   Require the offline suite, payload/source/RCN validators and regional staging
-  to pass. Confirm the live RCN date, health and source provenance agree with
-  the new cache. The push-triggered refresh is Śląskie; Opolskie stays on its
+  to pass. Confirm schema 3 and both index/detail namespaces agree with the manifest,
+  including an archive-detail retry and an older regional payload. Retain healthy
+  RCN provenance and continuity. The push-triggered refresh is Śląskie; Opolskie stays on its
   existing automatic 72-hour cadence. Do not dispatch a run to accelerate it.
 - [ ] Confirm both regions publish fresh healthy RCN snapshots under the repair.
   Reconcile changed matches, benchmarks and derived sale claims against the
@@ -72,6 +93,7 @@ KW acquisition/current-register verification remains in the private project.
   must stay separate; it is not permission to merge without evidence. Investigate
   failures/missed cycles and restart the observation after recovery.
 
-**Push verification is pending.** Do not wait/poll after push. There are no
-owner-only blockers. Expansion and P4 remain deferred until their gates and
-separate selection; completion of this batch does not authorize them.
+**Storage push verification is pending; RCN repair is production-verified for Śląskie.**
+Do not wait/poll after push. There are no owner-only blockers. Expansion and P4
+hosting/rollback work remain gated and require separate selection; the measured
+index/archive slice does not accept nationwide capacity.

@@ -100,6 +100,16 @@ function publication(region) {
   if (missing.length) {
     throw new Error(`incomplete data for ${region.slug}: missing ${missing.join(', ')}`);
   }
+  const payload = readJson(join(directory, 'manifest.json'));
+  if (payload.schema === 3) {
+    for (const [namespace, shards] of [['d', payload.shards], ['a', payload.archive?.shards]]) {
+      if (!Number.isInteger(shards) || shards <= 0) throw new Error(`invalid ${namespace} shard count for ${region.slug}`);
+      for (let i = 0; i < shards; i++) {
+        const path = join(directory, namespace, `${String(i).padStart(2, '0')}.json`);
+        if (!existsSync(path)) throw new Error(`incomplete data for ${region.slug}: missing ${namespace} shard ${i}`);
+      }
+    }
+  }
   const meta = readJson(metaPath);
   const sources = Object.entries(meta.by_source || {})
     .filter(([, count]) => Number(count) > 0)
@@ -386,6 +396,7 @@ const llmsRegions = published.length ? published.map((region) => {
   try {
     const manifest = readJson(join(region._directory, 'manifest.json'));
     shards = `\n  - ${dataUrl}/d/00.json … d/${String(manifest.shards - 1).padStart(2, '0')}.json — detail shards (${manifest.shards})`;
+    if (manifest.archive) shards += `\n  - ${dataUrl}/a/00.json … a/${String(manifest.archive.shards - 1).padStart(2, '0')}.json — archive detail shards keyed by detail_key (${manifest.archive.shards})`;
   } catch { /* a legacy payload may have no manifest */ }
   return `### ${region.label}
 
@@ -395,9 +406,9 @@ const llmsRegions = published.length ? published.map((region) => {
   - ${dataUrl}/meta.json — counts, freshness, runtime and source health
   - ${dataUrl}/stats.json — market series
   - ${dataUrl}/rcnstats.json — RCN transaction benchmarks
-  - ${dataUrl}/index.json — slim current-listing index
+  - ${dataUrl}/index.json — current-listing index; schema 3 uses a column table (fields + rows), older datasets use object arrays
   - ${dataUrl}/manifest.json — data version and shard count${shards}
-  - ${dataUrl}/archive.json — delisted offers`;
+  - ${dataUrl}/archive.json — archive faces; schema 3 expands timeline/photos from a/ shards on demand`;
 }).join('\n\n') : 'No regional dataset is currently published.';
 
 writeFileSync(join(SITE, 'llms.txt'), `# Rentgen ofert — Poland regional property data

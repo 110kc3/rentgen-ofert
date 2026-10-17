@@ -70,6 +70,81 @@ def _meta(root):
     return json.loads((root / "meta.json").read_text(encoding="utf-8"))
 
 
+def _compact_dataset(root):
+    _dataset(root)
+    current = json.loads((root / "index.json").read_text())
+    details = {}
+    for path in (root / "d").glob("*.json"):
+        details.update(json.loads(path.read_text()))
+    current = [row | details.get(row["url"], {}) for row in current]
+    archive = [{"url": "same", "type": "flat", "delisted": "2026-08-01",
+                "timeline": [{"kind": "listed", "date": date}]} for date in ["2026-01-01", "2026-02-01"]]
+    payload.build(current, root, archive=archive, shards=4, log=lambda *a: None)
+    meta = _meta(root)
+    meta.update(archive=2, sold_confirmed=0)
+    (root / "meta.json").write_text(json.dumps(meta))
+    return root
+
+
+def test_validator_accepts_compact_current_and_lazy_archives(tmp_path):
+    result = validate_data.validate_data_dir(_compact_dataset(tmp_path))
+    assert result["count"] == 2 and result["detail_records"] == 2
+
+
+def test_validator_rejects_partial_archive_publication(tmp_path):
+    root = _compact_dataset(tmp_path)
+    (root / "a/00.json").unlink()
+    with pytest.raises(validate_data.DataValidationError, match="archive detail shard"):
+        validate_data.validate_data_dir(root)
+
+
+def test_archive_detail_only_change_invalidates_manifest(tmp_path):
+    root = _compact_dataset(tmp_path)
+    for path in sorted((root / "a").glob("*.json")):
+        shard = json.loads(path.read_text())
+        if shard:
+            next(iter(shard.values()))["timeline"][0]["date"] = "2026-03-01"
+            path.write_text(json.dumps(shard, separators=(",", ":")))
+            break
+    with pytest.raises(validate_data.DataValidationError, match="payload hash"):
+        validate_data.validate_data_dir(root)
+
+
+def test_archive_duplicate_detail_key_is_rejected(tmp_path):
+    root = _compact_dataset(tmp_path)
+    path = root / "archive.json"
+    rows = payload.unpack_rows(json.loads(path.read_text()))
+    rows[1]["detail_key"] = rows[0]["detail_key"]
+    path.write_text(json.dumps(payload.pack_rows(rows)))
+    with pytest.raises(validate_data.DataValidationError, match="duplicate archive detail key"):
+        validate_data.validate_data_dir(root)
+
+
+def test_archive_missing_record_is_rejected(tmp_path):
+    root = _compact_dataset(tmp_path)
+    for path in sorted((root / "a").glob("*.json")):
+        shard = json.loads(path.read_text())
+        if shard:
+            shard.pop(next(iter(shard)))
+            path.write_text(json.dumps(shard))
+            break
+    with pytest.raises(validate_data.DataValidationError, match="missing archive detail record"):
+        validate_data.validate_data_dir(root)
+
+
+@pytest.mark.parametrize("field", ["timeline", "photo_urls"])
+def test_malformed_archive_detail_fields_are_rejected(tmp_path, field):
+    root = _compact_dataset(tmp_path)
+    for path in sorted((root / "a").glob("*.json")):
+        shard = json.loads(path.read_text())
+        if shard:
+            next(iter(shard.values()))[field] = 42
+            path.write_text(json.dumps(shard))
+            break
+    with pytest.raises(validate_data.DataValidationError, match="must be an array"):
+        validate_data.validate_data_dir(root)
+
+
 def test_generated_dataset_validator_checks_every_payload_part(tmp_path):
     root = _dataset(tmp_path)
     summary = validate_data.validate_data_dir(root)

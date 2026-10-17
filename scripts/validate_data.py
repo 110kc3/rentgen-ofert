@@ -229,10 +229,21 @@ def validate_data_dir(data_dir, *, previous_meta=None,
     index = parsed[index_path]
     meta = parsed[meta_path]
     _require(isinstance(manifest, dict), "manifest.json must contain an object")
-    _require(isinstance(index, list), "index.json must contain an array")
+    schema = manifest.get("schema", 1)
+    _require(type(schema) is int and schema in (1, 2, 3), f"unsupported manifest schema: {schema}")
+    if schema == 3:
+        _require(isinstance(index, dict) and isinstance(parsed[archive_path], dict),
+                 "schema 3 indexes must be column tables")
+        try:
+            index = payload.unpack_rows(index)
+            archive = payload.unpack_rows(parsed[archive_path])
+        except ValueError as exc:
+            raise DataValidationError(str(exc)) from exc
+    else:
+        _require(isinstance(index, list), "index.json must contain an array")
+        _require(isinstance(parsed[archive_path], list), "archive.json must contain an array")
+        archive = parsed[archive_path]
     _require(isinstance(meta, dict), "meta.json must contain an object")
-    _require(isinstance(parsed[archive_path], list),
-             "archive.json must contain an array")
     _require(isinstance(parsed[stats_path], dict),
              "stats.json must contain an object")
 
@@ -285,15 +296,54 @@ def validate_data_dir(data_dir, *, previous_meta=None,
 
     # Old regional branches remain readable during the serial rollout; new
     # publications include detail bytes in the version, not just the index.
-    schema = manifest.get("schema", 1)
-    _require(schema in (1, 2), f"unsupported manifest schema: {schema}")
+    archive_shards = set()
+    if schema == 3:
+        _require(detail_urls == index_urls, "missing current detail record(s)")
+        info = manifest.get("archive")
+        _require(isinstance(info, dict), "manifest.archive must be an object")
+        n = info.get("shards")
+        _require(type(n) is int and n > 0, "manifest.archive.shards must be positive")
+        _require(type(info.get("count")) is int and info["count"] == len(archive),
+                 "manifest archive count mismatch")
+        _require(meta.get("archive") == len(archive), "meta archive count mismatch")
+        _require(meta.get("sold_confirmed") == sum(bool(row.get("sold")) for row in archive),
+                 "meta sold count mismatch")
+        keys = [row.get("detail_key") for row in archive]
+        _require(all(isinstance(key, str) and key for key in keys), "missing archive detail key")
+        _require(len(set(keys)) == len(keys), "duplicate archive detail key")
+        indexed = {row["detail_key"]: row for row in archive}
+        archive_shards = {root / "a" / f"{i:02d}.json" for i in range(n)}
+        actual = set((root / "a").glob("*.json"))
+        _require(actual == archive_shards, "missing or unexpected archive detail shard(s)")
+        seen = set()
+        for path in sorted(archive_shards):
+            shard = parsed[path]
+            _require(isinstance(shard, dict), "archive detail shard must be an object")
+            for key, detail in shard.items():
+                _require(key in indexed and key not in seen, "unexpected archive detail key")
+                _require(payload.shard_of(key, n) == int(path.stem), "archive detail in wrong shard")
+                _require(isinstance(detail, dict), "archive detail must be an object")
+                for field, summary_field in (("timeline", "tl_n"), ("photo_urls", "ph_n")):
+                    values = detail.get(field)
+                    _require(values is None or isinstance(values, list),
+                             f"archive {field} must be an array")
+                    _require(len(values or []) == indexed[key].get(summary_field, 0),
+                             "archive detail summary mismatch")
+                seen.add(key)
+        _require(seen == set(keys), "missing archive detail record(s)")
     index_bytes = index_path.read_bytes()
-    expected_version = (
-        payload.content_version(index_bytes,
-                                ((root / "d" / f"{i:02d}.json").read_bytes()
-                                 for i in range(shards)))
-        if schema == 2 else hashlib.sha1(index_bytes).hexdigest()[:10]
-    )
+    if schema == 3:
+        parts = [archive_path, *(root / "d" / f"{i:02d}.json" for i in range(shards)),
+                 *(root / "a" / f"{i:02d}.json" for i in range(n))]
+        expected_version = payload.content_version(index_bytes,
+                            (path.read_bytes() for path in parts), schema=3)
+    else:
+        expected_version = (
+            payload.content_version(index_bytes,
+                                    ((root / "d" / f"{i:02d}.json").read_bytes()
+                                     for i in range(shards)))
+            if schema == 2 else hashlib.sha1(index_bytes).hexdigest()[:10]
+        )
     _require(version == expected_version,
              f"manifest version {version} != payload hash {expected_version}")
 

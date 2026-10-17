@@ -2,8 +2,49 @@
 import json
 import shutil
 import subprocess
+import pytest
 
 from scraper import payload
+
+
+def test_column_table_roundtrip_preserves_false_zero_and_missing_fields():
+    rows = [{"url": "a", "price": 0, "is_private": False}, {"url": "b", "sales": []}]
+    assert payload.unpack_rows(payload.pack_rows(rows)) == rows
+    assert payload.unpack_rows(rows) == rows
+
+
+@pytest.mark.parametrize("value", [
+    {"schema": 2, "fields": [], "rows": []},
+    {"schema": 1, "fields": ["url", "url"], "rows": []},
+    {"schema": 1, "fields": ["__proto__"], "rows": []},
+    {"schema": 1, "fields": ["url"], "rows": [["a", "extra"]]},
+    {"schema": 1, "fields": ["url"], "rows": [None]}, [None],
+])
+def test_invalid_column_tables_fail_closed(value):
+    with pytest.raises(ValueError):
+        payload.unpack_rows(value)
+
+
+def test_compact_archive_preserves_histories_with_the_same_url(tmp_path):
+    first = _listing(delisted="2026-10-01", sold={"price": 350000, "date": "2026-10-02"})
+    second = dict(first, timeline=[{"kind": "listed", "date": "2026-01-01"}])
+    v = payload.build([_listing(url="current")], tmp_path, shards=4,
+                      archive=[first, second, second], log=lambda *a: None)
+    manifest = json.loads((tmp_path / "manifest.json").read_text())
+    assert manifest == {"schema": 3, "v": v, "count": 1, "shards": 4,
+                        "archive": {"count": 3, "shards": 4}}
+    archived = payload.unpack_rows(json.loads((tmp_path / "archive.json").read_text()))
+    assert len({row["detail_key"] for row in archived}) == 3
+    assert len({row["url"] for row in archived}) == 1
+    for row, original in zip(archived, [first, second, second]):
+        key = row["detail_key"]
+        shard = json.loads((tmp_path / "a" / f"{payload.shard_of(key, 4):02d}.json").read_text())
+        assert "timeline" not in row and row["tl_n"] == len(original["timeline"])
+        assert shard[key]["timeline"] == original["timeline"]
+        assert row["sold"] == original["sold"]
+    second["street"] = "Changed"
+    assert payload.build([_listing(url="current")], tmp_path, shards=4,
+                         archive=[first, second, second], log=lambda *a: None) != v
 
 
 def _listing(url="https://otodom.pl/pl/oferta/x-1", **kw):

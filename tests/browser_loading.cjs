@@ -8,12 +8,14 @@ const loaders = source.slice(source.indexOf('let archiveRequest ='), source.inde
 const rendering = source.slice(source.indexOf('function render()'), source.indexOf('function priceLabel('));
 const settle = () => new Promise(resolve => setImmediate(resolve));
 const ok = value => ({ ok: true, json: async () => value });
+const columns = (fields, rows) => ({ schema: 1, fields, rows });
 
 function fixture(fetch) {
   const elements = new Map();
   const element = () => ({ innerHTML: '', textContent: '', onclick: null });
   const context = vm.createContext({
-    fetch, DATA: '/data/slaskie', state: { archive: null, shards: 1, v: '?v=current', all: [] },
+    fetch, RentgenPayload: require('../site/payload.js'),
+    DATA: '/data/slaskie', state: { archive: null, shards: 1, v: '?v=current', all: [] },
     archiveMode: true,
     $: selector => { if (!elements.has(selector)) elements.set(selector, element()); return elements.get(selector); },
     inArchive: () => context.archiveMode,
@@ -25,6 +27,62 @@ function fixture(fetch) {
   vm.runInContext('let view = [], rendered = 0, moreObserver = null;\n' + loaders + rendering, context);
   return { context, elements };
 }
+
+test('column decoding preserves false/zero and rejects malformed or unsafe fields', () => {
+  const { decode } = require('../site/payload.js');
+  assert.deepEqual(decode(columns(['url', 'price', 'is_private'], [['a', 0, false], ['b']])),
+    [{ url: 'a', price: 0, is_private: false }, { url: 'b' }]);
+  for (const fields of [['url', 'url'], ['__proto__'], ['constructor']])
+    assert.throws(() => decode(columns(fields, [])));
+  assert.throws(() => decode(columns(['url'], [['a', 'extra']])));
+  assert.throws(() => decode({ schema: 9, fields: [], rows: [] }));
+});
+
+test('compact archives load faces only and keep equal-URL timelines separate', async () => {
+  const urls = [];
+  const { context: c } = fixture(async url => {
+    urls.push(url);
+    if (url.includes('/archive.json')) return ok(columns(['url', 'detail_key', 'tl_n'],
+      [['shared-url', 'first', 1], ['shared-url', 'second', 1]]));
+    return ok({ first: { timeline: [{ date: '2026-01-01' }] },
+                second: { timeline: [{ date: '2026-02-01' }] } });
+  });
+  c.state.archiveInfo = { count: 2, shards: 1 };
+  const rows = await c.loadArchive();
+  assert.equal(urls.length, 1);
+  assert.equal(rows[0].timeline, undefined);
+  await Promise.all(rows.map(row => c.loadDetails(row)));
+  assert.equal(urls.length, 2);
+  assert.ok(urls[1].includes('/a/00.json'));
+  assert.equal(rows[0].timeline[0].date, '2026-01-01');
+  assert.equal(rows[1].timeline[0].date, '2026-02-01');
+});
+
+test('archive and current detail caches are isolated and archive failures retry', async () => {
+  let failures = 1;
+  const urls = [];
+  const { context: c } = fixture(async url => {
+    urls.push(url);
+    if (url.includes('/a/') && failures--) throw Error('offline');
+    return ok(url.includes('/a/') ? { archived: { timeline: ['archive'] } }
+      : { same: { timeline: ['current'] } });
+  });
+  const current = { url: 'same' }, archived = { url: 'same', detail_key: 'archived' };
+  await c.loadDetails(current);
+  await assert.rejects(c.loadDetails(archived));
+  assert.equal(archived._full, undefined);
+  await c.loadDetails(archived);
+  assert.equal(archived.timeline[0], 'archive');
+  assert.equal(current.timeline[0], 'current');
+  assert.equal(urls.length, 3);
+});
+
+test('compact archive count errors leave the old view retryable', async () => {
+  const { context: c } = fixture(async () => ok(columns(['detail_key'], [['a']])));
+  c.state.archiveInfo = { count: 2, shards: 1 };
+  await assert.rejects(c.loadArchive(), /count mismatch/);
+  assert.equal(c.state.archive, null);
+});
 
 for (const [name, fail] of [
   ['network', () => Promise.reject(new Error('offline'))],

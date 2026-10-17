@@ -102,6 +102,7 @@ def test_generates_picker_catalog_stable_pages_and_discovery(tmp_path):
     regional_page = (tmp_path / "site/region/slaskie/index.html").read_text(encoding="utf-8")
     assert 'id="kw-only"' in regional_page
     assert regional_page.index('src="kw.js') < regional_page.index('src="kw-links.js') < regional_page.index('src="app.js')
+    assert regional_page.index('src="payload.js') < regional_page.index('src="app.js')
 
     listing = (tmp_path / "site/region/slaskie/index.html").read_text(
         encoding="utf-8")
@@ -181,3 +182,23 @@ def test_rejects_nonempty_regional_tree_without_publication_marker(tmp_path):
 
     with pytest.raises(subprocess.CalledProcessError):
         _run(tmp_path)
+
+
+def test_compact_publication_requires_complete_archive_shards(tmp_path):
+    for relative in ("site/regions.json", "site/index.html",
+                     "scripts/templates/listings.html", "scripts/templates/stats.html"):
+        _copy(tmp_path, relative)
+    _dataset(tmp_path, "slaskie", 2, "2026-10-17T00:00:00Z", "partial")
+    directory = tmp_path / "site/data/slaskie"
+    (directory / "manifest.json").write_text(json.dumps({"schema": 3, "shards": 2,
+                                                       "archive": {"count": 0, "shards": 2}}))
+    (directory / "a").mkdir()
+    for name in ["00.json", "01.json"]:
+        (directory / "a" / name).write_text("{}")
+    _run(tmp_path)
+    discovery = (tmp_path / "site/llms.txt").read_text()
+    assert "/a/00.json" in discovery and "column table" in discovery
+    (directory / "a/01.json").unlink()
+    with pytest.raises(subprocess.CalledProcessError) as exc:
+        _run(tmp_path)
+    assert "missing a shard 1" in exc.value.stderr
