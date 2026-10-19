@@ -39,6 +39,18 @@ test('relative and loopback URLs support a local two-origin rehearsal', async ()
   }
 });
 
+test('deployment catalogs pin verified versions without following the mutable pointer', async () => {
+  const urls = [];
+  const entry = { slug: 'slaskie', storage: {
+    pointer_url: 'https://objects.example/slaskie/current.json', version,
+  } };
+  const result = await resolve(entry, base, async url => { urls.push(url); return ok(manifest); });
+  assert.equal(result.data, `https://objects.example/slaskie/versions/${version}`);
+  assert.deepEqual(urls, [`${result.data}/manifest.json`]);
+  for (const invalid of [null, '', '../escape', 123, [version]])
+    await assert.rejects(resolve({ ...entry, storage: { ...entry.storage, version: invalid } }, base), /version/);
+});
+
 test('configured storage errors fail closed instead of falling back to another snapshot', async () => {
   const entry = { slug: 'slaskie', storage: { pointer_url: 'https://objects.example/slaskie/current.json' } };
   for (const pointer of [{ schema: 2, version }, { schema: 1, version: '../escape' }, {}, null])

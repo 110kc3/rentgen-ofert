@@ -108,6 +108,17 @@ def activate(store, slug, version):
         return report
 
 
+def public_files(source):
+    """Explicit reader inputs, excluding lifecycle history and private caches."""
+    source = pathlib.Path(source)
+    paths = [source / name for name in
+             ("manifest.json", "index.json", "archive.json", "meta.json", "stats.json", "rcnstats.json")]
+    paths += sorted((source / "d").glob("*.json"))
+    if json.loads((source / "manifest.json").read_bytes()).get("schema") == 3:
+        paths += sorted((source / "a").glob("*.json"))
+    return paths
+
+
 def publish(source, store, slug, *, interrupt_after=None):
     """Stage a public tree, validate it, seal its version, then switch current.
 
@@ -121,12 +132,7 @@ def publish(source, store, slug, *, interrupt_after=None):
         versions.mkdir(exist_ok=True)
         stage = pathlib.Path(tempfile.mkdtemp(prefix=".upload-", dir=root))
         try:
-            paths = [source / name for name in
-                     ("manifest.json", "index.json", "archive.json", "meta.json", "stats.json", "rcnstats.json")]
-            paths += sorted((source / "d").glob("*.json"))
-            manifest = json.loads((source / "manifest.json").read_bytes())
-            if manifest.get("schema") == 3:
-                paths += sorted((source / "a").glob("*.json"))
+            paths = public_files(source)
             files = {}
             for number, path in enumerate(paths, 1):
                 name = path.relative_to(source).as_posix()

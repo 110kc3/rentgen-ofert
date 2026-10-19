@@ -1,7 +1,7 @@
 # Local versioned-storage and rollback prototype
 
 Implemented and rehearsed October 19, 2026. This is a local filesystem/HTTP
-prototype, with an optional reader in the static UI. No regional configuration
+prototype and deployment artifact dry-run, with an optional reader in the static UI. No regional configuration
 uses it in production, no workflow uploads to it, and no service was provisioned.
 The existing Pages data branches/publication remain in use.
 
@@ -31,6 +31,10 @@ Its sibling directory `versions/<version>/` contains the existing regional
 manifest, current/archive indexes, `d/` and (schema 3) `a/` details, metadata,
 statistics and RCN benchmarks. All these requests use the resolved version;
 changing the pointer cannot change an open tab's subsequent archive requests.
+Dry-run catalogs additionally carry `storage.version`, sealing even new page
+loads to the verified version until the next complete artifact is installed.
+Such readers skip the mutable pointer; pointer-only configuration remains
+supported for the original local prototype.
 The existing payload manifest/hash remains unchanged. A second, full SHA-256
 version covers a canonical `release.json` inventory, whose entries contain the
 length and SHA-256 of **every** public file, including metadata/statistics.
@@ -125,6 +129,75 @@ forecast, service quota, transfer estimate or cost estimate. Without pruning,
 storage grows with every distinct publication; rollback retention must be
 budgeted before selecting a host.
 
+## Deployment artifact dry-run
+
+The selected next slice builds a complete candidate artifact from frozen Pages
+inputs and a local mirror of immutable storage. It performs no network requests,
+upload, pointer activation or workflow dispatch. The normal Pages workflow does
+not invoke it. Create a separate mapping file, leaving the canonical catalog
+and production configuration unchanged:
+
+```json
+{"schema":1,"regions":{"slaskie":{"pointer_url":"https://objects.example/slaskie/current.json"}}}
+```
+
+```bash
+python -m scripts.deployment_dry_run \
+  --data-root /tmp/frozen \
+  --store /tmp/rentgen-objects \
+  --storage-map /tmp/storage-map.json \
+  --output /tmp/pages-candidate
+```
+
+`--data-root` contains directories named for each frozen local region;
+`--store` is the local object mirror from the publisher above. Mapped regions
+must be enabled and known to the canonical catalog. The builder reads each
+mirror pointer once, or takes an explicit `version` in that region's mapping,
+then verifies the inventory, all file bytes and full served-data contract.
+Pointer URLs must be absolute HTTPS (loopback HTTP is allowed for rehearsal).
+
+Remote summaries/counts/freshness come directly from the verified version's
+metadata. The generated browser catalog pins that version. Listing/statistics
+summaries, JSON-LD downloads, alternate JSON and `llms.txt` use its immutable
+URLs. A later pointer change cannot mismatch those summaries and the reader.
+Remaining Pages regions receive their validated public files and keep their
+older formats. Disabled regions, pipeline history and caches are excluded.
+
+The generator reads external metadata through an internal temporary
+`RENTGEN_PUBLICATION_PLAN`; only the builder supplies it after full verification.
+It does not copy external payloads into `site/data/<region>`. Both local and
+external inputs must pass; broken legacy siblings abort the complete candidate.
+Mirror bytes are checked again after rendering. Missing/corrupted shards,
+incomplete pointers, bad counts or invalid mappings leave no candidate output.
+
+Builds happen in a sibling temporary directory and install by rename only after
+all checks pass. Output must be a new directory outside the repo and all input
+trees; existing artifacts are never overwritten. The result contains `site/`
+(the candidate Pages artifact) and `report.json` with per-region versions/bytes
+and the final artifact size. A dry-run failure does not change any previous
+artifact, source tree or object pointer. This is not remote publication or a
+power-loss durability guarantee.
+
+518 offline tests pass. The optional complete-artifact Chromium rehearsal is:
+
+```bash
+PYTHONPATH=. python tests/check_deployment_browser.py --executable /path/to/chrome
+```
+
+Its 12 checks cover both listing/statistics backends, advertised downloads,
+pointer advancement while the catalog stays sealed, an incomplete candidate,
+installation of a complete second artifact and old archive timelines across
+that installation. The original pointer-only prototype's 12 Chromium checks
+also pass. Both harnesses use two loopback origins and no external network.
+
+Using the same frozen regional files as the table above, the full local artifact
+is about **126.42 MB**; leaving Opolskie on Pages and moving Śląskie to the mirrored
+version yields about **9.67 MB**. The excluded version is 116,763,038 bytes including
+its inventory. This demonstrates removal of the Pages payload ceiling in the
+candidate build; it does not accept any provider quota, transfer budget, cost
+or nationwide inventory projection. [The dry-run audit](audits/2026-10-19-deployment.md)
+records source versions, exact sizes and the still-pending Opolskie recovery.
+
 ## Remaining rollout gates
 
 The local partial-upload/rollback and mixed-backend behavior is demonstrated.
@@ -135,10 +208,11 @@ for multiple writers and remote rollback rehearsal. Its retention/garbage
 collection policy must protect versions used by open tabs. This prototype does
 not assert crash durability of object writes during host power loss.
 
-The current generator still derives publication metadata from local regional
-trees and includes those trees in the Pages artifact. Reader configurability
-alone does not remove that artifact's storage ceiling. Workflow upload, catalog
-handoff and exclusion of remote payloads from Pages need a separately selected
-deployment slice. No hosting account/provider or migration is selected here.
+The normal workflow still derives publication metadata from local regional
+trees and includes those trees in its Pages artifact. Only the explicit dry-run
+uses the verified catalog handoff and excludes remote payloads. Real workflow
+upload, public URL verification and promotion of that candidate require a
+separately selected deployment slice. No hosting account/provider or migration
+is selected here.
 [TODO.md](../TODO.md) owns the current handoff; [the rollout plan](../POLAND_ROLLOUT.md)
 owns overall capacity and cohort acceptance.

@@ -23,6 +23,25 @@ if (catalog.schema !== 1 || !Array.isArray(catalog.regions)
     || catalog.regions.length !== 16) {
   throw new Error('site/regions.json is not a schema-1 16-region catalog');
 }
+// Only the explicit local dry-run supplies a plan. Direct Pages deployment
+// keeps its existing branch overlay and local regional directories.
+const plan = process.env.RENTGEN_PUBLICATION_PLAN
+  ? readJson(process.env.RENTGEN_PUBLICATION_PLAN) : { schema: 1, regions: {} };
+if (plan.schema !== 1 || !plan.regions || typeof plan.regions !== 'object'
+    || Array.isArray(plan.regions)) throw new Error('invalid publication plan');
+for (const [slug, input] of Object.entries(plan.regions)) {
+  if (!catalog.regions.some(region => region.slug === slug && region.enabled)
+      || typeof input?.directory !== 'string'
+      || typeof input?.storage?.version !== 'string'
+      || !/^[a-f0-9]{64}$/.test(input?.storage?.version))
+    throw new Error(`invalid planned publication for ${slug}`);
+  const pointer = new URL(input.storage.pointer_url);
+  if (!pointer.pathname.endsWith('/current.json') || pointer.search || pointer.hash
+      || pointer.username || pointer.password
+      || !(pointer.protocol === 'https:' || (pointer.protocol === 'http:'
+        && ['localhost', '127.0.0.1', '[::1]'].includes(pointer.hostname))))
+    throw new Error(`invalid planned storage URL for ${slug}`);
+}
 if (existsSync(DATA_ROOT)) {
   const configured = new Set(catalog.regions.map((region) => region.slug));
   const unknown = readdirSync(DATA_ROOT, { withFileTypes: true })
@@ -78,13 +97,14 @@ const SOURCE_LABEL = {
 };
 
 function publication(region) {
-  const directory = join(DATA_ROOT, region.slug);
+  const input = plan.regions[region.slug];
+  const directory = input ? resolve(input.directory) : join(DATA_ROOT, region.slug);
   const metaPath = join(directory, 'meta.json');
   // `enabled` is the catalog kill switch for both refresh and publication.
   // Remove only the artifact copy: the recoverable data branch is untouched
   // and a later re-enable/deploy can overlay it again.
   if (!region.enabled) {
-    rmSync(directory, { recursive: true, force: true });
+    rmSync(join(DATA_ROOT, region.slug), { recursive: true, force: true });
     return { ...region, published: false, data: null };
   }
   if (!existsSync(metaPath)) {
@@ -116,6 +136,7 @@ function publication(region) {
     .map(([source]) => SOURCE_LABEL[source] || source);
   return {
     ...region,
+    ...(input ? { storage: input.storage } : {}),
     published: true,
     data: {
       count: Number(meta.count || 0),
@@ -131,6 +152,8 @@ function publication(region) {
     },
     _meta: meta,
     _directory: directory,
+    _dataUrl: input ? new URL(`versions/${input.storage.version}/`,
+      input.storage.pointer_url).href.replace(/\/$/, '') : `${BASE}/data/${region.slug}`,
   };
 }
 
@@ -187,6 +210,8 @@ function fileMb(directory, file) {
   return existsSync(path) ? Math.round(statSync(path).size / 1e6) : null;
 }
 
+const dataUrl = region => region._dataUrl || `${BASE}/data/${region.slug}`;
+
 function regionalSummary(region) {
   if (!region.published) {
     return `    <p class="sub" id="data-summary">Ten region jest skonfigurowany, ale dane nie zostały jeszcze opublikowane.</p>
@@ -200,8 +225,8 @@ function regionalSummary(region) {
     ${nf(meta.relisted)} wystawionych ponownie, ${nf(meta.rcn?.matched)} dopasowanych do
     transakcji notarialnych (RCN). Aktualizacja: ${datePl(meta.updated)}.</p>
     <noscript><p class="sub">Lista ofert wymaga JavaScriptu. Surowe dane (JSON):
-    <a href="data/${region.slug}/meta.json">meta.json</a>, <a href="data/${region.slug}/stats.json">stats.json</a>,
-    <a href="data/${region.slug}/rcnstats.json">rcnstats.json</a> — pełny katalog w <a href="llms.txt">llms.txt</a>.</p></noscript>`;
+    <a href="${escapeHtml(dataUrl(region))}/meta.json">meta.json</a>, <a href="${escapeHtml(dataUrl(region))}/stats.json">stats.json</a>,
+    <a href="${escapeHtml(dataUrl(region))}/rcnstats.json">rcnstats.json</a> — pełny katalog w <a href="llms.txt">llms.txt</a>.</p></noscript>`;
 }
 
 function statsSummary(region) {
@@ -213,8 +238,8 @@ function statsSummary(region) {
     ${nf(meta.rcn?.matched)} dopasowanych do ofert, benchmarki dla ${nf(meta.rcn_stats?.towns)} miejscowości.
     Aktualizacja: ${datePl(meta.updated)}.</p>
     <noscript><p class="sub">Wykresy wymagają JavaScriptu. Surowe dane (JSON):
-    <a href="data/${region.slug}/stats.json">stats.json</a>, <a href="data/${region.slug}/rcnstats.json">rcnstats.json</a>,
-    <a href="data/${region.slug}/meta.json">meta.json</a>.</p></noscript>`;
+    <a href="${escapeHtml(dataUrl(region))}/stats.json">stats.json</a>, <a href="${escapeHtml(dataUrl(region))}/rcnstats.json">rcnstats.json</a>,
+    <a href="${escapeHtml(dataUrl(region))}/meta.json">meta.json</a>.</p></noscript>`;
 }
 
 function datasetJsonLd(region, listingUrl, description) {
@@ -240,7 +265,7 @@ function datasetJsonLd(region, listingUrl, description) {
         .map((file) => ({
           '@type': 'DataDownload',
           encodingFormat: 'application/json',
-          contentUrl: `${BASE}/data/${region.slug}/${file}`,
+          contentUrl: `${dataUrl(region)}/${file}`,
           ...(fileMb(region._directory, file)
             ? { contentSize: `${fileMb(region._directory, file)} MB` } : {}),
         })),
@@ -273,7 +298,7 @@ for (const region of regions) {
     LISTING_TITLE: escapeHtml(listingTitle),
     LISTING_DESCRIPTION: escapeHtml(listingDescription),
     LISTING_URL: escapeHtml(listingUrl),
-    DATA_URL: escapeHtml(`${BASE}/data/${region.slug}`),
+    DATA_URL: escapeHtml(dataUrl(region)),
   }, `region/${region.slug}/index.html`);
   listing = replaceBetween(
     listing, '<!-- summary:start -->', '<!-- summary:end -->',
@@ -392,7 +417,7 @@ ${sitemapRows.join('\n')}
 `);
 
 const llmsRegions = published.length ? published.map((region) => {
-  const dataUrl = `${BASE}/data/${region.slug}`;
+  const dataUrl = region._dataUrl;
   let shards = '';
   try {
     const manifest = readJson(join(region._directory, 'manifest.json'));

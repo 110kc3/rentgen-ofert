@@ -120,5 +120,5 @@ P4 index compaction and lazy archive details are production-accepted. The
 CORS/cache policy, partial-upload protection, rollback and mixed backends.
 Nationwide capacity and remote service/deployment acceptance remain open. No
 storage service or additional region was deployed. [TODO.md](../TODO.md) owns
-the prototype push verification and healthy-cohort handoff;
+the deployment dry-run push verification and healthy-cohort handoff;
 [POLAND_ROLLOUT.md](../POLAND_ROLLOUT.md) owns the full rollout gates.

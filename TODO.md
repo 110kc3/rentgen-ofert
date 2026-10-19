@@ -11,6 +11,8 @@ The owner selected review items 1–3, then continued items 3 and 4: stability
 verification and the measured P4 index/archive slice, with push authorized.
 On October 19 the owner selected production acceptance and a local versioned-
 storage/rollback prototype, with push authorized.
+The owner then selected Opolskie recovery verification and the local deployment
+dry-run, with push authorized. Retention/provider selection was not selected.
 No additional region, concurrent matrix, new hosting infrastructure, automatic
 KW acquisition, historical identity rewrite or manual workflow dispatch is selected.
 
@@ -43,11 +45,11 @@ Eleven live Chromium checks pass, including archive-detail 503/retry, correct
 timelines, sold filtering, mobile layout and the real older Opolskie archive.
 [The October 19 audit](docs/audits/2026-10-19-storage.md) records complete evidence.
 
-Śląskie ref `f4051cffa4c9266b57db74b5472d2867fc347a97`, updated Oct 19
-13:50:28 UTC: schema 3, 30,879 cards, 4,092 archive cards,
-3,869 RCN matches and 111 archive sale claims. Healthy export-backed RCN retains
+Śląskie ref `d9613011be98fb8532c8d163ebfdb3a3b7a51771`, updated Oct 19
+15:14:04 UTC: schema 3, 30,926 cards, 4,092 archive cards,
+3,872 RCN matches and 111 archive sale claims. Healthy export-backed RCN retains
 315,432 flat / 576,596 building deeds and the validated October 17 hashes.
-Ordinary runtime is 80.5 minutes, with zero critical photo deferrals/backlog;
+Ordinary runtime is 82.3 minutes, with zero critical photo deferrals/backlog;
 archive checkpoint remains complete (Oct 15 / 49,854 records).
 
 Opolskie remains at `a50362a7f49edf54dc9bdadbef7c3c2eb4e55a0b`:
@@ -69,7 +71,8 @@ rehearses CORS and mutable/immutable cache policy.
 Optional per-region pointer URLs reach both listing/statistics readers. Each
 page pins all requests to one version; absent configuration retains legacy Pages
 behavior. No production region is configured for external storage. The generator
-still includes local payloads in Pages; no remote upload/deployment is implemented.
+still includes local payloads in its normal Pages workflow; the separately
+selected artifact dry-run below omits external payloads without uploading them.
 [The storage guide](docs/STORAGE.md) records commands, contract, capacity and limits.
 
 Verification: **504 offline tests**, **12 Chromium prototype checks**, and
@@ -87,6 +90,29 @@ including both statistics pages. The sale-archive drop from 112 to 111 is traced
 to one preserved history returning to the active market under another portal URL;
 it is not a count of new transactions. See the audit's production follow-up.
 
+## Deployment artifact dry-run — completed locally October 19
+
+`scripts/deployment_dry_run.py` builds a new isolated `site/` artifact and size
+report from frozen Pages inputs plus verified local storage mirrors. Catalog
+metadata, raw-data discovery and both readers pin the same immutable version.
+External payloads never enter the candidate Pages artifact; legacy siblings stay
+on Pages. Missing/corrupt versions or invalid local siblings abort the whole
+candidate. Existing artifacts, source data and object pointers are unchanged.
+
+Verification: **518 offline tests**, **12 complete-artifact Chromium checks**,
+and **12 pointer-only prototype Chromium checks**. Frozen full-data rehearsal:
+126.42 MB for both datasets on Pages versus 9.67 MB with Śląskie external and
+Opolskie local. The [storage guide](docs/STORAGE.md) and
+[dry-run audit](docs/audits/2026-10-19-deployment.md) record commands, source
+versions, exact measurements and limitations. The normal deployment workflow
+does not invoke this dry-run; no remote host/provider was configured.
+
+**Selected item 1 is checked but pending:** at Oct 19 20:15:17 UTC Opolskie still
+serves its Oct 16 publication and degraded Sep 28 RCN, before its next eligibility
+at 22:15:19 UTC. The repaired two-region observation has not started. Continue
+after the scheduled publication; do not accelerate it with a dispatch or wait
+for the seven-day/three-cycle gate in this session.
+
 ## Next accepted checks — after this push
 
 - [x] Verify repair commit `6fbb266` and healthy Silesian RCN production recovery.
@@ -95,6 +121,10 @@ it is not a count of new transactions. See the audit's production follow-up.
 - [x] Rehearse local immutable publication/rollback and mixed storage backends.
 - [x] Verify prototype/reader commit `f195e9b`: scrape/deploy, strict pipeline
   validation and default Pages listing/statistics readers all pass.
+- [x] Verify handoff commit `6a5894d`: [scrape 39279297132](https://github.com/110kc3/rentgen-ofert/actions/runs/39279297132)
+  and [deploy 39282872502](https://github.com/110kc3/rentgen-ofert/actions/runs/39282872502)
+  passed at the one recorded status check.
+- [x] Build and verify a local artifact/catalog dry-run; see the completed slice above.
 - [ ] Confirm both regions publish fresh healthy RCN snapshots under the repair.
   Reconcile changed matches, benchmarks and derived sale claims against broader
   export evidence. A rise in source records is not a sales-growth claim.
@@ -110,6 +140,6 @@ Expansion, provider selection, remote migration and the remaining P4 hosting
 work require separate selection. Local rollback checks do not accept nationwide
 capacity or the seven-day cohort. [POLAND_ROLLOUT.md](POLAND_ROLLOUT.md) owns those gates.
 
-The incoming documentation-only handoff push is pending CI/Pages verification;
-check its commit once next session. No implementation remains selected before
-the scheduled Opolskie recovery; do not wait/poll or dispatch a workflow.
+This implementation push is pending CI/Pages verification. Check its commit
+once next session, require strict pipeline validation and default Pages readers
+to remain healthy, then inspect the scheduled Opolskie publication if complete.

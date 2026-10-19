@@ -29,15 +29,20 @@ Chromium timings, compatibility and retry checks are in the
 Chromium checks pass, including archive-detail retry and the real older
 Opolskie dataset; see the [October 19 audit](docs/audits/2026-10-19-storage.md).
 
-**Local versioned-storage prototype verified:** immutable public versions,
+**Local versioned-storage prototype and artifact dry-run verified:** immutable public versions,
 an atomic regional pointer, interrupted-upload protection, validated rollback
 and optional listing/statistics storage URLs pass offline and two-origin
 Chromium checks. [The storage guide](docs/STORAGE.md) records reproduction and
 capacity with retained versions. No production region uses external storage;
 remote deployment and nationwide hosting acceptance remain open. Commit
 `f195e9b` passed scrape/deployment, 504 CI tests and 13 live Chromium checks,
-including listing and statistics readers. The current documentation handoff's
-CI/Pages verification is pending.
+including listing and statistics readers. Handoff commit `6a5894d` also passed
+CI/Pages verification. The selected dry-run now generates catalogs and
+discovery links from verified immutable versions and excludes their payloads
+from a separate candidate Pages artifact. The frozen mixed-backend artifact is
+about 9.67 MB versus 126.42 MB with both datasets on Pages. 518 offline tests
+and 24 local Chromium checks pass. No remote artifact is deployed; this dry-run
+push's CI/Pages verification is pending.
 
 The seven-healthy-day / three-Opolskie-cycle gate remains open because the
 last three automatic Opolskie refreshes all retained degraded RCN evidence.

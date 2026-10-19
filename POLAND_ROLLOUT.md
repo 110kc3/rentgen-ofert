@@ -18,11 +18,11 @@ its isolated data ref recoverable at `cba13c7`.
 | Regional catalog, routes, state, branches and overlay | Implemented and production-proven for the published pair; disabled pilot remains absent. |
 | Source continuity | Four contributing portals retained; OLX blocked, Otodom partial. Overall coverage remains partial. |
 | Archive maintenance | Both saved checkpoints complete: Śląskie Oct 15 / 49,854 records; Opolskie Oct 13 / 7,822. Regional staging enforces its scoped data/cache path allowlist, including the new archive shards. |
-| Ordinary runtime | Latest repaired Śląskie publication Oct 19: 80.5 min, zero critical photo deferrals/backlog. Opolskie Oct 16: 11.0 min with degraded RCN; repaired two-region maintenance acceptance remains open. |
-| RCN health | Śląskie reader push scrape/deploy passed: healthy 315,432 / 576,596 deeds, 3,869 matches, 111 archive sale claims. One previously archived history returned active under another URL. Opolskie awaits its next eligible automatic refresh on Oct 19. |
+| Ordinary runtime | Latest repaired Śląskie publication Oct 19: 82.3 min, zero critical photo deferrals/backlog. Opolskie Oct 16: 11.0 min with degraded RCN; repaired two-region maintenance acceptance remains open. |
+| RCN health | Śląskie remains healthy: 315,432 / 576,596 deeds, 3,872 matches, 111 archive sale claims. One previously archived history returned active under another URL. At 20:15 UTC Opolskie still awaits its next eligible automatic refresh after 22:15 UTC. |
 | Cohort gate | Not accepted: automatic Opolskie runs Oct 10, 13 and 16 all retained degraded RCN evidence. Restart after repaired healthy publications in both regions; require seven healthy days / three automatic Opolskie cycles. |
 | KW UI | Existing viewer/filter scrape and Pages deployment verified. No further KW acquisition work selected here. |
-| Storage/capacity | Column indexes/lazy archives production-verified Oct 19. Local immutable publication/rollback, CORS/cache and mixed-backend checks pass; prototype/reader commit `f195e9b` passed CI/deployment and live listing/statistics checks. Nationwide quota, retention and remote deployment gates remain open. |
+| Storage/capacity | Column indexes/lazy archives and reader push production-verified. Selected local deployment dry-run seals catalogs to verified versions and omits external payloads; frozen artifact 126.42 → 9.67 MB. 518 tests / 24 local Chromium checks pass; dry-run push CI pending. Nationwide quota, retention and remote deployment gates remain open. |
 
 The [October 17 audit](docs/audits/2026-10-17-rcn-exports.md) records immutable
 refs, Actions runs, archive state, the RCN failure and local repair checks.
@@ -1005,6 +1005,12 @@ unpublication retained both Śląskie and the recoverable pilot branch.
 - [x] Keep the static UI and small region catalog on Pages; make the reader data
   URL configurable per region. Both listing/statistics readers pin versions;
   the default Pages configuration is unchanged. See [STORAGE.md](docs/STORAGE.md).
+- [x] Build a local deployment dry-run from verified storage versions, pin the
+  catalog/summaries/discovery to those versions, and omit their payloads from
+  the candidate Pages artifact. Incomplete candidates cannot install an artifact;
+  mixed backends and tabs spanning publication pass real-browser checks. The
+  normal workflow remains local; [the audit](docs/audits/2026-10-19-deployment.md)
+  records frozen measurements and remaining gates.
 - [ ] **Accept when:** projected 16-region data remains below 70% of its hosting
   limit, a partial upload cannot publish a broken manifest, and the browser can
   load old and new storage backends during migration.

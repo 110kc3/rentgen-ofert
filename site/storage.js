@@ -19,8 +19,15 @@
         || pointerURL.username || pointerURL.password || pointerURL.search || pointerURL.hash
         || !pointerURL.pathname.endsWith("/current.json"))
       throw Error("Invalid regional storage URL");
-    const pointer = await json(pointerURL.href, fetcher, { cache: "no-store" });
-    if (!pointer || pointer.schema !== 1 || !/^[a-f0-9]{64}$/.test(pointer.version))
+    // A generated deployment can seal the catalog to a verified version. It
+    // must not follow a newer pointer before its summaries/catalog are rebuilt.
+    if (config.version !== undefined && (typeof config.version !== "string"
+        || !/^[a-f0-9]{64}$/.test(config.version)))
+      throw Error("Invalid regional storage version");
+    const pointer = config.version !== undefined ? { schema: 1, version: config.version }
+      : await json(pointerURL.href, fetcher, { cache: "no-store" });
+    if (!pointer || pointer.schema !== 1 || typeof pointer.version !== "string"
+        || !/^[a-f0-9]{64}$/.test(pointer.version))
       throw Error("Invalid regional storage pointer");
     const data = new URL(`versions/${pointer.version}/`, pointerURL).href.replace(/\/$/, "");
     const manifest = await json(`${data}/manifest.json`, fetcher);
