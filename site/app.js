@@ -12,7 +12,7 @@ const inArchive = () => state.history === "sold" || state.history === "sold_rcn"
 // Stable pages use /region/<slug>/. The query fallback keeps pre-P1 bookmarks
 // working while every data fetch remains scoped to one sibling directory.
 const REGION = RentgenRegion.fromLocation(location, "listings");
-const DATA = `data/${REGION}`;
+let DATA = `data/${REGION}`;
 
 // ---- per-region dashboard config -------------------------------------------
 // Loaded from the deployed derivative of site/regions.json before any regional
@@ -150,11 +150,14 @@ async function boot() {
   }
 
   try {
-    // manifest (tiny, always fresh) carries the content version; the slim
-    // index + detail shards are then fetched cacheably under ?v=<hash>.
+    // Optional external storage pins a complete immutable regional version.
+    // The default Pages manifest carries a query cache-buster for its shards.
     // Heavy fields (offers/timeline/photos) live in shards loaded on demand.
-    const mf = await fetch(`${DATA}/manifest.json`, { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    const storage = await RentgenStorage.resolve(regional, document.baseURI);
+    DATA = storage.data;
+    const mf = storage.pinned ? storage.manifest
+      : await fetch(`${DATA}/manifest.json`, { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : null)).catch(() => null);
     state.v = mf && mf.v ? `?v=${mf.v}` : "";
     state.shards = (mf && mf.shards) || 64;
     state.archiveInfo = mf && mf.archive;

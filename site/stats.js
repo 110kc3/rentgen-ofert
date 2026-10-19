@@ -6,7 +6,7 @@
 const PLN = new Intl.NumberFormat("pl-PL");
 // data lives per voivodeship in data/<region>/ — same convention as app.js
 const REGION = RentgenRegion.fromLocation(location, "stats");
-const DATA = `data/${REGION}`;
+let DATA = `data/${REGION}`;
 const $ = (sel) => document.querySelector(sel);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -68,6 +68,8 @@ async function boot() {
   }
 
   try {
+    const storage = await RentgenStorage.resolve(regional, document.baseURI);
+    DATA = storage.data;
     const [data, rcnstats] = await Promise.all([
       fetch(`${DATA}/stats.json`, { cache: "no-store" }).then((r) => r.json()),
       fetch(`${DATA}/rcnstats.json`, { cache: "no-store" }).then((r) => r.json()).catch(() => null),

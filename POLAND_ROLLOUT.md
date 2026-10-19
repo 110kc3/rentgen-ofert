@@ -1,13 +1,14 @@
 # Whole-Poland rollout: status and gates
 
-Updated 2026-10-17. [TODO.md](TODO.md) owns accepted tasks and the next check;
+Updated 2026-10-19. [TODO.md](TODO.md) owns accepted tasks and the next check;
 this document owns rollout decisions and future capacity/acceptance gates.
 The [development history](docs/HISTORY.md) preserves the former queue diary.
 
 ## Current status
 
 **Keep the current two-region cohort until RCN health and the seven-day gate
-are verified.** The owner selected the measured P4 index/archive slice; no additional region,
+are verified.** The measured P4 index/archive slice is production-accepted and
+the selected local storage/rollback prototype is verified; no additional region,
 concurrent matrix or new hosting infrastructure is selected. Śląskie runs twice daily; Opolskie's implemented serial
 72-hour scheduler is observed in production. Małopolskie stays disabled with
 its isolated data ref recoverable at `cba13c7`.
@@ -16,15 +17,18 @@ its isolated data ref recoverable at `cba13c7`.
 |---|---|
 | Regional catalog, routes, state, branches and overlay | Implemented and production-proven for the published pair; disabled pilot remains absent. |
 | Source continuity | Four contributing portals retained; OLX blocked, Otodom partial. Overall coverage remains partial. |
-| Archive maintenance | Both saved checkpoints complete: Śląskie Oct 15 / 49,854 records; Opolskie Oct 13 / 7,822. Each branch passes its exact 76-file allowlist. |
+| Archive maintenance | Both saved checkpoints complete: Śląskie Oct 15 / 49,854 records; Opolskie Oct 13 / 7,822. Regional staging enforces its scoped data/cache path allowlist, including the new archive shards. |
 | Ordinary runtime | Oct 16: Śląskie 78.1 min, Opolskie 11.0 min; zero critical photo deferrals/backlog. These runs failed fresh RCN pulls and do not establish repaired maintenance runtime. |
 | RCN health | Śląskie repair scrape/deploy passed: healthy 315,432 / 576,596 deeds, 3,850 matches, 112 archive sales, 78.2-minute runtime. Opolskie awaits its next eligible automatic refresh on Oct 19. |
 | Cohort gate | Not accepted: automatic Opolskie runs Oct 10, 13 and 16 all retained degraded RCN evidence. Restart after repaired healthy publications in both regions; require seven healthy days / three automatic Opolskie cycles. |
 | KW UI | Existing viewer/filter scrape and Pages deployment verified. No further KW acquisition work selected here. |
-| Storage/capacity | P4 column indexes and lazy archive details implemented/measured locally; storage push pending production verification. Full payload shrinks 6.84%; nationwide hosting/rollback gate remains open. |
+| Storage/capacity | Column indexes/lazy archives production-verified Oct 19. Local immutable publication/rollback, CORS/cache and mixed-backend checks pass; prototype/reader push CI pending. Nationwide quota, retention and remote deployment gates remain open. |
 
 The [October 17 audit](docs/audits/2026-10-17-rcn-exports.md) records immutable
 refs, Actions runs, archive state, the RCN failure and local repair checks.
+The [October 19 audit](docs/audits/2026-10-19-storage.md) accepts the compact
+payload release in production; [the storage guide](docs/STORAGE.md) records the
+selected local prototype and retained-version capacity measurements.
 Future rollout still requires ≤180-minute warm/maintenance runtimes (preferred
 ≤150), regional isolation, healthy evidence, seven-day cohort observation and
 the existing storage/atomic-publication gates. Green CI using an old cache is
@@ -621,7 +625,7 @@ The original P0 phase prohibited a second schedule until its gates passed.
 
 **Historical handoff (2026-09-09):** review fixes were audited and the serial
 Opolskie scheduler was implemented. Its automatic publications are now verified;
-the October 17 current status and TODO handoff own the remaining RCN and
+the current status and TODO handoff own the remaining RCN and
 healthy-cohort acceptance. No additional region is selected.
 
 - [x] **P0.1 Redesign the coverage model and region health result.**
@@ -990,15 +994,17 @@ unpublication retained both Śląskie and the recoverable pilot branch.
 
 - [x] Implement column-table indexes and measure bytes plus Chromium parse/decode
   and a cold network case (October 17). Warm decoding adds CPU cost; see
-  [the measured payload contract](docs/PAYLOAD.md). Production verification remains open.
+  [the measured payload contract](docs/PAYLOAD.md). Production-verified October 19.
 - [x] Implement separate lazy archive details, preserving duplicate-URL histories,
   retry behavior, old regional formats and publication guards. Local real-data
-  roundtrip/browser checks pass; production verification remains open.
-- [ ] Prototype versioned object storage: immutable data objects, a tiny mutable
+  roundtrip/browser checks pass; production-verified October 19.
+- [x] Prototype versioned object storage locally: immutable data objects, a tiny mutable
   manifest, CORS, cache headers, atomic publish and rollback to the previous
-  manifest.
-- [ ] Keep the static UI and small region catalog on Pages; make the data base
-  URL configurable per manifest/region.
+  manifest. Local filesystem/two-origin rehearsal passes October 19; remote
+  upload permissions, conditional writes and rollback remain service gates.
+- [x] Keep the static UI and small region catalog on Pages; make the reader data
+  URL configurable per region. Both listing/statistics readers pin versions;
+  the default Pages configuration is unchanged. See [STORAGE.md](docs/STORAGE.md).
 - [ ] **Accept when:** projected 16-region data remains below 70% of its hosting
   limit, a partial upload cannot publish a broken manifest, and the browser can
   load old and new storage backends during migration.

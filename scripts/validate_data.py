@@ -202,7 +202,14 @@ def validate_rcn(meta, stats, previous=None):
 
 
 def validate_data_dir(data_dir, *, previous_meta=None,
-                      allow_source_regression: bool = False) -> dict:
+                      allow_source_regression: bool = False,
+                      require_history: bool = True) -> dict:
+    """Validate a pipeline tree, or its served copy without private history.
+
+    Scrape workflows keep the strict default. Local storage rehearsal validates
+    the public copy with the same payload/source/RCN checks, omitting only the
+    requirement for the history file that Pages deliberately does not serve.
+    """
     root = pathlib.Path(data_dir)
     _require(root.is_dir(), f"regional data directory does not exist: {root}")
 
@@ -222,7 +229,7 @@ def validate_data_dir(data_dir, *, previous_meta=None,
     for required in (manifest_path, index_path, meta_path,
                      archive_path, stats_path):
         _require(required in parsed, f"missing generated file: {required}")
-    _require(history_path in gzip_paths,
+    _require(not require_history or history_path in gzip_paths,
              f"missing generated file: {history_path}")
 
     manifest = parsed[manifest_path]

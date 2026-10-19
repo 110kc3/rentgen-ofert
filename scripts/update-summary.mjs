@@ -154,6 +154,7 @@ const browserCatalog = {
     cadence: region.cadence,
     ...(region.anchor ? { anchor: region.anchor } : {}),
     ...(region.districts ? { districts: region.districts } : {}),
+    ...(region.storage !== undefined ? { storage: region.storage } : {}),
     published: region.published,
     data: region.data,
   })),

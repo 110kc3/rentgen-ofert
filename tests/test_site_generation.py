@@ -65,6 +65,27 @@ def _run(root):
                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
 
+def test_optional_storage_configuration_reaches_both_page_readers(tmp_path):
+    for relative in (
+        "site/regions.json", "site/index.html",
+        "scripts/templates/listings.html", "scripts/templates/stats.html",
+    ):
+        _copy(tmp_path, relative)
+    _dataset(tmp_path, "slaskie", 20, "2026-10-19T12:00:00Z", "partial")
+    path = tmp_path / "site/regions.json"
+    catalog = json.loads(path.read_text())
+    config = {"pointer_url": "https://objects.example/slaskie/current.json"}
+    next(region for region in catalog["regions"] if region["slug"] == "slaskie")["storage"] = config
+    path.write_text(json.dumps(catalog))
+    _run(tmp_path)
+    derivative = json.loads((tmp_path / "site/data/regions.json").read_text())
+    assert next(region for region in derivative["regions"] if region["slug"] == "slaskie")["storage"] == config
+    assert all("storage" not in region for region in derivative["regions"] if region["slug"] != "slaskie")
+    for page, app in [("index.html", "app.js"), ("stats/index.html", "stats.js")]:
+        html = (tmp_path / "site/region/slaskie" / page).read_text()
+        assert html.index('src="storage.js?') < html.index(f'src="{app}?')
+
+
 def test_generates_picker_catalog_stable_pages_and_discovery(tmp_path):
     for relative in (
         "site/regions.json", "site/index.html",

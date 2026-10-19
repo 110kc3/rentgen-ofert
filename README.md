@@ -5,7 +5,7 @@ to grow deliberately to all 16 Polish voivodeships. It attempts **Otodom**,
 **OLX**, **gratka**, **Morizon** and **nieruchomości-online**, de-duplicates
 what the portals serve, and presents it on a searchable static site.
 
-**2026-10-17 status:** Śląskie and Opolskie are published, with serial portal
+**2026-10-19 status:** Śląskie and Opolskie are published, with serial portal
 access. Śląskie runs twice daily; Opolskie uses the implemented 72-hour cadence.
 Małopolskie is a completed, disabled pilot with its data branch retained.
 The KW viewer/filter deployments are verified, and both regional archive
@@ -21,12 +21,21 @@ replacement. Source URLs, file hashes and raw counts are retained. PyArrow reads
 only matching fields in batches; raw exports stay temporary. Retrieval date does
 not assert that every county's underlying register is current.
 
-**P4 storage slice implemented:** the next publications use column-table current
+**P4 storage slice production-verified:** Śląskie serves column-table current
 and archive indexes, with archive timelines/photos loaded from separate shards
 only when expanded. Older regional datasets remain readable. Frozen-data bytes,
 Chromium timings, compatibility and retry checks are in the
-[payload guide](docs/PAYLOAD.md). Production verification of this storage push
-is pending. Nationwide storage/rollback acceptance remains open.
+[payload guide](docs/PAYLOAD.md). Complete live payload validation and 11 live
+Chromium checks pass, including archive-detail retry and the real older
+Opolskie dataset; see the [October 19 audit](docs/audits/2026-10-19-storage.md).
+
+**Local versioned-storage prototype verified:** immutable public versions,
+an atomic regional pointer, interrupted-upload protection, validated rollback
+and optional listing/statistics storage URLs pass offline and two-origin
+Chromium checks. [The storage guide](docs/STORAGE.md) records reproduction and
+capacity with retained versions. No production region uses external storage;
+remote deployment and nationwide hosting acceptance remain open. This incoming
+prototype/reader push still needs CI/Pages verification.
 
 The seven-healthy-day / three-Opolskie-cycle gate remains open because the
 last three automatic Opolskie refreshes all retained degraded RCN evidence.

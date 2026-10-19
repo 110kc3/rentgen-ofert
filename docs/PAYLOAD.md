@@ -1,7 +1,8 @@
 # Regional payload formats and storage measurements
 
-Schema 3 is implemented for the next automatic publications; deployment after
-the October 17 storage push remains pending. Each region migrates independently.
+Schema 3 is live on Śląskie and production-verified October 19, including full
+hash/count checks and archive-detail retry. Opolskie still serves schema 2 until
+its next automatic publication. Each region migrates independently.
 The browser and validator continue reading legacy manifest schemas 1/2.
 
 ## Schema 3
@@ -44,7 +45,9 @@ Pages artifact publication remain in use.
 Query versions are cache busters, not immutable object paths. A tab spanning a
 later publication may need a refresh if an old detail key has disappeared;
 missing records fail rather than displaying a different archive timeline.
-Immutable storage/manifest rollback remains a separate P4 gate.
+The optional [local versioned-storage prototype](STORAGE.md) pins complete
+regional versions across pointer switches/rollback. Production still uses the
+existing query-version paths; remote storage migration remains a separate gate.
 
 ## Measured October 17 slice
 
@@ -112,9 +115,10 @@ payload gives 116,285,442 bytes. Sixteen equally sized regions would require
 forecast. [GitHub documents a 1 GB published-site limit](https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits),
 checked October 17. This does not meet the rollout plan's 70% hosting-limit gate.
 
-P4 index compaction and lazy archive details are implemented and locally
-measured. Nationwide hosting, immutable versioned objects, CORS/cache policy,
-partial-upload protection and manifest rollback rehearsal remain open. No
+P4 index compaction and lazy archive details are production-accepted. The
+[October 19 local prototype](STORAGE.md) demonstrates immutable versions,
+CORS/cache policy, partial-upload protection, rollback and mixed backends.
+Nationwide capacity and remote service/deployment acceptance remain open. No
 storage service or additional region was deployed. [TODO.md](../TODO.md) owns
-production verification and the healthy-cohort handoff;
+the prototype push verification and healthy-cohort handoff;
 [POLAND_ROLLOUT.md](../POLAND_ROLLOUT.md) owns the full rollout gates.
