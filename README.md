@@ -34,8 +34,10 @@ an atomic regional pointer, interrupted-upload protection, validated rollback
 and optional listing/statistics storage URLs pass offline and two-origin
 Chromium checks. [The storage guide](docs/STORAGE.md) records reproduction and
 capacity with retained versions. No production region uses external storage;
-remote deployment and nationwide hosting acceptance remain open. This incoming
-prototype/reader push still needs CI/Pages verification.
+remote deployment and nationwide hosting acceptance remain open. Commit
+`f195e9b` passed scrape/deployment, 504 CI tests and 13 live Chromium checks,
+including listing and statistics readers. The current documentation handoff's
+CI/Pages verification is pending.
 
 The seven-healthy-day / three-Opolskie-cycle gate remains open because the
 last three automatic Opolskie refreshes all retained degraded RCN evidence.

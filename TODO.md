@@ -43,11 +43,11 @@ Eleven live Chromium checks pass, including archive-detail 503/retry, correct
 timelines, sold filtering, mobile layout and the real older Opolskie archive.
 [The October 19 audit](docs/audits/2026-10-19-storage.md) records complete evidence.
 
-Śląskie ref `8849971a3a3030eb8e6034183459913fc2de061f`, updated Oct 18
-21:40:29 UTC: schema 3, 30,933 cards / 51,865 raw offers, 4,098 archive cards,
-3,863 RCN matches and 112 archive sale claims. Healthy export-backed RCN retains
+Śląskie ref `f4051cffa4c9266b57db74b5472d2867fc347a97`, updated Oct 19
+13:50:28 UTC: schema 3, 30,879 cards, 4,092 archive cards,
+3,869 RCN matches and 111 archive sale claims. Healthy export-backed RCN retains
 315,432 flat / 576,596 building deeds and the validated October 17 hashes.
-Ordinary runtime is 77.6 minutes, with zero critical photo deferrals/backlog;
+Ordinary runtime is 80.5 minutes, with zero critical photo deferrals/backlog;
 archive checkpoint remains complete (Oct 15 / 49,854 records).
 
 Opolskie remains at `a50362a7f49edf54dc9bdadbef7c3c2eb4e55a0b`:
@@ -79,16 +79,22 @@ byte and browser measurements remain in [docs/PAYLOAD.md](docs/PAYLOAD.md).
 Nationwide hosting capacity, remote atomic publication and rollout acceptance
 remain open. There are no owner-only blockers for the completed local slice.
 
+Prototype/reader commit `f195e9b` passed [scrape 39252423912](https://github.com/110kc3/rentgen-ofert/actions/runs/39252423912)
+(504 tests, strict pipeline/source/RCN validation and 140-path regional staging)
+and [deployment 39263676649](https://github.com/110kc3/rentgen-ofert/actions/runs/39263676649).
+All three shipped reader scripts match the source; 13 live Chromium checks pass,
+including both statistics pages. The sale-archive drop from 112 to 111 is traced
+to one preserved history returning to the active market under another portal URL;
+it is not a count of new transactions. See the audit's production follow-up.
+
 ## Next accepted checks — after this push
 
 - [x] Verify repair commit `6fbb266` and healthy Silesian RCN production recovery.
 - [x] Verify compact storage commit `2c20374`, complete live payloads, archive retry
   and the older regional format; reconcile production documentation.
 - [x] Rehearse local immutable publication/rollback and mixed storage backends.
-- [ ] Check this prototype/reader push's scrape and deployment once next session
-  in [Actions](https://github.com/110kc3/rentgen-ofert/actions?query=branch%3Amain).
-  Require offline tests, strict pipeline validation and default Pages readers to
-  remain healthy. This push's CI/Pages verification is pending; do not wait/poll.
+- [x] Verify prototype/reader commit `f195e9b`: scrape/deploy, strict pipeline
+  validation and default Pages listing/statistics readers all pass.
 - [ ] Confirm both regions publish fresh healthy RCN snapshots under the repair.
   Reconcile changed matches, benchmarks and derived sale claims against broader
   export evidence. A rise in source records is not a sales-growth claim.
@@ -103,3 +109,7 @@ remain open. There are no owner-only blockers for the completed local slice.
 Expansion, provider selection, remote migration and the remaining P4 hosting
 work require separate selection. Local rollback checks do not accept nationwide
 capacity or the seven-day cohort. [POLAND_ROLLOUT.md](POLAND_ROLLOUT.md) owns those gates.
+
+The incoming documentation-only handoff push is pending CI/Pages verification;
+check its commit once next session. No implementation remains selected before
+the scheduled Opolskie recovery; do not wait/poll or dispatch a workflow.

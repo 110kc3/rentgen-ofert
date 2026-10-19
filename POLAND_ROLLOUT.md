@@ -18,11 +18,11 @@ its isolated data ref recoverable at `cba13c7`.
 | Regional catalog, routes, state, branches and overlay | Implemented and production-proven for the published pair; disabled pilot remains absent. |
 | Source continuity | Four contributing portals retained; OLX blocked, Otodom partial. Overall coverage remains partial. |
 | Archive maintenance | Both saved checkpoints complete: Śląskie Oct 15 / 49,854 records; Opolskie Oct 13 / 7,822. Regional staging enforces its scoped data/cache path allowlist, including the new archive shards. |
-| Ordinary runtime | Oct 16: Śląskie 78.1 min, Opolskie 11.0 min; zero critical photo deferrals/backlog. These runs failed fresh RCN pulls and do not establish repaired maintenance runtime. |
-| RCN health | Śląskie repair scrape/deploy passed: healthy 315,432 / 576,596 deeds, 3,850 matches, 112 archive sales, 78.2-minute runtime. Opolskie awaits its next eligible automatic refresh on Oct 19. |
+| Ordinary runtime | Latest repaired Śląskie publication Oct 19: 80.5 min, zero critical photo deferrals/backlog. Opolskie Oct 16: 11.0 min with degraded RCN; repaired two-region maintenance acceptance remains open. |
+| RCN health | Śląskie reader push scrape/deploy passed: healthy 315,432 / 576,596 deeds, 3,869 matches, 111 archive sale claims. One previously archived history returned active under another URL. Opolskie awaits its next eligible automatic refresh on Oct 19. |
 | Cohort gate | Not accepted: automatic Opolskie runs Oct 10, 13 and 16 all retained degraded RCN evidence. Restart after repaired healthy publications in both regions; require seven healthy days / three automatic Opolskie cycles. |
 | KW UI | Existing viewer/filter scrape and Pages deployment verified. No further KW acquisition work selected here. |
-| Storage/capacity | Column indexes/lazy archives production-verified Oct 19. Local immutable publication/rollback, CORS/cache and mixed-backend checks pass; prototype/reader push CI pending. Nationwide quota, retention and remote deployment gates remain open. |
+| Storage/capacity | Column indexes/lazy archives production-verified Oct 19. Local immutable publication/rollback, CORS/cache and mixed-backend checks pass; prototype/reader commit `f195e9b` passed CI/deployment and live listing/statistics checks. Nationwide quota, retention and remote deployment gates remain open. |
 
 The [October 17 audit](docs/audits/2026-10-17-rcn-exports.md) records immutable
 refs, Actions runs, archive state, the RCN failure and local repair checks.
