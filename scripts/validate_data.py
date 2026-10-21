@@ -29,6 +29,9 @@ class DataValidationError(ValueError):
 
 SOURCE_HEALTH_VALUES = frozenset({"healthy", "partial", "blocked", "unknown"})
 UNAVAILABLE_SOURCE_STATUSES = frozenset({"blocked", "unknown"})
+# An abrupt majority loss is a publication incident even if the portal reports
+# a plausible new total. Small samples and ordinary inventory drift can pass.
+SOURCE_VOLUME_BASELINE = 100
 
 
 def _read_json(path: pathlib.Path):
@@ -65,20 +68,24 @@ def _human_bytes(size: int) -> str:
 
 
 def _source_transition(regression: dict) -> str:
-    return (
+    transition = (
         f"{regression['source']} "
         f"{regression['previous_status']}/{regression['previous_current']:,} -> "
         f"{regression['current_status']}/{regression['current_current']:,}"
     )
+    if regression.get("reason") == "volume":
+        transition += " (more than 50% fewer current offers)"
+    return transition
 
 
 def validate_source_continuity(current_sources: dict, previous_meta=None,
                                *, allow_regression: bool = False) -> dict:
-    """Reject categorical loss of a previously contributing source.
+    """Reject unavailable contributors and abrupt source/type volume collapse.
 
     A missing source is equivalent to an unknown source with zero current rows.
-    Sources that were already unavailable, and first publications with no prior
-    metadata, deliberately do not establish a positive baseline.
+    A previous source or source/type with at least 100 current offers must retain
+    at least half. Portal totals and self-reported health cannot waive this gate.
+    Sources already unavailable, and first publications, establish no baseline.
     """
     result = {
         "has_previous": previous_meta is not None,
@@ -101,7 +108,8 @@ def validate_source_continuity(current_sources: dict, previous_meta=None,
              "current meta.coverage.by_source must be an object")
 
     regressions = []
-    for name, previous in sorted(previous_sources.items()):
+
+    def compare(name, previous, current):
         _require(isinstance(previous, dict),
                  f"previous coverage source {name} must be an object")
         previous_status = previous.get("status")
@@ -115,10 +123,7 @@ def validate_source_continuity(current_sources: dict, previous_meta=None,
                  "non-negative integer")
         if (previous_current == 0
                 or previous_status in UNAVAILABLE_SOURCE_STATUSES):
-            continue
-
-        result["checked"] += 1
-        current = current_sources.get(name)
+            return False
         if isinstance(current, dict):
             current_status = current.get("status", "unknown")
             current_current = current.get("current", 0)
@@ -132,15 +137,34 @@ def validate_source_continuity(current_sources: dict, previous_meta=None,
                  and current_current >= 0,
                  f"current coverage source {name}.current must be a "
                  "non-negative integer")
-        if (current_status in UNAVAILABLE_SOURCE_STATUSES
-                or current_current == 0):
+        unavailable = (current_status in UNAVAILABLE_SOURCE_STATUSES
+                       or current_current == 0)
+        collapsed = (previous_current >= SOURCE_VOLUME_BASELINE
+                     and current_current * 2 < previous_current)
+        if unavailable or collapsed:
             regressions.append({
                 "source": name,
                 "previous_status": previous_status,
                 "previous_current": previous_current,
                 "current_status": current_status,
                 "current_current": current_current,
+                "reason": "unavailable" if unavailable else "volume",
             })
+        return True
+
+    for name, previous in sorted(previous_sources.items()):
+        current = current_sources.get(name)
+        if not compare(name, previous, current):
+            continue
+        result["checked"] += 1
+        previous_types = previous.get("types", {})
+        _require(isinstance(previous_types, dict),
+                 f"previous coverage source {name}.types must be an object")
+        current_types = current.get("types", {}) if isinstance(current, dict) else {}
+        _require(isinstance(current_types, dict),
+                 f"current coverage source {name}.types must be an object")
+        for typ, previous_type in sorted(previous_types.items()):
+            compare(f"{name}/{typ}", previous_type, current_types.get(typ))
 
     result["regressions"] = regressions
     if regressions and not allow_regression:
@@ -631,7 +655,7 @@ def main(argv=None) -> int:
     parser.add_argument(
         "--allow-source-regression",
         action="store_true",
-        help="explicitly allow a contributing source to become unavailable",
+        help="explicitly allow source/type outages or a loss of more than half its offers",
     )
     try:
         args = parser.parse_args(argv)
@@ -640,8 +664,8 @@ def main(argv=None) -> int:
 
     if args.allow_source_regression:
         print(
-            "::warning::Source-continuity override enabled; an unavailable "
-            "previously contributing source may be published.",
+            "::warning::Source-continuity override enabled; a source/type outage "
+            "or volume collapse may be published.",
             file=sys.stderr,
         )
     try:

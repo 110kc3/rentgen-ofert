@@ -16,13 +16,13 @@ its isolated data ref recoverable at `cba13c7`.
 | Area | Current evidence / remaining gate |
 |---|---|
 | Regional catalog, routes, state, branches and overlay | Implemented and production-proven for the published pair; disabled pilot remains absent. |
-| Source continuity | Four contributing portals retained; OLX blocked, Otodom partial. An Oct 20 publication fell to 37 Gratka / 37 Morizon rows yet passed categorical continuity; the next run recovered. Quantitative collapse protection remains an unselected finding. |
+| Source continuity | Four contributing portals retained; OLX blocked, Otodom partial. Selected quantitative protection now rejects the actual Oct 20 37-row Gratka/Morizon collapse at both source/type levels. Prior samples ≥100 must retain ≥50%; intentional resets use the logged override. Healthy drift passes; new push verification pending. |
 | Archive maintenance | Śląskie complete: Oct 15 / 49,854 records. Opolskie's new Oct 20 cycle stopped on HTTP 429, with 52 checkpoints pending; its prior Oct 13 / 7,822-record checkpoint remains available. |
 | Ordinary runtime | Oct 20 Śląskie: 75.9 min, zero critical photo deferrals/backlog. Opolskie: 75.0 min including failed RCN and slow geocoding; fresh two-region maintenance acceptance remains open. |
 | RCN health | Śląskie healthy: 315,432 / 576,596 deeds, 3,894 matches, 111 archive sale claims. Opolskie Oct 20 retained degraded Sep 28 evidence after both hosts timed out. Selected transport hardening passes a 19.8-second local refresh of 63,494 / 86,224 deeds; production recovery pending, next automatic eligibility Oct 23 01:36 UTC. |
 | Cohort gate | Not started: automatic Opolskie runs through Oct 20 retained degraded RCN. Restart after repaired healthy publications in both regions; require seven healthy days / three automatic Opolskie cycles. |
 | KW UI | Existing viewer/filter scrape and Pages deployment verified. No further KW acquisition work selected here. |
-| Shipped Śląskie features | 32/33 live Chromium checks pass. Manual address RCN check/copy controls have blocked delegated clicks; only 65.8% of current offers have coordinates. See the October 21 audit. |
+| Shipped Śląskie features | Selected address check/copy repair passes 12 focused and 33 broad candidate Chromium checks plus real GUGiK. Failed/incomplete responses show failure; new deployment pending. The earlier audit's 65.8% coordinate coverage and other data limits remain. |
 | Storage/capacity | Column indexes/lazy archives and dry-run push production-verified. Selected local deployment dry-run seals catalogs to verified versions and omits external payloads; frozen artifact 126.42 → 9.67 MB. Nationwide quota, retention and remote deployment gates remain open. |
 
 The [October 17 audit](docs/audits/2026-10-17-rcn-exports.md) records immutable
@@ -32,6 +32,8 @@ payload release in production; [the storage guide](docs/STORAGE.md) records the
 selected local prototype and retained-version capacity measurements.
 The [October 21 audit](docs/audits/2026-10-21-rcn-and-features.md) records current
 production refs, selected RCN transport recovery and live feature findings.
+The [subsequent repair audit](docs/audits/2026-10-21-controls-and-continuity.md)
+records both selected fixes, actual incident replay and candidate browser checks.
 Future rollout still requires ≤180-minute warm/maintenance runtimes (preferred
 ≤150), regional isolation, healthy evidence, seven-day cohort observation and
 the existing storage/atomic-publication gates. Green CI using an old cache is

@@ -356,12 +356,73 @@ def test_source_continuity_allows_positive_drift_and_blocked_recovery(tmp_path):
     previous_otodom = previous["coverage"]["by_source"]["otodom"]
     previous_otodom.update(status="blocked", current=0, served_unique=0)
     previous_gratka = previous["coverage"]["by_source"]["gratka"]
-    previous_gratka.update(current=12_000, served_unique=12_000)
+    previous_gratka.update(current=2, served_unique=2)
 
     summary = validate_data.validate_data_dir(root, previous_meta=previous)
 
     assert summary["continuity"]["checked"] == 1
     assert summary["continuity"]["regressions"] == []
+
+
+@pytest.mark.parametrize("status", ["healthy", "partial"])
+def test_source_continuity_rejects_false_healthy_incident_counts(status):
+    previous = {"coverage": {"by_source": {
+        "gratka": {"status": "healthy", "current": 12368},
+        "morizon": {"status": "healthy", "current": 12367},
+    }}}
+    current = {name: {"status": status, "current": 37, "portal_total": 37,
+                      "served_unique": 37, "pct": 100.0}
+               for name in ("gratka", "morizon")}
+    with pytest.raises(validate_data.DataValidationError, match="50% fewer"):
+        validate_data.validate_source_continuity(current, previous)
+    report = validate_data.validate_source_continuity(current, previous,
+                                                     allow_regression=True)
+    assert {r["source"] for r in report["regressions"]} == {"gratka", "morizon"}
+    assert all(r["reason"] == "volume" for r in report["regressions"])
+
+
+@pytest.mark.parametrize("old,new,allowed", [
+    (1000, 980, True), (1000, 500, True), (1000, 499, False),
+    (100, 50, True), (100, 49, False), (99, 1, True), (0, 200, True),
+])
+def test_source_continuity_volume_boundaries(old, new, allowed):
+    previous = {"coverage": {"by_source": {"otodom": {"status": "partial", "current": old}}}}
+    current = {"otodom": {"status": "partial", "current": new}}
+    if allowed:
+        assert not validate_data.validate_source_continuity(current, previous)["regressions"]
+    else:
+        with pytest.raises(validate_data.DataValidationError, match="50% fewer"):
+            validate_data.validate_source_continuity(current, previous)
+
+
+def test_source_continuity_type_collapse_cannot_hide_behind_stable_total():
+    previous = {"coverage": {"by_source": {"gratka": {
+        "status": "healthy", "current": 12000,
+        "types": {"flat": {"status": "healthy", "current": 9000},
+                  "house": {"status": "healthy", "current": 3000}},
+    }}}}
+    current = {"gratka": {"status": "healthy", "current": 12000,
+        "types": {"flat": {"status": "healthy", "current": 11996},
+                  "house": {"status": "healthy", "current": 4}}}}
+    with pytest.raises(validate_data.DataValidationError, match="gratka/house.*3,000 -> healthy/4"):
+        validate_data.validate_source_continuity(current, previous)
+
+
+def test_volume_override_is_logged_in_cli_and_summary(tmp_path, monkeypatch, capsys):
+    root = _dataset(tmp_path / "current")
+    previous = _meta(root)
+    previous["coverage"]["by_source"]["gratka"]["current"] = 12368
+    previous_path = tmp_path / "previous.json"
+    previous_path.write_text(json.dumps(previous))
+    summary_path = tmp_path / "summary.md"
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary_path))
+    args = [str(root), "--previous-meta", str(previous_path)]
+    assert validate_data.main(args) == 1
+    assert not summary_path.exists()
+    assert validate_data.main(args + ["--allow-source-regression"]) == 0
+    assert "50% fewer" in capsys.readouterr().err
+    assert "operator override accepted" in summary_path.read_text()
+    assert "50% fewer" in summary_path.read_text()
 
 
 def test_source_continuity_override_is_explicit_and_reported(tmp_path, capsys):

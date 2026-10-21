@@ -12,12 +12,16 @@ The KW viewer/filter deployments are verified. Śląskie's archive checkpoint is
 complete; Opolskie's new cycle stopped on HTTP 429 with 52 checkpoints pending.
 Coverage remains partial; OLX's bounded probe is blocked.
 
-**Śląskie feature audit:** 32 of 33 live Chromium checks pass, covering filters,
-sorts, timelines, archive retry, maps, statistics and KW flows. Manual address
-RCN check/copy buttons have a confirmed event-propagation defect. An October 20
-source collapse also passed categorical continuity before the next run recovered;
-only 65.8% of current cards have map coordinates. See the
-[October 21 audit](docs/audits/2026-10-21-rcn-and-features.md) for evidence and limits.
+**Selected Śląskie repairs verified locally:** manual address RCN check/copy
+controls now reach their handlers and report failed/incomplete provider responses
+accurately. Source continuity now rejects a loss of more than half the prior
+source/type's current offers when its baseline has at least 100 offers. The
+actual October 20 collapse is rejected; healthy drift passes. 535 offline tests,
+12 focused plus 33 broad Chromium checks and a real-provider candidate check pass. New push
+CI/Pages verification is pending. See the
+[repair audit](docs/audits/2026-10-21-controls-and-continuity.md). The
+[earlier feature audit](docs/audits/2026-10-21-rcn-and-features.md) records coverage
+limits, including coordinates on 65.8% of that publication's current cards.
 
 **RCN recovery is verified on Śląskie:** commit `6fbb266` passed its scrape and
 Pages deploy, publishing healthy export-backed evidence with 3,850 matched
@@ -55,7 +59,7 @@ from a separate candidate Pages artifact. The frozen mixed-backend artifact is
 about 9.67 MB versus 126.42 MB with both datasets on Pages. 518 offline tests
 and 24 local Chromium checks passed for that slice. Dry-run commit `8733060`
 passed CI/Pages; no remote artifact is deployed. The October 21 transport change
-passes 524 offline tests and awaits its own push verification.
+passed its 524-test CI scrape, strict validation and Pages deployment.
 
 The seven-healthy-day / three-Opolskie-cycle gate remains open because the
 automatic Opolskie refreshes through October 20 retained degraded RCN evidence.
@@ -364,6 +368,11 @@ offline tests. After scraping it validates every generated JSON/gzip file,
 manifest count, detail shard, coverage block and runtime summary, then compares
 each previously positive/non-blocked source with the preserved publication
 metadata before anything is staged or pushed.
+The comparison also checks each previously reported property type independently.
+Sources/types with at least 100 prior current offers must retain at least half;
+missing/blocked/zero contributors still fail even below that baseline. Portal
+totals or a healthy coverage label cannot waive a count collapse. The explicit
+manual override logs affected counts/reasons and leaves schema/RCN checks active.
 
 ### C) Run locally (dashboard preview)
 

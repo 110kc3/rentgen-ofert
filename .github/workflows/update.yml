@@ -37,7 +37,7 @@ on:
         options: [auto, force, skip]
         default: auto
       allow_source_regression:
-        description: "Allow a contributing source to become blocked/unknown/zero"
+        description: "Allow source/type outages or a loss of more than half its offers"
         required: false
         type: boolean
         default: false

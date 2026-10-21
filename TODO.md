@@ -5,7 +5,32 @@ Updated 2026-10-21. This file owns accepted work and the next-session handoff.
 ideas. [POLAND_ROLLOUT.md](POLAND_ROLLOUT.md) owns expansion and capacity gates;
 its historical task lists do not authorize additional work.
 
-## October 21 selected recovery and feature audit
+## October 21 selected address/source repairs
+
+The owner selected both numbered audit findings. Implementation is complete;
+the new push's CI/Pages verification is pending.
+
+- [x] Repair manual address RCN lookup/copy clicks and verify success, re-render,
+  clipboard fallback and accurate provider-failure handling in Chromium.
+- [x] Investigate the 37-row collapse and reject abrupt source/type volume loss
+  before publication, with an explicit logged override for intentional resets.
+
+535 offline tests, 12 focused and 33 broad candidate Chromium checks pass. A real-provider candidate
+check reaches UUG, ULDK and both WFS layers with HTTP 200, displays the parcel and
+copies the command without opening a listing. The actual failed October 20
+metadata is rejected at six source/type transitions; healthy publication drift
+and the full frozen public dataset pass. Baselines of at least 100 offers must
+retain at least half, independently per source/type. The conservative threshold
+does not assert complete coverage or detect gradual long-term decline.
+See the [repair audit](docs/audits/2026-10-21-controls-and-continuity.md).
+
+Transport commit `eb7aeab` passed [scrape 39592569525](https://github.com/110kc3/rentgen-ofert/actions/runs/39592569525)
+(524 tests and strict validation) and [Pages 39602509595](https://github.com/110kc3/rentgen-ofert/actions/runs/39602509595)
+at the single recovery check. Production Opolskie fresh-RCN acceptance and the
+seven-day/three-cycle observation remain open; next eligibility remains October
+23 01:36:15 UTC plus scheduling delays. No manual dispatch or new region selected.
+
+## Earlier October 21 recovery and feature audit
 
 The owner selected Opolskie RCN transport recovery and a Śląskie feature audit.
 Production logs show both GUGiK connections timed out before parsing, spending
@@ -22,9 +47,9 @@ Pages deployment. Its previously pending verification is resolved.
 Both complete live public trees validate (134 JSON files each). Śląskie passes
 32/33 live Chromium checks; manual address RCN check/copy controls are blocked
 by event propagation. A transient 37-row Gratka/Morizon collapse also escaped
-categorical continuity. These are **unselected repair suggestions**, detailed
-in the [October 21 audit](docs/audits/2026-10-21-rcn-and-features.md), not added
-implementation work.
+categorical continuity. These were unselected findings at that audit; both were
+subsequently selected and repaired above. The
+[earlier audit](docs/audits/2026-10-21-rcn-and-features.md) retains its original evidence.
 
 Opolskie published October 20 01:36:15 UTC with degraded September 28 RCN and
 a new archive cycle rate-limited at 52 pending checkpoints. Next automatic
@@ -157,6 +182,9 @@ for the seven-day/three-cycle gate in this session.
   and [deploy 39282872502](https://github.com/110kc3/rentgen-ofert/actions/runs/39282872502)
   passed at the one recorded status check.
 - [x] Build and verify a local artifact/catalog dry-run; see the completed slice above.
+- [x] Verify RCN transport commit `eb7aeab`: scrape/strict validation and Pages pass.
+- [ ] Verify the selected address/continuity repair push once: CI/Pages, deployed
+  address check/copy controls, ordinary source counts and the quantitative gate.
 - [ ] Confirm both regions publish fresh healthy RCN snapshots under the repair.
   Reconcile changed matches, benchmarks and derived sale claims against broader
   export evidence. A rise in source records is not a sales-growth claim.
@@ -172,7 +200,7 @@ Expansion, provider selection, remote migration and the remaining P4 hosting
 work require separate selection. Local rollback checks do not accept nationwide
 capacity or the seven-day cohort. [POLAND_ROLLOUT.md](POLAND_ROLLOUT.md) owns those gates.
 
-The October 21 transport implementation push is pending CI/Pages verification.
+The October 21 address/continuity implementation push is pending CI/Pages verification.
 Check its commit once next session, require strict pipeline validation and
 default Pages readers to remain healthy, then inspect the next eligible
 automatic Opolskie publication. Local refresh success does not close either

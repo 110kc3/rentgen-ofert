@@ -1229,7 +1229,7 @@ function pinBlock(l) {
   const extra = l.type === "flat"
     ? `<input class="pin-x" data-flag="--pietro" placeholder="piętro" inputmode="numeric">`
     : `<input class="pin-x" data-flag="--dzialka" placeholder="działka m²" inputmode="numeric">`;
-  return `<details class="pinbox" onclick="event.stopPropagation()">
+  return `<details class="pinbox">
     <summary>📍 znasz adres? sprawdź w RCN</summary>
     <div class="pin-form"
          data-url="${escapeHtml(l.url)}" data-area="${l.area ?? ""}"
@@ -1249,9 +1249,15 @@ function pinBlock(l) {
 
 // ---- in-browser RCN check (UUG geocoder -> ULDK parcel -> WFS deeds) --------
 
+async function fetchGugik(url) {
+  const response = await fetch(url, { signal: AbortSignal.timeout(15000) });
+  if (!response.ok) throw new Error(`GUGiK HTTP ${response.status}`);
+  return response;
+}
+
 async function uugResolve(loc, ul, nr) {
   const addr = `${loc}, ${ul} ${nr}`.trim();
-  const r = await fetch("https://services.gugik.gov.pl/uug/?request=GetAddress&address=" +
+  const r = await fetchGugik("https://services.gugik.gov.pl/uug/?request=GetAddress&address=" +
                         encodeURIComponent(addr));
   const d = await r.json();
   const res = d && d.results && d.results["1"];
@@ -1261,7 +1267,7 @@ async function uugResolve(loc, ul, nr) {
 }
 
 async function uldkParcel(x, y) {
-  const r = await fetch(`https://uldk.gugik.gov.pl/?request=GetParcelByXY&xy=${x},${y},2180&result=id,region`);
+  const r = await fetchGugik(`https://uldk.gugik.gov.pl/?request=GetParcelByXY&xy=${x},${y},2180&result=id,region`);
   const lines = (await r.text()).trim().split("\n");
   if (lines[0].trim() !== "0" || !lines[1]) return null;
   const p = lines[1].split("|");
@@ -1277,11 +1283,24 @@ async function rcnDeedsNear(x, y, layer, radius = 60) {
   const bbox = `${y - radius},${x - radius},${y + radius},${x + radius}`;
   const url = "https://mapy.geoportal.gov.pl/wss/service/rcn?service=WFS&version=2.0.0" +
               `&request=GetFeature&typeNames=ms:${layer}&count=500&bbox=${bbox}`;
-  const doc = new DOMParser().parseFromString(await (await fetch(url)).text(), "text/xml");
+  const doc = new DOMParser().parseFromString(await (await fetchGugik(url)).text(), "text/xml");
+  const collection = doc.documentElement;
+  if (doc.querySelector("parsererror") || collection?.localName !== "FeatureCollection"
+      || collection.namespaceURI !== "http://www.opengis.net/wfs/2.0")
+    throw new Error("Invalid GUGiK WFS response");
+  const features = doc.getElementsByTagNameNS(_MS_NS, layer);
+  const returned = collection.getAttribute("numberReturned");
+  const matched = collection.getAttribute("numberMatched");
+  if (collection.hasAttribute("next")
+      || (returned !== null && (!/^\d+$/.test(returned) || Number(returned) !== features.length))
+      || (matched !== null && matched !== "unknown"
+          && (!/^\d+$/.test(matched) || Number(matched) !== features.length))
+      || features.length >= 500)
+    throw new Error("Incomplete GUGiK WFS response");
   const g = (f, n) => { const el = f.getElementsByTagNameNS(_MS_NS, n)[0];
                         return el ? el.textContent.trim() : ""; };
   const out = [];
-  for (const f of doc.getElementsByTagNameNS(_MS_NS, layer)) {
+  for (const f of features) {
     const pfx = layer === "lokale" ? "lok" : "bud";
     const trans = g(f, "tran_rodzaj_trans");
     if (trans && trans !== "wolnyRynek") continue;      // skip auctions etc.
@@ -1356,7 +1375,7 @@ async function runRcnCheck(box, btn) {
       ? `<div class="pin-deeds">${rows}</div>`
       : `<div class="pin-deeds">brak aktów notarialnych dla tego ${nrOk ? "budynku" : "miejsca"} w RCN (rejestr od ~2000 r.)</div>`);
   } catch (err) {
-    results.innerHTML = "błąd połączenia z usługami GUGiK — spróbuj ponownie";
+    results.innerHTML = "Nie udało się odczytać pełnych danych GUGiK — spróbuj ponownie. Brak wyniku nie potwierdza braku transakcji.";
   } finally {
     btn.disabled = false; btn.textContent = "Sprawdź w RCN";
   }
