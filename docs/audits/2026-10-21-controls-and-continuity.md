@@ -109,3 +109,55 @@ regional isolation and RCN guards. Candidate production CI/Pages verification is
 pending this push. Opolskie's fresh-RCN and the two-region stability gates remain
 separate and open. Audit-only source metadata/results are in
 `/tmp/rentgen-controls-20261021/`.
+
+## Production follow-up — October 21, after 18:40 UTC
+
+At the one next-session check, commit `3780e092fdada91b61b1be8efe2e2cccec179aee`
+passed [UI deployment 39627380687](https://github.com/110kc3/rentgen-ofert/actions/runs/39627380687).
+The live HTML uses `app.js?v=27`; `app.js`, `storage.js` and `stats.js` match
+the committed source bytes. The full **33/33 Chromium checks pass on the live
+deployment**, without replacing any script. A separate live address/copy check
+reaches UUG, ULDK and both WFS layers with HTTP 200, displays the parcel and
+copies a command without opening the listing. No matching deeds were returned
+for the checked public address. Initial browser-load timeouts cleared on
+subsequent checks; no persistent rendering error was reproduced.
+
+Every public JSON file was downloaded, followed by another manifest read to
+confirm a stable publication. The complete validator passes on both served
+trees with only the deliberately unserved pipeline history requirement omitted:
+
+| Region | Data ref | Public JSON files / bytes | Current / archive / sale claims |
+|---|---|---|---|
+| Śląskie | `8145ae2e1119c127f27acd5b56c28f713ff2411b` | 134 / 116,065,308 | 30,876 / 4,093 / 111 |
+| Opolskie | `cb36e709d52057eee2a4fd47c1e9bba586fde403` | 134 / 8,586,501 | 3,656 / 605 / 7 |
+
+Śląskie's last published update is October 21 14:04:08 UTC: healthy October 16
+RCN, 3,901 matched histories, 75.3-minute runtime, zero critical photo deferrals/
+backlog and complete October 15 archive checkpoint. Coordinates cover 20,303
+cards (65.8%). Its public source counts retain Gratka 12,352, Morizon 12,335,
+n-online 10,786 and Otodom 16,164; OLX remains blocked and Otodom partial.
+
+The same commit's [scrape 39627380782](https://github.com/110kc3/rentgen-ofert/actions/runs/39627380782)
+**failed publication validation** after passing all **535 offline tests** and
+the scrape step. Gratka returned repeated HTTP 503 responses and zero offers;
+Morizon still contributed 12,341. The validator rejected Gratka's source total
+and both types against the prior 12,352 / 9,767 flats / 2,585 houses. Regional
+staging/push was skipped and the dependent
+[data deployment 39641499756](https://github.com/110kc3/rentgen-ofert/actions/runs/39641499756)
+was skipped. The last good data ref and public payload remain unchanged. This
+is production evidence of refusal/preservation, not a healthy refresh or a new
+test failure. The quantitative cutoff also retains the earlier frozen-incident
+and boundary-test evidence; no operator override was used.
+
+Opolskie remains on October 20's degraded September 28 RCN and partial archive
+cycle with 52 checkpoints pending. Its most recent attempt marker is October
+20 00:20:50 UTC, so the publication timestamp determines the later eligibility:
+**October 23 01:36:15 UTC**, plus hourly tick, global lock and schedule delays.
+No workflow was dispatched to accelerate it. The repaired two-region stability
+clock has not started; a healthy automatic Śląskie publication after Gratka
+recovery and fresh healthy RCN in both regions remain acceptance requirements.
+
+Production-only downloads and browser reports are under
+`/tmp/rentgen-production-20261021/`. This follow-up changes documentation only;
+neither configured push workflow matches these documentation paths. Observe
+the next automatic refreshes rather than expecting a new scrape from this push.

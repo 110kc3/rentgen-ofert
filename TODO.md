@@ -7,8 +7,9 @@ its historical task lists do not authorize additional work.
 
 ## October 21 selected address/source repairs
 
-The owner selected both numbered audit findings. Implementation is complete;
-the new push's CI/Pages verification is pending.
+The owner selected both numbered audit findings. Implementation and live UI
+verification are complete. The initial data refresh was correctly refused after
+Gratka HTTP 503 responses; a healthy automatic replacement remains pending.
 
 - [x] Repair manual address RCN lookup/copy clicks and verify success, re-render,
   clipboard fallback and accurate provider-failure handling in Chromium.
@@ -23,6 +24,17 @@ and the full frozen public dataset pass. Baselines of at least 100 offers must
 retain at least half, independently per source/type. The conservative threshold
 does not assert complete coverage or detect gradual long-term decline.
 See the [repair audit](docs/audits/2026-10-21-controls-and-continuity.md).
+
+Production follow-up: commit `3780e09` passed
+[UI deploy 39627380687](https://github.com/110kc3/rentgen-ofert/actions/runs/39627380687),
+and 33/33 live Chromium checks pass, including real GUGiK address lookup/copy.
+All 268 public JSON files validate. Its
+[scrape 39627380782](https://github.com/110kc3/rentgen-ofert/actions/runs/39627380782)
+passed 535 tests but failed source continuity after Gratka returned zero offers.
+Regional push and the dependent data deploy were skipped. Śląskie retains the
+healthy 14:04 UTC publication (`8145ae2`, 30,876 cards / 4,093 archives / 111 sale
+claims) and both regions' prior evidence is intact. This refused refresh cannot
+count toward stability. The audit records complete production evidence.
 
 Transport commit `eb7aeab` passed [scrape 39592569525](https://github.com/110kc3/rentgen-ofert/actions/runs/39592569525)
 (524 tests and strict validation) and [Pages 39602509595](https://github.com/110kc3/rentgen-ofert/actions/runs/39602509595)
@@ -183,8 +195,12 @@ for the seven-day/three-cycle gate in this session.
   passed at the one recorded status check.
 - [x] Build and verify a local artifact/catalog dry-run; see the completed slice above.
 - [x] Verify RCN transport commit `eb7aeab`: scrape/strict validation and Pages pass.
-- [ ] Verify the selected address/continuity repair push once: CI/Pages, deployed
-  address check/copy controls, ordinary source counts and the quantitative gate.
+- [x] Check address/continuity commit `3780e09` once: UI deployed, 535 CI tests
+  pass, live controls/readers/payloads pass; source guard correctly refuses a
+  Gratka outage and preserves the previous publication. See the audit.
+- [ ] Confirm the next healthy automatic Śląskie publication after Gratka HTTP
+  503 recovery, with source continuity and no override. The refused initial
+  refresh does not accept a healthy replacement or start the stability clock.
 - [ ] Confirm both regions publish fresh healthy RCN snapshots under the repair.
   Reconcile changed matches, benchmarks and derived sale claims against broader
   export evidence. A rise in source records is not a sales-growth claim.
@@ -200,8 +216,9 @@ Expansion, provider selection, remote migration and the remaining P4 hosting
 work require separate selection. Local rollback checks do not accept nationwide
 capacity or the seven-day cohort. [POLAND_ROLLOUT.md](POLAND_ROLLOUT.md) owns those gates.
 
-The October 21 address/continuity implementation push is pending CI/Pages verification.
-Check its commit once next session, require strict pipeline validation and
-default Pages readers to remain healthy, then inspect the next eligible
-automatic Opolskie publication. Local refresh success does not close either
-remaining production/stability checkbox.
+The address/continuity push check is recorded; do not repeatedly poll that
+terminal run. Next session inspect the next completed automatic Śląskie refresh
+for source recovery and, when eligible, Opolskie's October 23 publication. Leave
+the guards active and retain prior data on failure; no manual dispatch selected.
+This documentation-only handoff does not match either push workflow. Healthy
+replacement, two-region fresh-RCN acceptance and the stability cohort remain open.

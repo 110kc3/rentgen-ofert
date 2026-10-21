@@ -12,13 +12,16 @@ The KW viewer/filter deployments are verified. Śląskie's archive checkpoint is
 complete; Opolskie's new cycle stopped on HTTP 429 with 52 checkpoints pending.
 Coverage remains partial; OLX's bounded probe is blocked.
 
-**Selected Śląskie repairs verified locally:** manual address RCN check/copy
+**Śląskie repairs deployed and checked:** manual address RCN check/copy
 controls now reach their handlers and report failed/incomplete provider responses
 accurately. Source continuity now rejects a loss of more than half the prior
 source/type's current offers when its baseline has at least 100 offers. The
 actual October 20 collapse is rejected; healthy drift passes. 535 offline tests,
-12 focused plus 33 broad Chromium checks and a real-provider candidate check pass. New push
-CI/Pages verification is pending. See the
+12 focused plus 33 broad candidate Chromium checks and a real-provider check pass.
+Production follow-up now passes **33/33 live Chromium checks** and validates all
+268 public JSON files. The UI deploy succeeded; its 535-test scrape was refused
+after Gratka HTTP 503s yielded zero offers, preserving the previous dataset.
+A healthy scheduled replacement remains pending. See the
 [repair audit](docs/audits/2026-10-21-controls-and-continuity.md). The
 [earlier feature audit](docs/audits/2026-10-21-rcn-and-features.md) records coverage
 limits, including coordinates on 65.8% of that publication's current cards.
