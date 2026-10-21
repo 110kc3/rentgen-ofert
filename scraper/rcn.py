@@ -56,6 +56,7 @@ BUD_PROPS = ("teryt,dok_data,tran_rodzaj_rynku,tran_rodzaj_trans,tran_cena_brutt
              "bud_id_budynku")
 
 HEADERS = {"User-Agent": "rentgen-ofert (+https://github.com/) requests"}
+REQUEST_TIMEOUT = (10, 120)  # connect quickly or try the alternate official source
 
 # Immutable, last healthy evidence before the 2026-09-24 empty-cache incident.
 # Restore only this cache, never the old listing history or published payload.
@@ -91,7 +92,7 @@ def _get_page(session, typename, flt, props, start):
         "filter": flt, "propertyName": f"({props})",
     }
     url = WFS + "?" + urllib.parse.urlencode(params)
-    r = session.get(url, headers=HEADERS, timeout=120)
+    r = session.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
     r.raise_for_status()
     return r.content
 
@@ -101,7 +102,7 @@ def _get_total(session, typename, flt):
     params = {"service": "WFS", "version": "2.0.0", "request": "GetFeature",
               "typeNames": typename, "filter": flt, "resultType": "hits"}
     response = session.get(WFS + "?" + urllib.parse.urlencode(params),
-                           headers=HEADERS, timeout=120)
+                           headers=HEADERS, timeout=REQUEST_TIMEOUT)
     response.raise_for_status()
     root = ET.fromstring(response.content)
     if (root.tag != f"{NS_WFS}FeatureCollection"
@@ -373,7 +374,7 @@ def recover_snapshot(session, teryt_prefix, log=print):
         return None
     url = ("https://raw.githubusercontent.com/110kc3/rentgen-ofert/"
            + recovery["ref"] + "/" + recovery["path"])
-    response = session.get(url, headers=HEADERS, timeout=120)
+    response = session.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
     response.raise_for_status()
     if hashlib.sha256(response.content).hexdigest() != recovery["sha256"]:
         raise ValueError("RCN: recovery cache checksum mismatch")

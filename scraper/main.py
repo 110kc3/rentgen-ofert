@@ -338,8 +338,9 @@ def run() -> int:
     rcn_started = time.monotonic()
     if rcn_mode != "0":
         teryt = REGION_CONFIG["teryt"]
-        snap = rcn.refresh(RCN_CACHE, http, teryt_prefix=teryt, today=today,
-                           force=(rcn_mode == "force"))
+        with net.rcn_session() as rcn_http:
+            snap = rcn.refresh(RCN_CACHE, rcn_http, teryt_prefix=teryt, today=today,
+                               force=(rcn_mode == "force"))
         rcn_health = rcn.refresh.last_health
         if snap is None:
             raise RuntimeError("No usable RCN snapshot; refusing to publish without transaction evidence")

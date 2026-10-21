@@ -5,17 +5,29 @@ to grow deliberately to all 16 Polish voivodeships. It attempts **Otodom**,
 **OLX**, **gratka**, **Morizon** and **nieruchomości-online**, de-duplicates
 what the portals serve, and presents it on a searchable static site.
 
-**2026-10-19 status:** Śląskie and Opolskie are published, with serial portal
+**2026-10-21 status:** Śląskie and Opolskie are published, with serial portal
 access. Śląskie runs twice daily; Opolskie uses the implemented 72-hour cadence.
 Małopolskie is a completed, disabled pilot with its data branch retained.
-The KW viewer/filter deployments are verified, and both regional archive
-checkpoints are complete. Coverage remains partial; OLX's bounded probe is blocked.
+The KW viewer/filter deployments are verified. Śląskie's archive checkpoint is
+complete; Opolskie's new cycle stopped on HTTP 429 with 52 checkpoints pending.
+Coverage remains partial; OLX's bounded probe is blocked.
+
+**Śląskie feature audit:** 32 of 33 live Chromium checks pass, covering filters,
+sorts, timelines, archive retry, maps, statistics and KW flows. Manual address
+RCN check/copy buttons have a confirmed event-propagation defect. An October 20
+source collapse also passed categorical continuity before the next run recovered;
+only 65.8% of current cards have map coordinates. See the
+[October 21 audit](docs/audits/2026-10-21-rcn-and-features.md) for evidence and limits.
 
 **RCN recovery is verified on Śląskie:** commit `6fbb266` passed its scrape and
 Pages deploy, publishing healthy export-backed evidence with 3,850 matched
 properties and 112 confirmed archive sales in 78.2 minutes. Opolskie still
-retains its older snapshot until its next automatic eligible refresh (October
-19, subject to scheduling delays). Strict WFS checks remain; rejected pulls use
+retains its older snapshot after both GUGiK hosts timed out on October 20.
+Its next automatic eligibility is October 23 01:36 UTC, plus scheduling delays.
+RCN now uses a separate session, a 10-second connect timeout and bounded
+whole-file retries for interrupted exports. A local refresh of a production
+cache copy validates both layers in 19.8 seconds; production recovery is pending.
+Strict WFS checks remain; rejected pulls use
 both official GUGiK provincial GeoParquet exports, validated before atomic cache
 replacement. Source URLs, file hashes and raw counts are retained. PyArrow reads
 only matching fields in batches; raw exports stay temporary. Retrieval date does
@@ -41,11 +53,12 @@ CI/Pages verification. The selected dry-run now generates catalogs and
 discovery links from verified immutable versions and excludes their payloads
 from a separate candidate Pages artifact. The frozen mixed-backend artifact is
 about 9.67 MB versus 126.42 MB with both datasets on Pages. 518 offline tests
-and 24 local Chromium checks pass. No remote artifact is deployed; this dry-run
-push's CI/Pages verification is pending.
+and 24 local Chromium checks passed for that slice. Dry-run commit `8733060`
+passed CI/Pages; no remote artifact is deployed. The October 21 transport change
+passes 524 offline tests and awaits its own push verification.
 
 The seven-healthy-day / three-Opolskie-cycle gate remains open because the
-last three automatic Opolskie refreshes all retained degraded RCN evidence.
+automatic Opolskie refreshes through October 20 retained degraded RCN evidence.
 The repaired two-region observation has not started.
 [TODO.md](TODO.md) owns the next checks; the
 [October 17 audit](docs/audits/2026-10-17-rcn-exports.md) records frozen evidence

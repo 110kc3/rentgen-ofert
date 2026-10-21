@@ -1,12 +1,19 @@
 """Official export fallback, using fictional Parquet files and no network."""
 import datetime as dt
+import hashlib
 import io
 
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
+import requests
 
 from scraper import rcn, rcn_exports
+
+
+@pytest.fixture(autouse=True)
+def no_retry_wait(monkeypatch):
+    monkeypatch.setattr(rcn_exports.time, "sleep", lambda seconds: None)
 
 
 def _row(layer="lokale", **changes):
@@ -152,3 +159,75 @@ def test_shrunken_complete_export_cannot_replace_cache(tmp_path, monkeypatch):
     assert rcn.refresh(path, _session(), "16", today="2026-10-17") == previous
     assert path.read_bytes() == original
     assert "20%" in rcn.refresh.last_health["error"]
+
+
+@pytest.mark.parametrize("failure", [
+    requests.ConnectTimeout, requests.ReadTimeout, requests.ConnectionError,
+    requests.exceptions.ChunkedEncodingError,
+])
+def test_transient_download_restarts_with_clean_bytes_and_hash(tmp_path, failure):
+    good = _session()
+
+    class Interrupted:
+        calls = 0
+        def get(self, url, **kwargs):
+            self.calls += 1
+            assert kwargs["timeout"] == (10, 120)
+            if self.calls == 1 and failure is requests.ConnectTimeout:
+                raise failure("connection timed out")
+            response = good.get(url, **kwargs)
+            if self.calls == 1:
+                def stream(size):
+                    yield b"partial bytes that must be discarded"
+                    raise failure("stream interrupted")
+                response.iter_content = stream
+            return response
+
+    session = Interrupted()
+    path = tmp_path / "layer.parquet"
+    size, digest = rcn_exports._download(session, "https://example.test/lokale.parquet",
+                                         path, log=lambda *a: None)
+    assert session.calls == 2
+    assert path.read_bytes() == good.files["lokale"]
+    assert size == len(good.files["lokale"])
+    assert digest == hashlib.sha256(good.files["lokale"]).hexdigest()
+
+
+def test_exhausted_second_layer_timeouts_retain_cache(tmp_path, monkeypatch):
+    def broken(*a, **kw):
+        raise ValueError("bad WFS")
+    monkeypatch.setattr(rcn, "fetch", broken)
+    path = tmp_path / "cache.gz"
+    tx = {"d": "2026-01-02", "c": 200000, "a": 40, "rynek": "w"}
+    previous = {"fetched": "2026-09-28", "lokale": [tx], "budynki": [tx]}
+    rcn.save_snapshot(path, previous)
+    original = path.read_bytes()
+    good = _session()
+
+    class Unavailable:
+        attempts = 0
+        def get(self, url, **kw):
+            if "budynki.parquet" in url:
+                self.attempts += 1
+                raise requests.ConnectTimeout("export host unreachable")
+            return good.get(url, **kw)
+
+    session = Unavailable()
+    assert rcn.refresh(path, session, "16", today="2026-10-21") == previous
+    assert session.attempts == 3
+    assert path.read_bytes() == original
+    assert rcn.refresh.last_health["status"] == "degraded"
+    assert rcn.refresh.last_health["fetched"] == "2026-09-28"
+
+
+def test_permanent_http_error_is_not_retried(tmp_path):
+    class Missing:
+        calls = 0
+        def get(self, *a, **kw):
+            self.calls += 1
+            raise requests.HTTPError("404 missing export")
+    session = Missing()
+    with pytest.raises(requests.HTTPError):
+        rcn_exports._download(session, "https://example.test/lokale.parquet",
+                             tmp_path / "layer.parquet", log=lambda *a: None)
+    assert session.calls == 1

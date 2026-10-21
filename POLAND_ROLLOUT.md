@@ -1,6 +1,6 @@
 # Whole-Poland rollout: status and gates
 
-Updated 2026-10-19. [TODO.md](TODO.md) owns accepted tasks and the next check;
+Updated 2026-10-21. [TODO.md](TODO.md) owns accepted tasks and the next check;
 this document owns rollout decisions and future capacity/acceptance gates.
 The [development history](docs/HISTORY.md) preserves the former queue diary.
 
@@ -16,19 +16,22 @@ its isolated data ref recoverable at `cba13c7`.
 | Area | Current evidence / remaining gate |
 |---|---|
 | Regional catalog, routes, state, branches and overlay | Implemented and production-proven for the published pair; disabled pilot remains absent. |
-| Source continuity | Four contributing portals retained; OLX blocked, Otodom partial. Overall coverage remains partial. |
-| Archive maintenance | Both saved checkpoints complete: Śląskie Oct 15 / 49,854 records; Opolskie Oct 13 / 7,822. Regional staging enforces its scoped data/cache path allowlist, including the new archive shards. |
-| Ordinary runtime | Latest repaired Śląskie publication Oct 19: 82.3 min, zero critical photo deferrals/backlog. Opolskie Oct 16: 11.0 min with degraded RCN; repaired two-region maintenance acceptance remains open. |
-| RCN health | Śląskie remains healthy: 315,432 / 576,596 deeds, 3,872 matches, 111 archive sale claims. One previously archived history returned active under another URL. At 20:15 UTC Opolskie still awaits its next eligible automatic refresh after 22:15 UTC. |
-| Cohort gate | Not accepted: automatic Opolskie runs Oct 10, 13 and 16 all retained degraded RCN evidence. Restart after repaired healthy publications in both regions; require seven healthy days / three automatic Opolskie cycles. |
+| Source continuity | Four contributing portals retained; OLX blocked, Otodom partial. An Oct 20 publication fell to 37 Gratka / 37 Morizon rows yet passed categorical continuity; the next run recovered. Quantitative collapse protection remains an unselected finding. |
+| Archive maintenance | Śląskie complete: Oct 15 / 49,854 records. Opolskie's new Oct 20 cycle stopped on HTTP 429, with 52 checkpoints pending; its prior Oct 13 / 7,822-record checkpoint remains available. |
+| Ordinary runtime | Oct 20 Śląskie: 75.9 min, zero critical photo deferrals/backlog. Opolskie: 75.0 min including failed RCN and slow geocoding; fresh two-region maintenance acceptance remains open. |
+| RCN health | Śląskie healthy: 315,432 / 576,596 deeds, 3,894 matches, 111 archive sale claims. Opolskie Oct 20 retained degraded Sep 28 evidence after both hosts timed out. Selected transport hardening passes a 19.8-second local refresh of 63,494 / 86,224 deeds; production recovery pending, next automatic eligibility Oct 23 01:36 UTC. |
+| Cohort gate | Not started: automatic Opolskie runs through Oct 20 retained degraded RCN. Restart after repaired healthy publications in both regions; require seven healthy days / three automatic Opolskie cycles. |
 | KW UI | Existing viewer/filter scrape and Pages deployment verified. No further KW acquisition work selected here. |
-| Storage/capacity | Column indexes/lazy archives and reader push production-verified. Selected local deployment dry-run seals catalogs to verified versions and omits external payloads; frozen artifact 126.42 → 9.67 MB. 518 tests / 24 local Chromium checks pass; dry-run push CI pending. Nationwide quota, retention and remote deployment gates remain open. |
+| Shipped Śląskie features | 32/33 live Chromium checks pass. Manual address RCN check/copy controls have blocked delegated clicks; only 65.8% of current offers have coordinates. See the October 21 audit. |
+| Storage/capacity | Column indexes/lazy archives and dry-run push production-verified. Selected local deployment dry-run seals catalogs to verified versions and omits external payloads; frozen artifact 126.42 → 9.67 MB. Nationwide quota, retention and remote deployment gates remain open. |
 
 The [October 17 audit](docs/audits/2026-10-17-rcn-exports.md) records immutable
 refs, Actions runs, archive state, the RCN failure and local repair checks.
 The [October 19 audit](docs/audits/2026-10-19-storage.md) accepts the compact
 payload release in production; [the storage guide](docs/STORAGE.md) records the
 selected local prototype and retained-version capacity measurements.
+The [October 21 audit](docs/audits/2026-10-21-rcn-and-features.md) records current
+production refs, selected RCN transport recovery and live feature findings.
 Future rollout still requires ≤180-minute warm/maintenance runtimes (preferred
 ≤150), regional isolation, healthy evidence, seven-day cohort observation and
 the existing storage/atomic-publication gates. Green CI using an old cache is

@@ -10,14 +10,57 @@ import hashlib
 import pathlib
 import re
 import tempfile
+import time
 
 import pyarrow.parquet as pq
+import requests
 
 from . import rcn
 
 EXPORT_BASE = ("https://opendata.geoportal.gov.pl/InneDane/latest_exports/"
                "rcn_transakcje_ceny/PARQUET/")
 MAX_EXPORT_BYTES = 512 * 1024 * 1024
+DOWNLOAD_ATTEMPTS = 3
+
+
+class IncompleteExportError(ValueError):
+    pass
+
+
+def _download(session, url, path, log):
+    """Retry interrupted streams as whole files, never append to a partial file.
+
+    Requests' adapter retries stop once streaming response headers arrive.
+    Parsing and data validation stay outside this retry loop: corrupt data is
+    not a transient transport error and must never replace the previous cache.
+    """
+    for attempt in range(1, DOWNLOAD_ATTEMPTS + 1):
+        size, digest = 0, hashlib.sha256()
+        try:
+            with session.get(url, headers=rcn.HEADERS,
+                             timeout=rcn.REQUEST_TIMEOUT, stream=True) as response:
+                response.raise_for_status()
+                declared = response.headers.get("Content-Length")
+                if declared is not None and not 0 < int(declared) <= MAX_EXPORT_BYTES:
+                    raise ValueError("RCN export: invalid download size")
+                with path.open("wb") as output:
+                    for chunk in response.iter_content(1024 * 1024):
+                        size += len(chunk)
+                        if size > MAX_EXPORT_BYTES:
+                            raise ValueError("RCN export: download too large")
+                        output.write(chunk)
+                        digest.update(chunk)
+                if declared is not None and size != int(declared):
+                    raise IncompleteExportError("RCN export: interrupted download")
+            return size, digest.hexdigest()
+        except (requests.ConnectionError, requests.Timeout,
+                requests.exceptions.ChunkedEncodingError, IncompleteExportError) as exc:
+            path.unlink(missing_ok=True)
+            if attempt == DOWNLOAD_ATTEMPTS:
+                raise
+            log(f"RCN export: download attempt {attempt}/{DOWNLOAD_ATTEMPTS} "
+                f"failed ({exc}); restarting {url}")
+            time.sleep(2 * attempt)
 
 
 def _read_export(path, region, layer, props, compact):
@@ -63,24 +106,10 @@ def fetch_exports(session, region, log=print):
                                       ("budynki", rcn.BUD_PROPS, rcn._compact_bud)):
             url = f"{EXPORT_BASE}{region}_transakcje_ceny_{layer}.parquet"
             path = pathlib.Path(directory) / f"{layer}.parquet"
-            size, digest = 0, hashlib.sha256()
-            with session.get(url, headers=rcn.HEADERS, timeout=120, stream=True) as response:
-                response.raise_for_status()
-                declared = response.headers.get("Content-Length")
-                if declared is not None and not 0 < int(declared) <= MAX_EXPORT_BYTES:
-                    raise ValueError(f"RCN export {layer}: invalid download size")
-                with path.open("wb") as output:
-                    for chunk in response.iter_content(1024 * 1024):
-                        size += len(chunk)
-                        if size > MAX_EXPORT_BYTES:
-                            raise ValueError(f"RCN export {layer}: download too large")
-                        output.write(chunk)
-                        digest.update(chunk)
-                if declared is not None and size != int(declared):
-                    raise ValueError(f"RCN export {layer}: interrupted download")
+            size, digest = _download(session, url, path, log)
             records, raw = _read_export(path, region, layer, props, compact)
             layers[layer] = records
-            sources[layer] = {"url": url, "sha256": digest.hexdigest(),
+            sources[layer] = {"url": url, "sha256": digest,
                               "bytes": size, "rows": raw}
             log(f"RCN export {layer}: {raw} source rows, {len(records)} usable transactions")
     return layers["lokale"], layers["budynki"], {"kind": "gugik_exports", "files": sources}

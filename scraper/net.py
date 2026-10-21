@@ -74,3 +74,20 @@ def probe_session() -> requests.Session:
     s.mount("https://", adapter)
     s.mount("http://", adapter)
     return s
+
+
+def rcn_session() -> requests.Session:
+    """Keep GUGiK outages out of the portal crawler's six-attempt ladder.
+
+    One transport retry is enough before WFS falls back to exports. Export
+    body interruptions are retried from byte zero by the export reader.
+    """
+    s = requests.Session()
+    retry = CappedRetry(total=1, connect=1, read=0, status=1,
+                        status_forcelist=(429, 500, 502, 503, 504),
+                        backoff_factor=1, respect_retry_after_header=True,
+                        raise_on_status=False)
+    adapter = HTTPAdapter(max_retries=retry)
+    s.mount("https://", adapter)
+    s.mount("http://", adapter)
+    return s

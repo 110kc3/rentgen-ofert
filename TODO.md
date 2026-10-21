@@ -1,9 +1,41 @@
 # Current queue — rentgen-ofert
 
-Updated 2026-10-19. This file owns accepted work and the next-session handoff.
+Updated 2026-10-21. This file owns accepted work and the next-session handoff.
 [Development history](docs/HISTORY.md) preserves the former diary and unselected
 ideas. [POLAND_ROLLOUT.md](POLAND_ROLLOUT.md) owns expansion and capacity gates;
 its historical task lists do not authorize additional work.
+
+## October 21 selected recovery and feature audit
+
+The owner selected Opolskie RCN transport recovery and a Śląskie feature audit.
+Production logs show both GUGiK connections timed out before parsing, spending
+26 minutes in the portal retry ladder. RCN now has its own session, 10-second
+connect timeout, one adapter retry and up to three complete export-download
+attempts. Interrupted streams restart bytes/hashes; invalid data and failed
+second layers still preserve the previous atomic cache and retrieval date.
+
+524 offline tests pass. A fresh local refresh of the actual Opolskie cache copy
+validated 63,494 flat / 86,224 building deeds in 19.78 seconds. No cache was
+uploaded. Commit `8733060` passed its 518-test scrape, strict validation and
+Pages deployment. Its previously pending verification is resolved.
+
+Both complete live public trees validate (134 JSON files each). Śląskie passes
+32/33 live Chromium checks; manual address RCN check/copy controls are blocked
+by event propagation. A transient 37-row Gratka/Morizon collapse also escaped
+categorical continuity. These are **unselected repair suggestions**, detailed
+in the [October 21 audit](docs/audits/2026-10-21-rcn-and-features.md), not added
+implementation work.
+
+Opolskie published October 20 01:36:15 UTC with degraded September 28 RCN and
+a new archive cycle rate-limited at 52 pending checkpoints. Next automatic
+eligibility is **October 23 01:36:15 UTC**, subject to scheduling/lock delays.
+Śląskie remains healthy with 30,914 current cards, 4,092 archive cards and 111
+sale claims; zero critical photo deferrals/backlog. The repaired two-region
+stability clock has **not started**. This transport push requires its own
+CI/Pages check; production Opolskie recovery remains pending.
+
+Earlier dated sections below retain their original evidence; this section
+supersedes their outstanding-status snapshots.
 
 ## Completed repair and selected stability/storage follow-up
 
@@ -107,7 +139,7 @@ Opolskie local. The [storage guide](docs/STORAGE.md) and
 versions, exact measurements and limitations. The normal deployment workflow
 does not invoke this dry-run; no remote host/provider was configured.
 
-**Selected item 1 is checked but pending:** at Oct 19 20:15:17 UTC Opolskie still
+**Historical selected item 1 check:** at Oct 19 20:15:17 UTC Opolskie still
 serves its Oct 16 publication and degraded Sep 28 RCN, before its next eligibility
 at 22:15:19 UTC. The repaired two-region observation has not started. Continue
 after the scheduled publication; do not accelerate it with a dispatch or wait
@@ -140,6 +172,8 @@ Expansion, provider selection, remote migration and the remaining P4 hosting
 work require separate selection. Local rollback checks do not accept nationwide
 capacity or the seven-day cohort. [POLAND_ROLLOUT.md](POLAND_ROLLOUT.md) owns those gates.
 
-This implementation push is pending CI/Pages verification. Check its commit
-once next session, require strict pipeline validation and default Pages readers
-to remain healthy, then inspect the scheduled Opolskie publication if complete.
+The October 21 transport implementation push is pending CI/Pages verification.
+Check its commit once next session, require strict pipeline validation and
+default Pages readers to remain healthy, then inspect the next eligible
+automatic Opolskie publication. Local refresh success does not close either
+remaining production/stability checkbox.
