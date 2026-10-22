@@ -1,11 +1,34 @@
 # Current queue — rentgen-ofert
 
-Updated 2026-10-21. This file owns accepted work and the next-session handoff.
+Updated 2026-10-22. This file owns accepted work and the next-session handoff.
 [Development history](docs/HISTORY.md) preserves the former diary and unselected
 ideas. [POLAND_ROLLOUT.md](POLAND_ROLLOUT.md) owns expansion and capacity gates;
 its historical task lists do not authorize additional work.
 
-## October 21 selected address/source repairs
+## October 22 scheduled source recovery — verified
+
+Pulled `main` with `--ff-only`; already at `385ea9a`. The next accepted task is
+complete: [automatic Śląskie scrape 39678803197](https://github.com/110kc3/rentgen-ofert/actions/runs/39678803197)
+passed 535 tests, strict source/type/RCN validation and regional staging with
+`ALLOW_SOURCE_REGRESSION: false`; [deploy 39689522871](https://github.com/110kc3/rentgen-ofert/actions/runs/39689522871)
+passed. This is a real publication, not a green hourly no-op.
+
+New data ref `b0ce686`, published Oct 21 22:51:19 UTC: 31,000 cards, 4,091 archive
+faces, 110 sale claims, 3,902 RCN matches; Gratka/Morizon recovered to 12,341 rows
+each. Runtime 84.1 minutes, zero critical photo deferrals/backlog, persisted archive
+checkpoint complete. All 134 public JSON files validate and nine live Chromium
+checks pass. The two removed archive histories are preserved and active; one
+carried the former sale claim, explaining the archive/sale-count changes.
+See the [source-recovery audit](docs/audits/2026-10-22-source-recovery.md).
+
+Śląskie still uses its healthy October 16 RCN cache. Opolskie remains on its
+October 20 publication with degraded September 28 RCN and 52 archive checkpoints
+pending. Next automatic eligibility is **October 23 01:36:15 UTC** plus schedule/
+lock delays. Fresh two-region RCN acceptance and the stability observation remain
+open; the clock has not started. No manual dispatch, override, new region or
+hosting work was selected. Earlier dated sections retain their original evidence.
+
+## Earlier October 21 selected address/source repairs
 
 The owner selected both numbered audit findings. Implementation and live UI
 verification are complete. The initial data refresh was correctly refused after
@@ -198,9 +221,9 @@ for the seven-day/three-cycle gate in this session.
 - [x] Check address/continuity commit `3780e09` once: UI deployed, 535 CI tests
   pass, live controls/readers/payloads pass; source guard correctly refuses a
   Gratka outage and preserves the previous publication. See the audit.
-- [ ] Confirm the next healthy automatic Śląskie publication after Gratka HTTP
-  503 recovery, with source continuity and no override. The refused initial
-  refresh does not accept a healthy replacement or start the stability clock.
+- [x] Confirm a healthy automatic Śląskie publication after Gratka HTTP 503
+  recovery: scrape 39678803197/deploy 39689522871 passed; full live payload,
+  continuity without override and archive reconciliation verified October 22.
 - [ ] Confirm both regions publish fresh healthy RCN snapshots under the repair.
   Reconcile changed matches, benchmarks and derived sale claims against broader
   export evidence. A rise in source records is not a sales-growth claim.
@@ -216,9 +239,9 @@ Expansion, provider selection, remote migration and the remaining P4 hosting
 work require separate selection. Local rollback checks do not accept nationwide
 capacity or the seven-day cohort. [POLAND_ROLLOUT.md](POLAND_ROLLOUT.md) owns those gates.
 
-The address/continuity push check is recorded; do not repeatedly poll that
-terminal run. Next session inspect the next completed automatic Śląskie refresh
-for source recovery and, when eligible, Opolskie's October 23 publication. Leave
-the guards active and retain prior data on failure; no manual dispatch selected.
-This documentation-only handoff does not match either push workflow. Healthy
-replacement, two-region fresh-RCN acceptance and the stability cohort remain open.
+Both address/continuity push verification and healthy Śląskie source recovery
+are recorded; do not repeatedly poll those terminal runs. The next TODO is the
+fresh healthy two-region RCN check, led by Opolskie's next eligible October 23
+publication. Leave guards active and preserve prior data on failure; no manual
+dispatch selected. This documentation-only handoff matches neither push workflow.
+Two-region fresh-RCN acceptance and the stability cohort remain open.

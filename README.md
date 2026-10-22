@@ -5,7 +5,7 @@ to grow deliberately to all 16 Polish voivodeships. It attempts **Otodom**,
 **OLX**, **gratka**, **Morizon** and **nieruchomości-online**, de-duplicates
 what the portals serve, and presents it on a searchable static site.
 
-**2026-10-21 status:** Śląskie and Opolskie are published, with serial portal
+**2026-10-22 status:** Śląskie and Opolskie are published, with serial portal
 access. Śląskie runs twice daily; Opolskie uses the implemented 72-hour cadence.
 Małopolskie is a completed, disabled pilot with its data branch retained.
 The KW viewer/filter deployments are verified. Śląskie's archive checkpoint is
@@ -19,9 +19,14 @@ source/type's current offers when its baseline has at least 100 offers. The
 actual October 20 collapse is rejected; healthy drift passes. 535 offline tests,
 12 focused plus 33 broad candidate Chromium checks and a real-provider check pass.
 Production follow-up now passes **33/33 live Chromium checks** and validates all
-268 public JSON files. The UI deploy succeeded; its 535-test scrape was refused
-after Gratka HTTP 503s yielded zero offers, preserving the previous dataset.
-A healthy scheduled replacement remains pending. See the
+268 public JSON files. The initial 535-test scrape was refused after Gratka HTTP
+503s yielded zero offers, preserving the previous dataset. A subsequent automatic
+refresh recovered with continuity active and no override: 31,000 current cards,
+4,091 archives, 110 archive sale claims and an 84.1-minute runtime. All 134 updated
+public JSON files and nine focused live browser checks pass. Both removed archive
+histories remain preserved and active, explaining the changed archive/sale counts.
+The [October 22 recovery audit](docs/audits/2026-10-22-source-recovery.md) closes
+the source-recovery TODO; fresh Opolskie RCN and the cohort gate remain open. See the
 [repair audit](docs/audits/2026-10-21-controls-and-continuity.md). The
 [earlier feature audit](docs/audits/2026-10-21-rcn-and-features.md) records coverage
 limits, including coordinates on 65.8% of that publication's current cards.

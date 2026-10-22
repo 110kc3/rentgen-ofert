@@ -1,6 +1,6 @@
 # Whole-Poland rollout: status and gates
 
-Updated 2026-10-21. [TODO.md](TODO.md) owns accepted tasks and the next check;
+Updated 2026-10-22. [TODO.md](TODO.md) owns accepted tasks and the next check;
 this document owns rollout decisions and future capacity/acceptance gates.
 The [development history](docs/HISTORY.md) preserves the former queue diary.
 
@@ -16,10 +16,10 @@ its isolated data ref recoverable at `cba13c7`.
 | Area | Current evidence / remaining gate |
 |---|---|
 | Regional catalog, routes, state, branches and overlay | Implemented and production-proven for the published pair; disabled pilot remains absent. |
-| Source continuity | Last good published contributions retained; OLX blocked, Otodom partial. Commit 3780e09 passed 535 tests then refused a zero-row Gratka HTTP 503 outage; staging/data deploy skipped and prior publication preserved. Healthy automatic replacement pending. The ≥100 baseline / ≥50% retention rule also rejects the frozen 37-row collapse. |
+| Source continuity | Post-outage recovery accepted: automatic scrape 39678803197/deploy 39689522871 passed, 535 tests and source/type continuity without override. Gratka/Morizon contribute 12,341 each. The earlier 503 run preserved the good dataset; the ≥100 baseline / ≥50% retention rule remains active. OLX blocked, Otodom partial. |
 | Archive maintenance | Śląskie complete: Oct 15 / 49,854 records. Opolskie's new Oct 20 cycle stopped on HTTP 429, with 52 checkpoints pending; its prior Oct 13 / 7,822-record checkpoint remains available. |
-| Ordinary runtime | Last published Oct 21 Śląskie: 75.3 min, zero critical photo deferrals/backlog. Opolskie: 75.0 min including failed RCN and slow geocoding; fresh two-region maintenance acceptance remains open. |
-| RCN health | Last published Śląskie healthy: 315,432 / 576,596 deeds, 3,901 matches, 111 archive sale claims. Opolskie Oct 20 retained degraded Sep 28 evidence after both hosts timed out. Selected transport hardening passes a 19.8-second local refresh of 63,494 / 86,224 deeds; production recovery pending, next automatic eligibility Oct 23 01:36 UTC. |
+| Ordinary runtime | Recovered Oct 21 22:51 UTC Śląskie: 84.1 min, zero critical photo deferrals/backlog. Opolskie: 75.0 min including failed RCN and slow geocoding; fresh two-region maintenance acceptance remains open. |
+| RCN health | Śląskie retains healthy Oct 16 evidence: 315,432 / 576,596 deeds, 3,902 matches, 110 archive sale claims. Two preserved histories returned active, including one former sale claim. Opolskie still has degraded Sep 28 evidence; next automatic eligibility Oct 23 01:36 UTC. A fresh repaired two-region baseline remains pending. |
 | Cohort gate | Not started: automatic Opolskie runs through Oct 20 retained degraded RCN. Restart after repaired healthy publications in both regions; require seven healthy days / three automatic Opolskie cycles. |
 | KW UI | Existing viewer/filter scrape and Pages deployment verified. No further KW acquisition work selected here. |
 | Shipped Śląskie features | UI deployment verified: 33/33 live Chromium checks, real GUGiK/copy and all 268 public JSON files pass. Failed/incomplete lookup responses show failure. Coordinate coverage remains 65.8%; portal/county-freshness limits remain. |
@@ -34,6 +34,8 @@ The [October 21 audit](docs/audits/2026-10-21-rcn-and-features.md) records curre
 production refs, selected RCN transport recovery and live feature findings.
 The [subsequent repair audit](docs/audits/2026-10-21-controls-and-continuity.md)
 records both selected fixes, actual incident replay and candidate browser checks.
+The [October 22 recovery audit](docs/audits/2026-10-22-source-recovery.md) accepts
+the first healthy scheduled Śląskie replacement and reconciles archive changes.
 Future rollout still requires ≤180-minute warm/maintenance runtimes (preferred
 ≤150), regional isolation, healthy evidence, seven-day cohort observation and
 the existing storage/atomic-publication gates. Green CI using an old cache is
