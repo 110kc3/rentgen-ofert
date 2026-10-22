@@ -12,14 +12,17 @@ the selected local storage/rollback prototype is verified; no additional region,
 concurrent matrix or new hosting infrastructure is selected. Śląskie runs twice daily; Opolskie's implemented serial
 72-hour scheduler is observed in production. Małopolskie stays disabled with
 its isolated data ref recoverable at `cba13c7`.
+On October 22 the owner selected expansion/storage **planning only**; the
+[storage plan](docs/STORAGE.md#production-storage-and-expansion-plan--october-22)
+does not authorize provisioning, migration or another region.
 
 | Area | Current evidence / remaining gate |
 |---|---|
 | Regional catalog, routes, state, branches and overlay | Implemented and production-proven for the published pair; disabled pilot remains absent. |
-| Source continuity | Post-outage recovery accepted: automatic scrape 39678803197/deploy 39689522871 passed, 535 tests and source/type continuity without override. Gratka/Morizon contribute 12,341 each. The earlier 503 run preserved the good dataset; the ≥100 baseline / ≥50% retention rule remains active. OLX blocked, Otodom partial. |
-| Archive maintenance | Śląskie complete: Oct 15 / 49,854 records. Opolskie's new Oct 20 cycle stopped on HTTP 429, with 52 checkpoints pending; its prior Oct 13 / 7,822-record checkpoint remains available. |
-| Ordinary runtime | Recovered Oct 21 22:51 UTC Śląskie: 84.1 min, zero critical photo deferrals/backlog. Opolskie: 75.0 min including failed RCN and slow geocoding; fresh two-region maintenance acceptance remains open. |
-| RCN health | Śląskie retains healthy Oct 16 evidence: 315,432 / 576,596 deeds, 3,902 matches, 110 archive sale claims. Two preserved histories returned active, including one former sale claim. Opolskie still has degraded Sep 28 evidence; next automatic eligibility Oct 23 01:36 UTC. A fresh repaired two-region baseline remains pending. |
+| Source continuity | Latest automatic scrape 39770778678/deploy 39783221230 passed, 535 tests and source/type continuity without override. Gratka/Morizon contribute 12,353 / 12,355; Morizon remains partial because of a small partition shortfall despite rounded 100.0% coverage. The ≥100 baseline / ≥50% retention rule remains active. OLX blocked, Otodom partial. |
+| Archive maintenance | Retained complete checkpoints: Śląskie Oct 15 / 49,854 records, Opolskie Oct 13 / 7,822. New Oct 22 / Oct 20 maintenance cycles stopped on HTTP 429 with 100 / 52 partitions pending. Old checkpoint completeness does not complete the new cycle. |
+| Ordinary runtime | Latest Oct 22 13:00 UTC Śląskie: 91.3 min, zero critical photo deferrals/backlog. Opolskie: 75.0 min including failed RCN and slow geocoding; fresh two-region maintenance acceptance remains open. |
+| RCN health | Śląskie retains healthy Oct 16 evidence: 315,432 / 576,596 deeds, 3,906 matches, 110 archive sale claims. Cache refresh becomes due Oct 23. Opolskie still has degraded Sep 28 evidence; next automatic eligibility Oct 23 01:36 UTC. A fresh repaired two-region baseline remains pending. |
 | Cohort gate | Not started: automatic Opolskie runs through Oct 20 retained degraded RCN. Restart after repaired healthy publications in both regions; require seven healthy days / three automatic Opolskie cycles. |
 | KW UI | Existing viewer/filter scrape and Pages deployment verified. No further KW acquisition work selected here. |
 | Shipped Śląskie features | UI deployment verified: 33/33 live Chromium checks, real GUGiK/copy and all 268 public JSON files pass. Failed/incomplete lookup responses show failure. Coordinate coverage remains 65.8%; portal/county-freshness limits remain. |
@@ -36,6 +39,8 @@ The [subsequent repair audit](docs/audits/2026-10-21-controls-and-continuity.md)
 records both selected fixes, actual incident replay and candidate browser checks.
 The [October 22 recovery audit](docs/audits/2026-10-22-source-recovery.md) accepts
 the first healthy scheduled Śląskie replacement and reconciles archive changes.
+The [later cohort checkpoint](docs/audits/2026-10-22-cohort-checkpoint.md) validates
+the next publication and records the still-open RCN and archive-maintenance gates.
 Future rollout still requires ≤180-minute warm/maintenance runtimes (preferred
 ≤150), regional isolation, healthy evidence, seven-day cohort observation and
 the existing storage/atomic-publication gates. Green CI using an old cache is

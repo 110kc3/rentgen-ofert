@@ -5,6 +5,36 @@ Updated 2026-10-22. This file owns accepted work and the next-session handoff.
 ideas. [POLAND_ROLLOUT.md](POLAND_ROLLOUT.md) owns expansion and capacity gates;
 its historical task lists do not authorize additional work.
 
+## October 22 selected acceptance checks and storage plan
+
+The owner selected fresh two-region RCN acceptance, the stability observation,
+and **planning only** for expansion/storage, with push authorized. Infrastructure,
+provider/account selection, a new region and manual workflow dispatch remain
+outside this batch. The [cohort checkpoint](docs/audits/2026-10-22-cohort-checkpoint.md)
+records the current evidence and the next verification procedure; the
+[storage plan](docs/STORAGE.md#production-storage-and-expansion-plan--october-22)
+defines item 3's deliverable and future acceptance criteria.
+
+Latest Śląskie ref `e351e4e`, published October 22 13:00:42 UTC: 30,970 current
+cards, 4,137 archives, 110 sale claims and 3,906 matched histories. Scheduled
+scrape `39770778678` and deploy `39783221230` passed; 535 CI tests, all 268 live
+JSON files across both regions and nine focused Śląskie Chromium checks pass.
+Strict continuity against the previous publication passes without override.
+Runtime is 91.3 minutes and critical photo deferrals/backlog remain zero.
+
+Neither remaining acceptance gate is complete. Śląskie still uses its healthy
+October 16 RCN cache; the seven-day refresh boundary is October 23. Opolskie
+still publishes degraded September 28 RCN, with automatic eligibility October
+23 01:36:15 UTC plus schedule/lock delays. Both retained archive checkpoints are
+complete, but new maintenance cycles have **100 / 52 pending partitions** after
+HTTP 429. Retaining the old checkpoint does not accept those unfinished cycles.
+The repaired two-region stability clock remains unstarted, with zero accepted
+cycles. Verify the next automatic publications rather than dispatching a run.
+
+This documentation-only push matches neither push workflow. Push verification
+is pending until the scoped commit is published; use the branch Actions view
+at the next session. No runtime or production configuration changes are included.
+
 ## October 22 scheduled source recovery — verified
 
 Pulled `main` with `--ff-only`; already at `385ea9a`. The next accepted task is
@@ -235,8 +265,9 @@ for the seven-day/three-cycle gate in this session.
   ≤180 minutes (preferred ≤150). The known unresolved two-ad Opolskie group
   must stay separate. Investigate failures/missed cycles and restart after recovery.
 
-Expansion, provider selection, remote migration and the remaining P4 hosting
-work require separate selection. Local rollback checks do not accept nationwide
+Expansion/storage planning is selected and recorded in the storage guide.
+Expansion implementation, provider selection, remote migration and the remaining
+P4 hosting work require separate selection. Local rollback checks do not accept nationwide
 capacity or the seven-day cohort. [POLAND_ROLLOUT.md](POLAND_ROLLOUT.md) owns those gates.
 
 Both address/continuity push verification and healthy Śląskie source recovery
@@ -244,4 +275,5 @@ are recorded; do not repeatedly poll those terminal runs. The next TODO is the
 fresh healthy two-region RCN check, led by Opolskie's next eligible October 23
 publication. Leave guards active and preserve prior data on failure; no manual
 dispatch selected. This documentation-only handoff matches neither push workflow.
-Two-region fresh-RCN acceptance and the stability cohort remain open.
+Two-region fresh-RCN acceptance and the stability cohort remain open. The newest
+checkpoint above supersedes earlier same-day publication/maintenance counts.

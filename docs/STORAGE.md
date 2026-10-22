@@ -216,3 +216,86 @@ separately selected deployment slice. No hosting account/provider or migration
 is selected here.
 [TODO.md](../TODO.md) owns the current handoff; [the rollout plan](../POLAND_ROLLOUT.md)
 owns overall capacity and cohort acceptance.
+
+## Production storage and expansion plan — October 22
+
+The owner selected **planning only** for this item, alongside the RCN and
+stability checks in [TODO.md](../TODO.md). This plan is complete as a design
+handoff; every remote implementation step below remains deferred. No provider,
+account, retention period, budget, migration or additional region is selected.
+
+### Order and evidence required
+
+| Step | Planned outcome | Acceptance before advancing |
+|---|---|---|
+| 1. Accept the current cohort | Fresh repaired RCN publications for both regions, then seven healthy days and three automatic Opolskie cycles. | Immutable refs/runs, both RCN layers and provenance, explained match/benchmark/sale changes, resumed archive cycles complete, zero critical photo backlog, normal no-ops, regional isolation and ordinary/fresh-RCN runtimes ≤180 minutes, preferred ≤150. |
+| 2. Select service and retention | A dated comparison of candidate services against measured storage, requests, transfer and a monthly budget. | Verify current official quotas/pricing, public HTTPS, CORS/cache support, immutable object protection and conditional activation. Choose account ownership, retention/open-tab policy and budget before provisioning. No provider recommendation is implied by this plan. |
+| 3. Rehearse one remote region | Upload a frozen Śląskie version while Opolskie continues on Pages. | Complete hash/length inventory verified through public URLs; no credentials exposed; interrupted/invalid upload preserves the prior release; conflicting activation is refused; remote rollback works. Both readers and discovery/download metadata pin the same version. |
+| 4. Integrate publication | Upload/verify first, then generate and promote the sealed Pages catalog/artifact. | Existing local dry-run becomes the tested build input; external payloads stay out of the artifact. A failed upload, validation or build keeps the previous catalog/artifact. The mixed backend passes listing/statistics, lazy archive, error/retry and old-tab checks. |
+| 5. Measure and select the next pilot | Decide whether one additional serial region fits storage, transfer and runner budgets. | Healthy current cohort; measured retained versions and projected full inventory below 70% quota; cold/warm pilot meets the existing rollout gates. Region choice and activation require separate selection. No concurrent matrix or nationwide enablement. |
+
+The completed local publisher, rollback tests and artifact dry-run are inputs
+to steps 3–4, not work to repeat or evidence that remote behavior already passes.
+Allow roughly one focused session for the provider/cost decision and separate
+implementation and verification slices for remote rehearsal and workflow
+integration. Pilot acceptance depends on actual cold/warm runs; it has no fixed
+completion date before those measurements exist.
+
+### Capacity model includes retained publications
+
+The [October 22 checkpoint](audits/2026-10-22-cohort-checkpoint.md) measures
+116,550,340 public JSON bytes for Śląskie and 8,586,501 for Opolskie, each
+134 files. These exclude the additional version inventory and service overhead.
+Use actual regional release inventories when selecting a service. Two retained
+versions alone do not model a retention window with repeated publications.
+
+For a sensitivity calculation, let every one of 16 regions have Śląskie's
+measured size `B`; retain an active and rollback version per region, plus every
+publication in a `D`-day window, plus one serial staging version. With Śląskie
+twice daily and 15 other regions every 72 hours, reserve:
+
+`objects_bytes(D) = B × (32 + 2D + 15 × ceil(D / 3) + 1)`
+
+This deliberately overcounts overlapping active/rollback versions. It assumes
+every publication changes all objects, no cross-version deduplication and no
+compression savings; it excludes growth, inventories and provider overhead.
+The per-region ceiling handles cadence boundaries rather than rounding the
+whole fleet down to an average seven publications/day.
+
+| Illustrative window | Full-version equivalents | Public JSON GB | Quota floor at 70% usage, GB |
+|---|---:|---:|---:|
+| 7 days | 92 | 10.72 | 15.32 |
+| 30 days | 243 | 28.32 | 40.46 |
+| 90 days | 663 | 77.27 | 110.39 |
+
+GB is decimal. These are scenario floors, not a nationwide forecast or selected
+retention periods. Add measured regional sizes/growth, inventory overhead,
+orphaned-upload allowance and rollback reserves before accepting capacity.
+Budget uploads, object operations and download transfer separately: a session
+usually fetches an index and selected lazy shards, not the whole release.
+Measure those requests and distinguish bots from human sessions before
+estimating transfer; existing traffic evidence does not establish a budget.
+
+### Publication, retention and rollback decisions
+
+Keep the existing data branches as the source of pipeline history/caches. Upload
+only the validated public release to a new immutable version path; verify every
+object before activation. Serialize publication and use conditional pointer
+updates so another writer cannot silently replace a newer release. Readers
+must pin the verified version; never fall back to a different snapshot on error.
+Rehearse rollback of both the public catalog and any active pointer, with the
+previous and newer versions still readable by already-open tabs.
+
+The prototype has no garbage collector. A fixed deletion window cannot protect
+arbitrarily old open tabs. Before implementing deletion, explicitly choose
+either indefinite retention with a sustainable budget, or a bounded supported
+tab lifetime plus a user-visible refresh/recovery path for expired versions.
+Until that decision is implemented and tested, do not enable automatic deletion
+or claim that one of the illustrative windows preserves every open tab.
+Protect active, rollback and deployed-catalog versions even when older than a
+chosen window; rehearsal must cover deletion races, interrupted uploads and
+rollback after a newer publication.
+
+The next implementation choice, after cohort acceptance, is step 2's dated
+service/retention proposal. This plan does not create a second task queue;
+[TODO.md](../TODO.md) remains the accepted-work entrypoint.
