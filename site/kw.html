@@ -4,12 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'">
   <title>Twoja lista KW — Rentgen ofert</title>
   <meta name="description" content="Przeglądaj własne zestawienie numerów ksiąg wieczystych, adresów i źródeł. Plik pozostaje w przeglądarce.">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="kw.css?v=1">
+  <link rel="stylesheet" href="kw.css?v=2">
   <script src="kw.js?v=2" defer></script>
+  <script src="kw-catalogue.js?v=1" defer></script>
+  <script src="kw-catalogue-view.js?v=1" defer></script>
 </head>
 <body>
   <main>
@@ -18,6 +20,25 @@
       <p class="lead">Adresy, numery ksiąg i ogłoszenia źródłowe w jednym miejscu.</p>
       <p>Wczytaj własny plik <strong>records.json</strong> wyeksportowany ze sprawdz-kw. Dane pozostają w pamięci tej karty — odświeżenie strony je usuwa.</p>
     </header>
+    <section class="catalogue-panel" aria-labelledby="catalogue-title">
+      <h2 id="catalogue-title">Szukaj w swoim katalogu KW</h2>
+      <p id="catalogue-status" role="status" aria-live="polite">Prywatny katalog jest dostępny w lokalnej wersji Rentgena. Poniżej możesz również wczytać plik.</p>
+      <button id="catalogue-connect" type="button" hidden>Połącz katalog</button>
+      <form id="catalogue-form" hidden>
+        <div class="catalogue-fields">
+          <label>Miejscowość<input id="catalogue-city" required maxlength="500" autocomplete="off"></label>
+          <label>Ulica<input id="catalogue-street" required maxlength="500" autocomplete="off"></label>
+          <label>Nr budynku<input id="catalogue-number" required maxlength="500" autocomplete="off"></label>
+          <label id="catalogue-unit-label">Nr lokalu<input id="catalogue-unit" required maxlength="30" autocomplete="off"></label>
+          <label>Rodzaj<select id="catalogue-kind"><option value="unit">Mieszkanie</option><option value="land">Dom / grunt</option></select></label>
+        </div>
+        <button id="catalogue-search" type="submit">Szukaj po pełnym adresie</button>
+        <button id="catalogue-clear" type="button">Wyczyść wyszukiwanie</button>
+      </form>
+      <p id="catalogue-result-status" role="status" aria-live="polite"></p>
+      <div id="catalogue-results" class="records"></div>
+      <div id="catalogue-land-context" hidden></div>
+    </section>
     <section class="import-panel" aria-label="Wczytaj zestawienie">
       <label for="file">Wybierz plik z rekordami KW <span>JSON · do 4 MiB · do 1000 obserwacji</span></label>
       <input id="file" type="file" accept=".json,application/json">

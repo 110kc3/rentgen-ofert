@@ -28,7 +28,7 @@
   <!-- jsonld:start -->
   <script type="application/ld+json">{}</script>
 <!-- jsonld:end -->
-  <link rel="stylesheet" href="styles.css?v=10">
+  <link rel="stylesheet" href="styles.css?v=11">
 </head>
 <body>
   <header>
@@ -144,6 +144,8 @@
       <p id="kw-help">Wczytaj records.json, a następnie użyj „Powiąż KW” na karcie oferty po sprawdzeniu jej pełnego adresu.
         Filtr „Tylko z KW” pokaże powiązane mieszkania i domy. Powiązanie nie potwierdza aktualnej treści księgi.</p>
       <label>Plik z rekordami KW <input id="kw-file" type="file" accept=".json,application/json"></label>
+      <button type="button" id="kw-connect" hidden>Połącz katalog KW</button>
+      <p id="kw-catalogue-status" role="status" aria-live="polite"></p>
       <button type="button" id="kw-clear" disabled>Usuń dane i powiązania KW</button>
       <p id="kw-status" role="status">Dane i powiązania pozostają w tej karcie. Odświeżenie je usuwa.</p>
       <a href="kw.html">Przeglądaj samą listę KW</a>
@@ -156,6 +158,16 @@
   <dialog id="kw-dialog" aria-labelledby="kw-dialog-title">
     <h2 id="kw-dialog-title">Powiąż KW z ofertą</h2>
     <p id="kw-offer-title"></p>
+    <form id="kw-address-form" class="kw-address-form" hidden>
+      <fieldset><legend>Znajdź KW po pełnym adresie oferty</legend>
+        <label>Miejscowość<input id="kw-address-city" required maxlength="500" autocomplete="off"></label>
+        <label>Ulica<input id="kw-address-street" required maxlength="500" autocomplete="off"></label>
+        <label>Nr budynku<input id="kw-address-number" required maxlength="500" autocomplete="off"></label>
+        <label id="kw-unit-field">Nr lokalu<input id="kw-address-unit" maxlength="30" autocomplete="off"></label>
+        <button id="kw-address-search" type="submit">Szukaj w katalogu KW</button>
+      </fieldset>
+      <p id="kw-query-status" role="status" aria-live="polite"></p>
+    </form>
     <label>Adres i numer ze źródła <select id="kw-record"></select></label>
     <div id="kw-evidence"></div>
     <p id="kw-link-help">Dla mieszkania wybierz jego księgę lokalową; dla domu — księgę gruntu obejmującego dom.
@@ -170,9 +182,10 @@
 
   <script src="region-context.js?v=1"></script>
   <script src="kw.js?v=2"></script>
-  <script src="kw-links.js?v=1"></script>
+  <script src="kw-catalogue.js?v=1"></script>
+  <script src="kw-links.js?v=2"></script>
   <script src="payload.js?v=1"></script>
   <script src="storage.js?v=2"></script>
-  <script src="app.js?v=27"></script>
+  <script src="app.js?v=28"></script>
 </body>
 </html>

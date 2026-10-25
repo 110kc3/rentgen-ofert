@@ -86,6 +86,7 @@ function distOf(l) {
 
 const state = { all: [], archive: null, type: "all", source: "all", owner: "all", history: "all", market: "all", distance: "all", sort: "newest", localities: [], kwOnly: false };
 const kwLinks = RentgenKWLinks.create();
+let kwCatalogueAvailable = false;
 const kwListing = l => ({ url: l.url, type: l.type, locality: normLoc(l.locality) });
 const kwOf = l => kwLinks.get(kwListing(l));
 let locOptions = [];                         // [ [name, count], ... ] sorted by count
@@ -372,7 +373,8 @@ function wireControls() {
 }
 
 // ---- private KW evidence and explicit per-offer associations ---------------
-// Never included in snapshot(), storage, URLs or outgoing requests.
+// Associations never enter filter snapshots, storage or shared URLs. Explicit
+// address searches use only the same-origin private catalogue on loopback.
 function syncKWButton() {
   const button = $("#kw-only");
   if (button) {
@@ -382,23 +384,25 @@ function syncKWButton() {
 }
 
 function kwBlock(l) {
-  if (!kwLinks.size || !l.url) return "";
+  if ((!kwLinks.size && !kwCatalogueAvailable) || !l.url) return "";
   const group = kwOf(l);
   const button = `<button type="button" class="kw-attach">${group ? "Zmień KW" : "Powiąż KW"}</button>`;
   if (!group) return `<div class="kw-card">${button}</div>`;
   const record = group.records[0];
   const sources = group.records.map(r => `<a href="${escapeHtml(r.source.url)}" target="_blank" rel="noopener noreferrer">Źródło ${escapeHtml(r.source.document_date || "bez daty")}</a>`).join(" · ");
   return `<div class="kw-card"><strong>${record.register_type === "unit" ? "KW lokalu" : "KW gruntu domu"}:</strong>
-    <code>${escapeHtml(record.kw_number)}</code><p>${sources}</p>
-    <p class="kw-caveat">Powiązano ręcznie · aktualna treść księgi niesprawdzona</p>
+    <code>${escapeHtml(record.kw_number)}</code> <button type="button" class="kw-copy">Kopiuj KW</button><p>${sources}</p>
+    <p class="kw-caveat">Powiązano ręcznie · ${group.evidence_status === "observed_own_io" ? "adres odczytany z własnego działu I-O" : "historyczne źródło, do sprawdzenia"}</p>
     ${button} <button type="button" class="kw-unlink">Usuń powiązanie</button></div>`;
 }
 
 function wireKW() {
   const input = $("#kw-file"), dialog = $("#kw-dialog"), select = $("#kw-record"), confirmation = $("#kw-confirm-address");
   if (!input || !dialog) return;
-  let generation = 0, target = null, choices = [];
-  const close = () => { dialog.close(); target = null; choices = []; };
+  let generation = 0, queryGeneration = 0, target = null, choices = [];
+  const client = typeof RentgenKWCatalogue !== "undefined" ? RentgenKWCatalogue.createClient() : null;
+  const addressForm = $("#kw-address-form"), queryStatus = $("#kw-query-status");
+  const close = () => { queryGeneration++; dialog.close(); target = null; choices = []; };
   const summary = () => { $("#kw-status").textContent = `Wczytano ${kwLinks.size} obserwacji. Powiązano ${kwLinks.linked} ofert. Dane znikną po odświeżeniu.`; };
   const refresh = () => { summary(); render(); };
   $("#kw-only").addEventListener("click", () => {
@@ -406,7 +410,11 @@ function wireKW() {
     if (state.kwOnly && !kwLinks.size) $("#kw-tools").open = true;
     render();
   });
-  $("#kw-setup").addEventListener("click", () => { $("#kw-tools").open = true; input.click(); });
+  $("#kw-setup").addEventListener("click", () => {
+    $("#kw-tools").open = true;
+    if (client && kwCatalogueAvailable) { state.kwOnly = false; render(); }
+    else input.click();
+  });
   input.addEventListener("change", async () => {
     const file = input.files[0]; if (!file) return;
     const current = ++generation;
@@ -426,6 +434,7 @@ function wireKW() {
   });
   $("#kw-clear").addEventListener("click", () => {
     generation++; close(); kwLinks.clear(); state.kwOnly = false; input.value = "";
+    if (client) for (const field of ["city", "street", "number", "unit"]) $("#kw-address-" + field).value = "";
     $("#kw-clear").disabled = true; refresh();
   });
   function preview() {
@@ -433,6 +442,10 @@ function wireKW() {
     const group = choices.find(g => g.id === select.value), area = $("#kw-evidence");
     area.replaceChildren();
     if (!group) { area.textContent = "Brak zgodnych rekordów dla rodzaju i miejscowości tej oferty. Sprzeczne numery dla jednego adresu wymagają wyjaśnienia w źródłach."; return; }
+    if (group.evidence_status) {
+      const badge = document.createElement("p");
+      badge.textContent = RentgenKWCatalogue.evidenceLabel(group.evidence_status); area.append(badge);
+    }
     for (const r of group.records) {
       const p = document.createElement("p"), link = document.createElement("a");
       link.href = r.source.url; link.target = "_blank"; link.rel = "noopener noreferrer";
@@ -440,33 +453,90 @@ function wireKW() {
       p.append(link); area.append(p);
     }
   }
-  select.addEventListener("change", preview);
-  confirmation.addEventListener("change", () => { $("#kw-save").disabled = !confirmation.checked || !choices.some(g => g.id === select.value); });
-  $("#kw-cancel").addEventListener("click", close);
-  dialog.addEventListener("cancel", () => { target = null; choices = []; });
-  $("#kw-save").addEventListener("click", () => {
-    if (!target) return;
-    try { kwLinks.attach(target, select.value, confirmation.checked); close(); refresh(); }
-    catch (error) { $("#kw-evidence").textContent = error.message; }
-  });
-  $("#grid").addEventListener("click", event => {
-    const attach = event.target.closest(".kw-attach"), remove = event.target.closest(".kw-unlink");
-    if (!attach && !remove) return;
-    event.stopPropagation();
-    const url = event.target.closest(".card").dataset.href;
-    const listing = (inArchive() ? state.archive || [] : state.all).find(l => l.url === url);
-    if (!listing) return;
-    if (remove) { kwLinks.remove(kwListing(listing)); refresh(); return; }
-    target = kwListing(listing); choices = kwLinks.choices(target);
-    $("#kw-offer-title").textContent = listing.title || "Oferta bez tytułu";
+  function setChoices(current) {
     select.replaceChildren(...choices.map(group => {
       const r = group.records[0], a = r.address, option = document.createElement("option");
       option.value = group.id;
       option.textContent = `${a.city}, ${a.street} ${a.number}${a.unit ? "/" + a.unit : ""} — ${r.kw_number}`;
       return option;
     }));
-    const current = kwOf(listing); if (current) select.value = current.id;
-    preview(); dialog.showModal();
+    if (current && choices.some(group => group.id === current.id)) select.value = current.id;
+    preview();
+  }
+  if (client && addressForm && queryStatus) {
+    const status = $("#kw-catalogue-status"), connect = $("#kw-connect");
+    async function connectCatalogue() {
+      if (!client.available) { status.textContent = "Prywatny katalog jest dostępny w lokalnej wersji Rentgena. Tutaj możesz wczytać plik."; return; }
+      connect.disabled = true; status.textContent = "Łączenie z prywatnym katalogiem…";
+      try {
+        const response = await client.status(); kwCatalogueAvailable = true;
+        status.textContent = `Połączono katalog: ${response.catalogue.registers} ksiąg, ${response.catalogue.observations} obserwacji. Użyj „Powiąż KW” na wybranej ofercie.`;
+        $("#kw-setup").textContent = "Katalog KW"; addressForm.hidden = false; render();
+      } catch (error) { kwCatalogueAvailable = false; addressForm.hidden = true; status.textContent = error.message; render(); }
+      finally { connect.disabled = false; }
+    }
+    connect.hidden = !client.available; connect.addEventListener("click", connectCatalogue);
+    if (client.available) connectCatalogue();
+    else status.textContent = "Prywatny katalog jest dostępny w lokalnej wersji Rentgena. Tutaj możesz wczytać plik.";
+    addressForm.addEventListener("input", () => { queryGeneration++; choices = []; setChoices(); $("#kw-address-search").disabled = false; queryStatus.textContent = "Wyszukaj po pełnym adresie tej oferty."; });
+    addressForm.addEventListener("submit", async event => {
+      event.preventDefault(); if (!target) return;
+      const current = ++queryGeneration, selectedTarget = target, button = $("#kw-address-search");
+      choices = []; setChoices(); queryStatus.textContent = "Szukanie w prywatnym katalogu…"; button.disabled = true;
+      try {
+        const request = { city: $("#kw-address-city").value, street: $("#kw-address-street").value,
+          number: $("#kw-address-number").value, register_type: target.type === "flat" ? "unit" : "land" };
+        if (request.register_type === "unit") request.unit = $("#kw-address-unit").value;
+        const response = await client.search(request);
+        if (current !== queryGeneration || target !== selectedTarget) return;
+        const added = kwLinks.addCatalogue(response), allowed = new Set(kwLinks.choices(target).map(group => group.id));
+        choices = added.filter(group => allowed.has(group.id)); setChoices();
+        queryStatus.textContent = response.status === "ambiguous" ? "Różne księgi dla tego adresu — wyjaśnij sprzeczność w źródłach."
+          : choices.length ? "Znaleziono rekord. Porównaj adres ze źródłem i potwierdź powiązanie."
+          : response.land_context.length ? "Znaleziono jedynie księgę gruntu. Nie zastępuje ona księgi mieszkania."
+          : "Brak rekordu dla tego pełnego adresu w katalogu. To nie oznacza braku KW.";
+        $("#kw-clear").disabled = !kwLinks.size; summary(); render();
+      } catch (error) { if (current === queryGeneration && target === selectedTarget) queryStatus.textContent = error.message; }
+      finally { if (current === queryGeneration) button.disabled = false; }
+    });
+  }
+  select.addEventListener("change", preview);
+  confirmation.addEventListener("change", () => { $("#kw-save").disabled = !confirmation.checked || !choices.some(g => g.id === select.value); });
+  $("#kw-cancel").addEventListener("click", close);
+  dialog.addEventListener("cancel", () => { queryGeneration++; target = null; choices = []; });
+  $("#kw-save").addEventListener("click", () => {
+    if (!target) return;
+    try { kwLinks.attach(target, select.value, confirmation.checked); close(); refresh(); }
+    catch (error) { $("#kw-evidence").textContent = error.message; }
+  });
+  $("#grid").addEventListener("click", async event => {
+    const attach = event.target.closest(".kw-attach"), remove = event.target.closest(".kw-unlink"), copy = event.target.closest(".kw-copy");
+    if (!attach && !remove && !copy) return;
+    event.stopPropagation();
+    const url = event.target.closest(".card").dataset.href;
+    const listing = (inArchive() ? state.archive || [] : state.all).find(l => l.url === url);
+    if (!listing) return;
+    if (copy) {
+      const group = kwOf(listing); if (!group) return;
+      try { await navigator.clipboard.writeText(group.records[0].kw_number); copy.textContent = "Skopiowano"; }
+      catch { copy.textContent = "Zaznacz numer KW"; }
+      return;
+    }
+    if (remove) { kwLinks.remove(kwListing(listing)); refresh(); return; }
+    target = kwListing(listing); choices = kwLinks.choices(target);
+    $("#kw-offer-title").textContent = listing.title || "Oferta bez tytułu";
+    queryGeneration++; $("#kw-address-search").disabled = false;
+    if (client && addressForm) {
+      const current = kwOf(listing), address = current && current.records[0].address;
+      $("#kw-address-city").value = address ? address.city : normLoc(listing.locality);
+      $("#kw-address-street").value = address ? address.street : listing.street || "";
+      $("#kw-address-number").value = address ? address.number : event.target.closest(".card").querySelector(".pin-nr")?.value || "";
+      $("#kw-address-unit").value = address && address.unit || "";
+      $("#kw-address-unit").required = target.type === "flat"; $("#kw-address-unit").disabled = target.type !== "flat";
+      $("#kw-unit-field").hidden = target.type !== "flat"; addressForm.hidden = !kwCatalogueAvailable;
+      queryStatus.textContent = "Wpisz pełny adres tej oferty. Dla mieszkania wymagany jest numer lokalu.";
+    }
+    setChoices(kwOf(listing)); dialog.showModal();
   });
 }
 

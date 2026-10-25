@@ -96,6 +96,24 @@ def test_truncated_parquet_is_rejected():
         rcn_exports.fetch_exports(Session({"lokale": _parquet([_row()])[:-20]}), "16")
 
 
+@pytest.mark.parametrize("truncated", [False, True])
+def test_rejected_export_closes_stream_before_temporary_cleanup(monkeypatch, truncated):
+    payload = _parquet([_row(teryt="2401")])
+    if truncated:
+        payload = payload[:-20]
+    opened = []
+    constructor = pq.ParquetFile
+
+    def tracked(stream, *args, **kwargs):
+        opened.append(stream)
+        return constructor(stream, *args, **kwargs)
+
+    monkeypatch.setattr(rcn_exports.pq, "ParquetFile", tracked)
+    with pytest.raises((ValueError, pa.ArrowInvalid)):
+        rcn_exports.fetch_exports(Session({"lokale": payload}), "16")
+    assert opened and all(stream.closed for stream in opened)
+
+
 def test_interrupted_download_is_rejected():
     with pytest.raises(ValueError, match="interrupted download"):
         rcn_exports.fetch_exports(_session(declared=999999), "16")

@@ -70,8 +70,8 @@ RCN evidence remains degraded; storage publication does not repair it.
 
 After successful checks, the complete directory is renamed into its version
 path. An existing version is verified and reused, never overwritten. The pointer
-is written to a temporary file, flushed, atomically replaced and its parent
-directory flushed. Injected interruptions remove staging and leave the pointer
+is written to a temporary file, flushed, atomically replaced and, on POSIX, its
+parent directory flushed. Injected interruptions remove staging and leave the pointer
 unchanged; the first interrupted upload creates no pointer. Rollback rechecks
 the entire target before replacing the pointer. Corrupted targets are rejected.
 Old and new versions remain available to existing tabs after either switch.
@@ -90,8 +90,16 @@ Pointers and errors use `Cache-Control: no-store`; version files use
 `public, max-age=31536000, immutable`. The configured UI origin gets
 `Access-Control-Allow-Origin` and `Vary: Origin`. Reads are credential-free;
 the server has no upload endpoint. Hidden uploads, lock files, directories and
-private history return 404. This Linux prototype uses `fcntl` and same-filesystem
-rename; it is not an object-store adapter or a production web server.
+private history return 404. This prototype uses same-filesystem rename; it is not
+an object-store adapter or a production web server.
+
+Local Windows runs use a real one-byte `msvcrt` file lock; POSIX retains `fcntl`.
+A second process cannot acquire the same publication lock. Windows lock
+contention retries for up to ten seconds and fails before publication if still
+locked. Both paths release the lock after errors. Windows retains file flushing
+and atomic pointer replacement, but Python's directory-fsync operation is not
+available there, so the extra POSIX directory-entry crash durability is not
+claimed. SHA-256 streaming also supports local Python 3.10 environments.
 
 Offline tests run with the normal `python -m pytest -q`. The optional Chromium
 rehearsal creates a temporary UI, storage server, two-region fixtures and two

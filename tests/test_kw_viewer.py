@@ -4,7 +4,7 @@ import subprocess
 import pytest
 
 
-@pytest.mark.parametrize("filename", ["kw_viewer.cjs", "kw_links.cjs"])
+@pytest.mark.parametrize("filename", ["kw_viewer.cjs", "kw_links.cjs", "kw_catalogue.cjs"])
 def test_kw_evidence_viewer_contract(filename):
     result = subprocess.run(
         ["node", "--test", str(pathlib.Path(__file__).with_name(filename))],

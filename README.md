@@ -1,5 +1,10 @@
 # rentgen-ofert
 
+**Private KW integration, 25 October 2026:** this integration branch adds direct
+catalogue search and explicit listing links through the companion `sprawdz-kw`
+service. See [the integration handoff](docs/KW_INTEGRATION.md). The public Pages
+file-import workflow remains available; private records are not shipped here.
+
 A regional house and flat *sale* listing aggregator, Śląskie-first and designed
 to grow deliberately to all 16 Polish voivodeships. It attempts **Otodom**,
 **OLX**, **gratka**, **Morizon** and **nieruchomości-online**, de-duplicates

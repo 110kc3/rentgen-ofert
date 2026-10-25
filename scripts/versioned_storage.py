@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import argparse
 import contextlib
-import fcntl
 import functools
 import hashlib
 import http.server
@@ -23,6 +22,11 @@ import urllib.parse
 from scraper import regions
 from scripts.validate_data import DataValidationError, validate_data_dir
 
+if os.name == "nt":
+    import msvcrt
+else:
+    import fcntl
+
 VERSION = re.compile(r"^[a-f0-9]{64}$")
 OBJECT = re.compile(r"^(?:manifest|index|archive|meta|stats|rcnstats)\.json$|^[da]/\d{2,}\.json$")
 
@@ -33,8 +37,11 @@ def _encode(value):
 
 
 def _sha(path):
+    digest = hashlib.sha256()
     with path.open("rb") as stream:
-        return hashlib.file_digest(stream, "sha256").hexdigest()
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _region(store, slug):
@@ -46,9 +53,27 @@ def _region(store, slug):
 
 @contextlib.contextmanager
 def _locked(root):
-    with (root / ".publish.lock").open("a") as handle:
-        fcntl.flock(handle, fcntl.LOCK_EX)
-        yield
+    with (root / ".publish.lock").open("a+b") as handle:
+        if os.name == "nt":
+            # Lock one existing byte so independently launched publishers share
+            # the same lock. LK_LOCK retries contention for up to ten seconds;
+            # a timeout fails before any publication work starts.
+            if handle.tell() == 0:
+                handle.write(b"\0")
+                handle.flush()
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+            try:
+                yield
+            finally:
+                handle.seek(0)
+                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+        else:
+            fcntl.flock(handle, fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(handle, fcntl.LOCK_UN)
 
 
 def _atomic_pointer(root, version):
@@ -60,11 +85,15 @@ def _atomic_pointer(root, version):
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(temporary, root / "current.json")
-        descriptor = os.open(root, os.O_RDONLY)
-        try:
-            os.fsync(descriptor)
-        finally:
-            os.close(descriptor)
+        # Windows cannot open/fsync a directory through these stdlib calls.
+        # It retains file fsync and atomic replacement, but does not claim the
+        # additional directory-entry crash durability provided on POSIX.
+        if os.name != "nt":
+            descriptor = os.open(root, os.O_RDONLY)
+            try:
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
     finally:
         pathlib.Path(temporary).unlink(missing_ok=True)
 

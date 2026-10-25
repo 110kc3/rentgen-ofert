@@ -2,6 +2,8 @@
 import functools
 import http.server
 import json
+import subprocess
+import sys
 import threading
 import urllib.error
 import urllib.request
@@ -31,6 +33,38 @@ def _change_meta(source):
     meta = json.loads(path.read_bytes())
     meta["updated"] = "2026-10-19T12:00:00Z"
     path.write_text(json.dumps(meta))
+
+
+def test_publication_lock_excludes_another_process_and_releases_after_error(tmp_path):
+    probe = r'''
+import os
+from pathlib import Path
+import sys
+with (Path(sys.argv[1]) / ".publish.lock").open("a+b") as handle:
+    handle.seek(0)
+    try:
+        if os.name == "nt":
+            import msvcrt
+            msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        print("blocked")
+    else:
+        print("acquired")
+'''
+
+    def attempt():
+        result = subprocess.run([sys.executable, "-c", probe, str(tmp_path)],
+                                capture_output=True, text=True, timeout=10, check=True)
+        return result.stdout.strip()
+
+    with pytest.raises(RuntimeError, match="interrupted"):
+        with storage._locked(tmp_path):
+            assert attempt() == "blocked"
+            raise RuntimeError("interrupted")
+    assert attempt() == "acquired"
 
 
 def test_public_validation_omits_only_pipeline_history(source):

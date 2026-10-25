@@ -64,7 +64,15 @@ def _download(session, url, path, log):
 
 
 def _read_export(path, region, layer, props, compact):
-    parquet = pq.ParquetFile(path)
+    # Own the underlying stream even if the Parquet constructor itself fails.
+    # Otherwise an exception traceback can retain its handle on Windows and
+    # cleanup masks the original validation failure with a sharing violation.
+    with path.open("rb") as stream:
+        with pq.ParquetFile(stream) as parquet:
+            return _read_export_file(parquet, region, layer, props, compact)
+
+
+def _read_export_file(parquet, region, layer, props, compact):
     names = {name.lower(): name for name in parquet.schema_arrow.names}
     required = {"gid", *props.split(",")}
     if len(names) != len(parquet.schema_arrow.names) or not required <= names.keys():
