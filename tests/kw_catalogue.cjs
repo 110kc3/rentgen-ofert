@@ -38,6 +38,34 @@ test('loopback client uses relative same-origin JSON requests with no cache or a
   assert.deepEqual(JSON.parse(calls[0][1].body), request);
   assert.equal(calls[0][1].method, 'POST'); assert.equal(calls[0][1].cache, 'no-store');
   assert.equal(calls[0][1].credentials, 'same-origin'); assert.equal(calls[0][1].referrerPolicy, 'no-referrer');
+  assert.equal(calls[0][1].redirect, 'error');
+});
+
+test('HTTPS catalogue discovery needs a private server marker matching this exact origin', async () => {
+  const location = { protocol: 'https:', hostname: 'private.example.test', origin: 'https://private.example.test:8443' };
+  let calls = 0;
+  const fetch = async (path, options) => {
+    calls++;
+    assert.equal(path, '/api/kw/search');
+    assert.equal(options.redirect, 'error');
+    return { ok: true, text: async () => JSON.stringify(fixture()) };
+  };
+  for (const content of [null, '', 'https://private.example.test', 'https://other.example.test',
+    'http://private.example.test:8443', 'https://private.example.test:8443/']) {
+    const document = { querySelector: () => content === null ? null : { getAttribute: () => content } };
+    const client = catalogue.createClient({ location, document, fetch });
+    assert.equal(client.available, false);
+    await assert.rejects(client.search(request));
+  }
+  assert.equal(calls, 0);
+  const document = { querySelector: selector => {
+    assert.equal(selector, 'meta[name="rentgen-kw-origin"]');
+    return { getAttribute: key => { assert.equal(key, 'content'); return location.origin; } };
+  } };
+  const client = catalogue.createClient({ location, document, fetch });
+  assert.equal(client.available, true);
+  assert.equal((await client.search(request)).candidates.length, 1);
+  assert.equal(calls, 1);
 });
 
 test('only complete exact addresses are queried and supplied listing data is rejected', async () => {

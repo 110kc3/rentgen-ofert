@@ -26,14 +26,18 @@ API contracts:
 
 Private query and association state stays in tab memory; it does not enter
 localStorage, share URLs, public listing JSON or scraper overrides. Refresh clears
-it. Public Pages does not call the private API: the current client only enables
-same-origin access on loopback HTTP, and the server binds to loopback.
+it. Public Pages does not call the private API. The client enables loopback HTTP
+or HTTPS with a `rentgen-kw-origin` meta tag exactly matching `location.origin`.
+Only the private backend inserts this tag into HTML responses; public source and
+build assets contain no deployment marker. Requests stay relative to the page
+origin, use no-store and reject redirects. The backend still binds to loopback.
 
-For Raspberry Pi remote hosting, authenticated HTTPS access and explicit trusted
-hostname/origin support remain to be completed. An SSH tunnel using the same port
-works for the initial smoke test. Do not expose the bare development server or put
-database files under `site/`. Login, a public domain and Pi service startup have not
-been configured. The private plan explains Tailscale and HTTPS reverse-proxy options.
+For Raspberry Pi remote hosting, explicit trusted HTTPS origin support and optional
+Tailscale identity allowlisting are now implemented in the companion backend.
+Choosing and enabling the real authenticated route remains pending. An SSH tunnel
+using the same port works for the initial smoke test. Do not expose the bare backend
+or put database files under `site/`. Remote login and persistent Pi service startup
+have not been configured. The private plan owns deployment paths and access options.
 
 Prepare public data without scraping:
 
@@ -54,7 +58,12 @@ The prepared preview used the published regional snapshots; no scrape was run.
 Portability fixes in this branch keep POSIX locks intact, add real Windows file
 locking, support streaming hashes on Python 3.10 and close Parquet files on errors.
 Windows lacks POSIX directory-fsync semantics; that limitation is documented in
-`docs/STORAGE.md`. The Pi/ARM64 environment still needs its own tests.
+`docs/STORAGE.md`. On October 25 the Pi/ARM64 run passed all **539 pytest tests**
+with Python 3.11.2, Node 22.23.3 and an ARM64 PyArrow wheel. The validated artifact
+contains both published regions. Both load real listings, filter/reset and load
+timeline details in Chromium. Seven combined checks passed on loopback HTTP and
+an authenticated local TLS fixture; the fixture also denied anonymous static/data/API
+routes and revoked identity access. Real remote authentication remains unverified.
 
 This branch has not been merged into public main or deployed to Pages. No real
 private catalogue records, credentials, SQLite files or generated datasets are

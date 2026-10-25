@@ -1,9 +1,34 @@
 # Current queue — rentgen-ofert
 
-Updated 2026-10-22. This file owns accepted work and the next-session handoff.
+Updated 2026-10-25. This file owns accepted work and the next-session handoff.
 [Development history](docs/HISTORY.md) preserves the former diary and unselected
 ideas. [POLAND_ROLLOUT.md](POLAND_ROLLOUT.md) owns expansion and capacity gates;
 its historical task lists do not authorize additional work.
+
+## October 25 private integration on Pi
+
+The owner resumed the private KW integration handoff on the Pi. Work stays on
+`codex/kw-integration-2026-10-25` in a separate worktree; the existing main checkout
+is preserved. The client now enables HTTPS catalogue access only when the private
+server supplies a discovery marker matching the exact page origin. Public Pages
+contains no marker or private catalogue data and performs no API discovery probes.
+Requests remain same-origin, uncached and refuse redirects.
+
+All 539 tests pass on ARM64 with Python 3.11.2 and Node 22.23.3. Both existing
+regional snapshots build and pass Chromium listing/filter/timeline checks. The
+companion backend and seven combined checks pass on loopback and a local TLS
+fixture, including anonymous denial and identity revocation. The fixture is not
+evidence of a deployed remote login. No scrape or workflow was dispatched.
+
+Next accepted integration work: finish the owner's choice of authenticated remote
+access and verify service restart; that choice is pending. The private repo owns
+runtime paths, catalogue and deployment configuration. See
+[KW_INTEGRATION.md](docs/KW_INTEGRATION.md). Acquisition remains paused there.
+This branch remains unmerged and has not been deployed to public Pages. Push
+verification is pending on the [integration branch Actions view](https://github.com/110kc3/rentgen-ofert/actions?query=branch%3Acodex%2Fkw-integration-2026-10-25);
+its current push filters do not trigger a branch run. No run existed for checkpoint
+`8a50f76` at the single recovery check. The unrelated production queue below remains
+unchanged by this migration.
 
 ## October 22 selected acceptance checks and storage plan
 

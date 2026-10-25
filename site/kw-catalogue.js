@@ -98,12 +98,18 @@
   }
   function createClient(options = {}) {
     const location = options.location || root.location, fetcher = options.fetch || (root.fetch && root.fetch.bind(root));
-    const available = isLocal(location) && typeof fetcher === 'function';
+    const document = options.document || root.document;
+    const marker = document && document.querySelector('meta[name="rentgen-kw-origin"]');
+    // Only the private server inserts this marker. Public build assets contain
+    // no deployment origin and make no discovery request on HTTPS Pages.
+    const privateOrigin = !!location && location.protocol === 'https:' && !!location.origin
+      && !!marker && marker.getAttribute('content') === location.origin;
+    const available = (isLocal(location) || privateOrigin) && typeof fetcher === 'function';
     async function request(path, payload) {
-      if (!available) throw Error('Prywatny katalog jest dostępny w lokalnej wersji Rentgena.');
+      if (!available) throw Error('Prywatny katalog jest dostępny w prywatnej wersji Rentgena.');
       try {
         const response = await fetcher(path, { method: payload ? 'POST' : 'GET', credentials: 'same-origin', cache: 'no-store',
-          referrerPolicy: 'no-referrer', ...(payload ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) } : {}) });
+          referrerPolicy: 'no-referrer', redirect: 'error', ...(payload ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) } : {}) });
         if (!response.ok) throw Error('unavailable');
         const body = await response.text();
         if (body.length > 2 * 1024 * 1024) throw Error('oversize');
