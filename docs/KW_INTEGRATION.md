@@ -34,10 +34,13 @@ origin, use no-store and reject redirects. The backend still binds to loopback.
 
 For Raspberry Pi remote hosting, explicit trusted HTTPS origin support and optional
 Tailscale identity allowlisting are now implemented in the companion backend.
-Choosing and enabling the real authenticated route remains pending. An SSH tunnel
-using the same port works for the initial smoke test. Do not expose the bare backend
-or put database files under `site/`. Remote login and persistent Pi service startup
-have not been configured. The private plan owns deployment paths and access options.
+The owner selected private Tailscale HTTPS. The private application service is
+installed, enabled and restart-tested with a single allowed identity. Tailscale
+account consent to enable Serve/HTTPS is pending; the real remote route is not yet
+active or verified. Anonymous/unapproved routes and identity revocation/restoration
+pass local checks. A plain SSH tunnel alone does not satisfy the service's Tailscale
+identity requirement. Do not expose the bare backend or put database files under
+`site/`. The private plan owns deployment paths and the consent/verification handoff.
 
 Prepare public data without scraping:
 

@@ -20,14 +20,17 @@ companion backend and seven combined checks pass on loopback and a local TLS
 fixture, including anonymous denial and identity revocation. The fixture is not
 evidence of a deployed remote login. No scrape or workflow was dispatched.
 
-Next accepted integration work: finish the owner's choice of authenticated remote
-access and verify service restart; that choice is pending. The private repo owns
-runtime paths, catalogue and deployment configuration. See
+The owner selected private Tailscale HTTPS. The companion service is installed,
+enabled and restart-tested, with anonymous/unapproved app/data/API denial and
+identity revocation/restoration checked locally. Tailscale requires account-level
+Serve/HTTPS consent before the real remote route can be enabled and verified.
+That account action and actual HTTPS browser verification are the remaining gate.
+The private repo owns runtime paths, catalogue and deployment configuration. See
 [KW_INTEGRATION.md](docs/KW_INTEGRATION.md). Acquisition remains paused there.
 This branch remains unmerged and has not been deployed to public Pages. Push
 verification is pending on the [integration branch Actions view](https://github.com/110kc3/rentgen-ofert/actions?query=branch%3Acodex%2Fkw-integration-2026-10-25);
 its current push filters do not trigger a branch run. No run existed for checkpoint
-`8a50f76` at the single recovery check. The unrelated production queue below remains
+`f1bf75e` at the single recovery check. The unrelated production queue below remains
 unchanged by this migration.
 
 ## October 22 selected acceptance checks and storage plan
