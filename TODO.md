@@ -1,11 +1,11 @@
 # Current queue — rentgen-ofert
 
-Updated 2026-10-25. This file owns accepted work and the next-session handoff.
+Updated 2026-10-26. This file owns accepted work and the next-session handoff.
 [Development history](docs/HISTORY.md) preserves the former diary and unselected
 ideas. [POLAND_ROLLOUT.md](POLAND_ROLLOUT.md) owns expansion and capacity gates;
 its historical task lists do not authorize additional work.
 
-## October 25 private integration on Pi
+## October 26 private Pi hosting verified
 
 The owner resumed the private KW integration handoff on the Pi. Work stays on
 `codex/kw-integration-2026-10-25` in a separate worktree; the existing main checkout
@@ -22,15 +22,20 @@ evidence of a deployed remote login. No scrape or workflow was dispatched.
 
 The owner selected private Tailscale HTTPS. The companion service is installed,
 enabled and restart-tested, with anonymous/unapproved app/data/API denial and
-identity revocation/restoration checked locally. Tailscale requires account-level
-Serve/HTTPS consent before the real remote route can be enabled and verified.
-That account action and actual HTTPS browser verification are the remaining gate.
+identity revocation/restoration checked locally. Consent is complete and the private
+HTTPS route is active. Seven combined browser checks and both real regional listing/
+filter/timeline checks pass through actual Tailscale Serve with certificate validation.
+Removing the allowed identity denies every app/data/API route, even with a forged
+allowlisted identity header; restoring it returns successful search. Test requests
+originated on the Pi through its real tailnet listener; a separate laptop check and
+full Pi reboot were not observed. The selected migration is complete. No new scraper,
+acquisition, refresh or monitoring schedules were enabled.
 The private repo owns runtime paths, catalogue and deployment configuration. See
 [KW_INTEGRATION.md](docs/KW_INTEGRATION.md). Acquisition remains paused there.
 This branch remains unmerged and has not been deployed to public Pages. Push
 verification is pending on the [integration branch Actions view](https://github.com/110kc3/rentgen-ofert/actions?query=branch%3Acodex%2Fkw-integration-2026-10-25);
 its current push filters do not trigger a branch run. No run existed for checkpoint
-`f1bf75e` at the single recovery check. The unrelated production queue below remains
+`9e1f015` at the single recovery check. The unrelated production queue below remains
 unchanged by this migration.
 
 ## October 22 selected acceptance checks and storage plan

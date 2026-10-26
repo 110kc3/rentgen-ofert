@@ -35,12 +35,15 @@ origin, use no-store and reject redirects. The backend still binds to loopback.
 For Raspberry Pi remote hosting, explicit trusted HTTPS origin support and optional
 Tailscale identity allowlisting are now implemented in the companion backend.
 The owner selected private Tailscale HTTPS. The private application service is
-installed, enabled and restart-tested with a single allowed identity. Tailscale
-account consent to enable Serve/HTTPS is pending; the real remote route is not yet
-active or verified. Anonymous/unapproved routes and identity revocation/restoration
-pass local checks. A plain SSH tunnel alone does not satisfy the service's Tailscale
-identity requirement. Do not expose the bare backend or put database files under
-`site/`. The private plan owns deployment paths and the consent/verification handoff.
+installed, enabled and restart-tested with a single allowed identity. Consent is
+complete and the real HTTPS route is active. Seven combined browser checks and both
+regions pass through Tailscale Serve with certificate validation. Revocation denies
+all app/data/API routes even with a forged allowlisted identity header; restoring the
+owner restores access. Checks originated on the Pi through its actual tailnet listener;
+a separate laptop visit and full reboot were not observed. A plain SSH tunnel alone
+does not satisfy the service's Tailscale identity requirement. Do not expose the
+bare backend or put database files under
+`site/`. The private plan owns the deployment address, paths and operations handoff.
 
 Prepare public data without scraping:
 
@@ -66,7 +69,8 @@ with Python 3.11.2, Node 22.23.3 and an ARM64 PyArrow wheel. The validated artif
 contains both published regions. Both load real listings, filter/reset and load
 timeline details in Chromium. Seven combined checks passed on loopback HTTP and
 an authenticated local TLS fixture; the fixture also denied anonymous static/data/API
-routes and revoked identity access. Real remote authentication remains unverified.
+routes and revoked identity access. On October 26 the same browser flows and identity
+revocation/spoof-denial checks passed through the actual Tailscale Serve HTTPS route.
 
 This branch has not been merged into public main or deployed to Pages. No real
 private catalogue records, credentials, SQLite files or generated datasets are
