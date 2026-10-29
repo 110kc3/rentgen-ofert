@@ -1,0 +1,1639 @@
+{
+ "updated": "2026-10-29T07:19:33+00:00",
+ "count": 3674,
+ "raw": 5503,
+ "by_source": {
+  "otodom": 2058,
+  "gratka": 943,
+  "morizon": 943,
+  "nieruchomosci-online": 1559
+ },
+ "by_type": {
+  "house": 1601,
+  "flat": 2073
+ },
+ "relisted": 615,
+ "geocoded": 2318,
+ "archive": 625,
+ "rcn": {
+  "records": 5309,
+  "no_location_yet": 457,
+  "no_deed_candidates": 1990,
+  "candidates_rejected": 2552,
+  "matched": 310
+ },
+ "rcn_health": {
+  "status": "healthy",
+  "fetched": "2026-10-23",
+  "counts": {
+   "lokale": 63494,
+   "budynki": 86224
+  },
+  "error": null,
+  "source": {
+   "kind": "gugik_exports",
+   "files": {
+    "lokale": {
+     "url": "https://opendata.geoportal.gov.pl/InneDane/latest_exports/rcn_transakcje_ceny/PARQUET/16_transakcje_ceny_lokale.parquet",
+     "sha256": "f1efbf4cfcd74a2baf438d018ee27de063e3405d26aeaaf4766a2739d2bb5a66",
+     "bytes": 7273504,
+     "rows": 89176
+    },
+    "budynki": {
+     "url": "https://opendata.geoportal.gov.pl/InneDane/latest_exports/rcn_transakcje_ceny/PARQUET/16_transakcje_ceny_budynki.parquet",
+     "sha256": "7540e9837bcbaabadb442f88290454cc432936b39c4aeccfd05428463b0b3b68",
+     "bytes": 16906829,
+     "rows": 273649
+    }
+   },
+   "wfs_error": "RCN lokale: changing/inconsistent total (89176 -> 351, offset 0, returned 351)"
+  }
+ },
+ "rcn_stats": {
+  "towns": 55,
+  "gap_pairs": 11
+ },
+ "sold_confirmed": 11,
+ "health": "partial",
+ "coverage": {
+  "schema": 2,
+  "status": "partial",
+  "by_source": {
+   "gratka": {
+    "status": "healthy",
+    "searches": 2,
+    "pages": 28,
+    "listings": 943,
+    "served_unique": 943,
+    "kept_unique": 943,
+    "current": 943,
+    "archived": 0,
+    "truncated": 0,
+    "issues": 0,
+    "types": {
+     "flat": {
+      "status": "healthy",
+      "searches": 1,
+      "pages": 13,
+      "served_unique": 452,
+      "kept_unique": 452,
+      "current": 452,
+      "archived": 0,
+      "issues": 0,
+      "portal_total": 452,
+      "pct": 100.0
+     },
+     "house": {
+      "status": "healthy",
+      "searches": 1,
+      "pages": 15,
+      "served_unique": 491,
+      "kept_unique": 491,
+      "current": 491,
+      "archived": 0,
+      "issues": 0,
+      "portal_total": 491,
+      "pct": 100.0
+     }
+    },
+    "portal_total": 943,
+    "pct": 100.0
+   },
+   "morizon": {
+    "status": "healthy",
+    "searches": 2,
+    "pages": 28,
+    "listings": 943,
+    "served_unique": 943,
+    "kept_unique": 943,
+    "current": 943,
+    "archived": 0,
+    "truncated": 0,
+    "issues": 0,
+    "types": {
+     "flat": {
+      "status": "healthy",
+      "searches": 1,
+      "pages": 13,
+      "served_unique": 452,
+      "kept_unique": 452,
+      "current": 452,
+      "archived": 0,
+      "issues": 0,
+      "portal_total": 452,
+      "pct": 100.0
+     },
+     "house": {
+      "status": "healthy",
+      "searches": 1,
+      "pages": 15,
+      "served_unique": 491,
+      "kept_unique": 491,
+      "current": 491,
+      "archived": 0,
+      "issues": 0,
+      "portal_total": 491,
+      "pct": 100.0
+     }
+    },
+    "portal_total": 943,
+    "pct": 100.0
+   },
+   "nieruchomosci-online": {
+    "status": "healthy",
+    "searches": 2,
+    "pages": 283,
+    "listings": 1559,
+    "served_unique": 2116,
+    "kept_unique": 2116,
+    "current": 1559,
+    "archived": 557,
+    "truncated": 0,
+    "issues": 0,
+    "types": {
+     "flat": {
+      "status": "healthy",
+      "searches": 1,
+      "pages": 150,
+      "served_unique": 1562,
+      "kept_unique": 1562,
+      "current": 1005,
+      "archived": 557,
+      "issues": 0,
+      "partitions": {
+       "axis": "town",
+       "leaves": 60,
+       "complete": 60,
+       "failed": [],
+       "capped": [],
+       "missing": [],
+       "details": {
+        "opole": {
+         "requests": 18,
+         "pages": 18,
+         "served_current": 553,
+         "served_archived": 71,
+         "new_current": 553,
+         "new_archived": 0,
+         "archive_start": 16,
+         "stop": "archive_boundary"
+        },
+        "namyslow": {
+         "requests": 4,
+         "pages": 4,
+         "served_current": 43,
+         "served_archived": 91,
+         "new_current": 43,
+         "new_archived": 0,
+         "archive_start": 2,
+         "stop": "archive_boundary"
+        },
+        "strzelce-opolskie": {
+         "requests": 3,
+         "pages": 3,
+         "served_current": 13,
+         "served_archived": 53,
+         "new_current": 13,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "kedzierzyn-kozle": {
+         "requests": 5,
+         "pages": 5,
+         "served_current": 109,
+         "served_archived": 72,
+         "new_current": 109,
+         "new_archived": 0,
+         "archive_start": 3,
+         "stop": "archive_boundary"
+        },
+        "brzeg": {
+         "requests": 5,
+         "pages": 5,
+         "served_current": 112,
+         "served_archived": 67,
+         "new_current": 112,
+         "new_archived": 0,
+         "archive_start": 3,
+         "stop": "archive_boundary"
+        },
+        "nysa": {
+         "requests": 3,
+         "pages": 3,
+         "served_current": 19,
+         "served_archived": 82,
+         "new_current": 19,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "archive_boundary"
+        },
+        "proszkow": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 0,
+         "served_archived": 36,
+         "new_current": 0,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "niemodlin": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 7,
+         "served_archived": 28,
+         "new_current": 7,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "komprachcice": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 0,
+         "served_archived": 38,
+         "new_current": 0,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "turawa": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 0,
+         "served_archived": 20,
+         "new_current": 0,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "lubniany": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 6,
+         "served_archived": 2,
+         "new_current": 0,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "krapkowice": {
+         "requests": 3,
+         "pages": 3,
+         "served_current": 16,
+         "served_archived": 65,
+         "new_current": 16,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "archive_boundary"
+        },
+        "lesnica": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 1,
+         "served_archived": 1,
+         "new_current": 1,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "lewin-brzeski": {
+         "requests": 3,
+         "pages": 3,
+         "served_current": 3,
+         "served_archived": 76,
+         "new_current": 3,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "lubsza": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 2,
+         "served_archived": 2,
+         "new_current": 0,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "ozimek": {
+         "requests": 3,
+         "pages": 3,
+         "served_current": 6,
+         "served_archived": 102,
+         "new_current": 6,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "archive_boundary"
+        },
+        "skarbimierz": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 0,
+         "served_archived": 70,
+         "new_current": 0,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "archive_boundary"
+        },
+        "dobrzen-wielki": {
+         "requests": 3,
+         "pages": 3,
+         "served_current": 4,
+         "served_archived": 71,
+         "new_current": 4,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "glubczyce": {
+         "requests": 3,
+         "pages": 3,
+         "served_current": 12,
+         "served_archived": 63,
+         "new_current": 12,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "wilkow": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 4,
+         "served_archived": 3,
+         "new_current": 4,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "zawadzkie": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 5,
+         "served_archived": 33,
+         "new_current": 5,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "chrzastowice": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 1,
+         "served_archived": 1,
+         "new_current": 1,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "kluczbork": {
+         "requests": 3,
+         "pages": 3,
+         "served_current": 27,
+         "served_archived": 84,
+         "new_current": 27,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "archive_boundary"
+        },
+        "pokoj": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 0,
+         "served_archived": 7,
+         "new_current": 0,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "dabrowa": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 1,
+         "served_archived": 6,
+         "new_current": 1,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "glucholazy": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 2,
+         "served_archived": 34,
+         "new_current": 2,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "murow": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 1,
+         "served_archived": 9,
+         "new_current": 1,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "tulowice": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 5,
+         "served_archived": 29,
+         "new_current": 5,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "byczyna": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 1,
+         "served_archived": 16,
+         "new_current": 1,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "domaszowice": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 1,
+         "served_archived": 6,
+         "new_current": 1,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "olesno": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 6,
+         "served_archived": 31,
+         "new_current": 6,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "popielow": {
+         "requests": 1,
+         "pages": 1,
+         "served_current": 0,
+         "served_archived": 0,
+         "new_current": 0,
+         "new_archived": 0,
+         "stop": "end"
+        },
+        "prudnik": {
+         "requests": 3,
+         "pages": 3,
+         "served_current": 5,
+         "served_archived": 66,
+         "new_current": 5,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "zdzieszowice": {
+         "requests": 3,
+         "pages": 3,
+         "served_current": 10,
+         "served_archived": 65,
+         "new_current": 10,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "gogolin": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 1,
+         "served_archived": 39,
+         "new_current": 1,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "grodkow": {
+         "requests": 3,
+         "pages": 3,
+         "served_current": 7,
+         "served_archived": 67,
+         "new_current": 7,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "jemielnica": {
+         "requests": 1,
+         "pages": 1,
+         "served_current": 0,
+         "served_archived": 0,
+         "new_current": 0,
+         "new_archived": 0,
+         "stop": "end"
+        },
+        "swierczow": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 5,
+         "served_archived": 0,
+         "new_current": 3,
+         "new_archived": 0,
+         "stop": "end"
+        },
+        "izbicko": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 0,
+         "served_archived": 13,
+         "new_current": 0,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "kietrz": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 5,
+         "served_archived": 18,
+         "new_current": 5,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "korfantow": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 0,
+         "served_archived": 8,
+         "new_current": 0,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "lambinowice": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 1,
+         "served_archived": 13,
+         "new_current": 1,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "lubrza": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 5,
+         "served_archived": 0,
+         "new_current": 2,
+         "new_archived": 0,
+         "stop": "end"
+        },
+        "olszanka": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 1,
+         "served_archived": 1,
+         "new_current": 1,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "praszka": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 5,
+         "served_archived": 11,
+         "new_current": 5,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "tarnow-opolski": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 3,
+         "served_archived": 36,
+         "new_current": 3,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "ujazd": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 0,
+         "served_archived": 2,
+         "new_current": 0,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "wolczyn": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 0,
+         "served_archived": 34,
+         "new_current": 0,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "baborow": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 4,
+         "served_archived": 15,
+         "new_current": 4,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "biala": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 0,
+         "served_archived": 8,
+         "new_current": 0,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "dobrodzien": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 0,
+         "served_archived": 11,
+         "new_current": 0,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "lasowice-wielkie": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 1,
+         "served_archived": 0,
+         "new_current": 0,
+         "new_archived": 0,
+         "stop": "end"
+        },
+        "rudniki": {
+         "requests": 1,
+         "pages": 1,
+         "served_current": 0,
+         "served_archived": 0,
+         "new_current": 0,
+         "new_archived": 0,
+         "stop": "end"
+        },
+        "bierawa": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 7,
+         "served_archived": 2,
+         "new_current": 0,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "cisek": {
+         "requests": 1,
+         "pages": 1,
+         "served_current": 0,
+         "served_archived": 0,
+         "new_current": 0,
+         "new_archived": 0,
+         "stop": "end"
+        },
+        "glogowek": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 1,
+         "served_archived": 18,
+         "new_current": 1,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "gorzow-slaski": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 9,
+         "served_archived": 0,
+         "new_current": 2,
+         "new_archived": 0,
+         "stop": "end"
+        },
+        "paczkow": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 2,
+         "served_archived": 36,
+         "new_current": 2,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "pawlowiczki": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 6,
+         "served_archived": 1,
+         "new_current": 1,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "renska-wies": {
+         "requests": 1,
+         "pages": 1,
+         "served_current": 0,
+         "served_archived": 0,
+         "new_current": 0,
+         "new_archived": 0,
+         "stop": "end"
+        }
+       }
+      },
+      "archive_harvest": {
+       "mode": "refresh",
+       "stop_reason": "complete",
+       "complete": true,
+       "refreshed": "2026-10-29",
+       "records": 5812,
+       "pending": 0,
+       "cycle_records": 5812,
+       "cycle_started": "2026-10-20",
+       "seconds": 60.8,
+       "budget_seconds": 900.0,
+       "requests": 56,
+       "errors": []
+      }
+     },
+     "house": {
+      "status": "healthy",
+      "searches": 1,
+      "pages": 133,
+      "served_unique": 554,
+      "kept_unique": 554,
+      "current": 554,
+      "archived": 0,
+      "issues": 0,
+      "partitions": {
+       "axis": "town",
+       "leaves": 60,
+       "complete": 60,
+       "failed": [],
+       "capped": [],
+       "missing": [],
+       "details": {
+        "opole": {
+         "requests": 8,
+         "pages": 8,
+         "served_current": 212,
+         "served_archived": 107,
+         "new_current": 212,
+         "new_archived": 0,
+         "archive_start": 6,
+         "stop": "archive_boundary"
+        },
+        "namyslow": {
+         "requests": 3,
+         "pages": 3,
+         "served_current": 37,
+         "served_archived": 85,
+         "new_current": 37,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "archive_boundary"
+        },
+        "strzelce-opolskie": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 19,
+         "served_archived": 21,
+         "new_current": 19,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "kedzierzyn-kozle": {
+         "requests": 3,
+         "pages": 3,
+         "served_current": 31,
+         "served_archived": 128,
+         "new_current": 31,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "archive_boundary"
+        },
+        "brzeg": {
+         "requests": 3,
+         "pages": 3,
+         "served_current": 29,
+         "served_archived": 129,
+         "new_current": 29,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "archive_boundary"
+        },
+        "nysa": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 6,
+         "served_archived": 32,
+         "new_current": 6,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "proszkow": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 18,
+         "served_archived": 13,
+         "new_current": 12,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "niemodlin": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 7,
+         "served_archived": 34,
+         "new_current": 7,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "komprachcice": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 3,
+         "served_archived": 35,
+         "new_current": 3,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "turawa": {
+         "requests": 3,
+         "pages": 3,
+         "served_current": 22,
+         "served_archived": 95,
+         "new_current": 22,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "lubniany": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 4,
+         "served_archived": 31,
+         "new_current": 4,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "krapkowice": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 9,
+         "served_archived": 31,
+         "new_current": 9,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "lesnica": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 12,
+         "served_archived": 6,
+         "new_current": 9,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "lewin-brzeski": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 10,
+         "served_archived": 31,
+         "new_current": 10,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "lubsza": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 13,
+         "served_archived": 27,
+         "new_current": 11,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "ozimek": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 4,
+         "served_archived": 37,
+         "new_current": 4,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "skarbimierz": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 1,
+         "served_archived": 19,
+         "new_current": 1,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "dobrzen-wielki": {
+         "requests": 3,
+         "pages": 3,
+         "served_current": 16,
+         "served_archived": 99,
+         "new_current": 16,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "glubczyce": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 9,
+         "served_archived": 32,
+         "new_current": 9,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "wilkow": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 0,
+         "served_archived": 1,
+         "new_current": 0,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "zawadzkie": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 1,
+         "served_archived": 14,
+         "new_current": 1,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "chrzastowice": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 21,
+         "served_archived": 19,
+         "new_current": 15,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "kluczbork": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 7,
+         "served_archived": 28,
+         "new_current": 7,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "pokoj": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 1,
+         "served_archived": 12,
+         "new_current": 1,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "dabrowa": {
+         "requests": 4,
+         "pages": 4,
+         "served_current": 4,
+         "served_archived": 7,
+         "new_current": 4,
+         "new_archived": 0,
+         "archive_start": 3,
+         "stop": "archive_boundary"
+        },
+        "glucholazy": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 2,
+         "served_archived": 24,
+         "new_current": 2,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "murow": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 3,
+         "served_archived": 17,
+         "new_current": 3,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "tulowice": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 3,
+         "served_archived": 16,
+         "new_current": 3,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "byczyna": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 1,
+         "served_archived": 14,
+         "new_current": 1,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "domaszowice": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 3,
+         "served_archived": 6,
+         "new_current": 3,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "olesno": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 5,
+         "served_archived": 24,
+         "new_current": 5,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "popielow": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 8,
+         "served_archived": 26,
+         "new_current": 8,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "prudnik": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 2,
+         "served_archived": 38,
+         "new_current": 2,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "zdzieszowice": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 4,
+         "served_archived": 36,
+         "new_current": 2,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "gogolin": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 15,
+         "served_archived": 24,
+         "new_current": 8,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "grodkow": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 7,
+         "served_archived": 12,
+         "new_current": 7,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "jemielnica": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 2,
+         "served_archived": 5,
+         "new_current": 2,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "swierczow": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 1,
+         "served_archived": 2,
+         "new_current": 1,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "izbicko": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 2,
+         "served_archived": 18,
+         "new_current": 2,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "kietrz": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 2,
+         "served_archived": 22,
+         "new_current": 2,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "korfantow": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 1,
+         "served_archived": 20,
+         "new_current": 1,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "lambinowice": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 0,
+         "served_archived": 7,
+         "new_current": 0,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "lubrza": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 0,
+         "served_archived": 5,
+         "new_current": 0,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "olszanka": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 0,
+         "served_archived": 10,
+         "new_current": 0,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "praszka": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 1,
+         "served_archived": 11,
+         "new_current": 1,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "tarnow-opolski": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 2,
+         "served_archived": 38,
+         "new_current": 2,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "ujazd": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 8,
+         "served_archived": 1,
+         "new_current": 2,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "wolczyn": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 1,
+         "served_archived": 19,
+         "new_current": 1,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "baborow": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 1,
+         "served_archived": 8,
+         "new_current": 1,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "biala": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 1,
+         "served_archived": 1,
+         "new_current": 1,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "dobrodzien": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 2,
+         "served_archived": 26,
+         "new_current": 2,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "lasowice-wielkie": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 0,
+         "served_archived": 3,
+         "new_current": 0,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "rudniki": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 0,
+         "served_archived": 10,
+         "new_current": 0,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "bierawa": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 8,
+         "served_archived": 25,
+         "new_current": 5,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "cisek": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 2,
+         "served_archived": 5,
+         "new_current": 1,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "glogowek": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 1,
+         "served_archived": 17,
+         "new_current": 1,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "gorzow-slaski": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 2,
+         "served_archived": 3,
+         "new_current": 2,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "paczkow": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 0,
+         "served_archived": 14,
+         "new_current": 0,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "pawlowiczki": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 2,
+         "served_archived": 6,
+         "new_current": 2,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "renska-wies": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 2,
+         "served_archived": 9,
+         "new_current": 2,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        }
+       }
+      },
+      "archive_harvest": {
+       "mode": "refresh",
+       "stop_reason": "complete",
+       "complete": true,
+       "refreshed": "2026-10-29",
+       "records": 1967,
+       "pending": 0,
+       "cycle_records": 1967,
+       "cycle_started": "2026-10-20",
+       "seconds": 60.8,
+       "budget_seconds": 900.0,
+       "requests": 56,
+       "errors": []
+      }
+     }
+    },
+    "seen": 2116,
+    "archive_harvest": {
+     "mode": "refresh",
+     "records": 7779,
+     "complete": true,
+     "pending": 0,
+     "cycle_records": 7779,
+     "seconds": 60.8,
+     "budget_seconds": 900.0,
+     "requests": 56,
+     "cycle_started": "2026-10-20",
+     "stop_reason": "complete",
+     "failed_requests": 0,
+     "refreshed": "2026-10-29"
+    }
+   },
+   "olx": {
+    "status": "blocked",
+    "searches": 1,
+    "pages": 1,
+    "listings": 0,
+    "served_unique": 0,
+    "kept_unique": 0,
+    "current": 0,
+    "archived": 0,
+    "truncated": 1,
+    "issues": 1,
+    "types": {
+     "flat": {
+      "status": "blocked",
+      "searches": 0,
+      "pages": 0,
+      "served_unique": 0,
+      "kept_unique": 0,
+      "current": 0,
+      "archived": 0,
+      "issues": 0,
+      "reasons": [
+       "portal_probe_blocked"
+      ],
+      "http_statuses": [
+       403
+      ]
+     },
+     "house": {
+      "status": "blocked",
+      "searches": 1,
+      "pages": 1,
+      "served_unique": 0,
+      "kept_unique": 0,
+      "current": 0,
+      "archived": 0,
+      "issues": 1,
+      "reasons": [
+       "root_search_failed"
+      ],
+      "http_statuses": [
+       403
+      ]
+     }
+    },
+    "reasons": [
+     "portal_probe_blocked",
+     "root_search_failed"
+    ],
+    "http_statuses": [
+     403
+    ]
+   },
+   "otodom": {
+    "status": "partial",
+    "searches": 2,
+    "pages": 34,
+    "listings": 2058,
+    "served_unique": 2083,
+    "kept_unique": 2058,
+    "current": 2058,
+    "archived": 0,
+    "truncated": 1,
+    "issues": 1,
+    "types": {
+     "flat": {
+      "status": "partial",
+      "searches": 1,
+      "pages": 20,
+      "served_unique": 1150,
+      "kept_unique": 1131,
+      "current": 1131,
+      "archived": 0,
+      "issues": 1,
+      "reasons": [
+       "incomplete_searches",
+       "coverage_shortfall"
+      ],
+      "portal_total": 1432,
+      "pct": 80.3
+     },
+     "house": {
+      "status": "healthy",
+      "searches": 1,
+      "pages": 14,
+      "served_unique": 933,
+      "kept_unique": 927,
+      "current": 927,
+      "archived": 0,
+      "issues": 0,
+      "portal_total": 947,
+      "pct": 98.5
+     }
+    },
+    "reasons": [
+     "coverage_shortfall",
+     "incomplete_searches"
+    ],
+    "seen": 2083,
+    "portal_total": 2379,
+    "pct": 87.6
+   }
+  },
+  "issues": [
+   {
+    "source": "olx",
+    "type": "house",
+    "pages": 1,
+    "listings": 0,
+    "stopped": "error",
+    "tag": "opolskie",
+    "error": "403 Client Error: Forbidden for url: https://www.olx.pl/nieruchomosci/domy/sprzedaz/opolskie/?page=1",
+    "http_status": 403,
+    "role": "parent",
+    "issue": "error"
+   },
+   {
+    "source": "otodom",
+    "type": "flat",
+    "pages": 20,
+    "listings": 1131,
+    "stopped": "end",
+    "served": 1211,
+    "tag": "opolskie",
+    "portal_pages": 20,
+    "portal_total": 1432,
+    "role": "parent",
+    "issue": "short_total"
+   }
+  ],
+  "truncated": [
+   {
+    "source": "olx",
+    "type": "house",
+    "pages": 1,
+    "listings": 0,
+    "stopped": "error",
+    "tag": "opolskie",
+    "error": "403 Client Error: Forbidden for url: https://www.olx.pl/nieruchomosci/domy/sprzedaz/opolskie/?page=1",
+    "http_status": 403,
+    "role": "parent",
+    "issue": "error"
+   },
+   {
+    "source": "otodom",
+    "type": "flat",
+    "pages": 20,
+    "listings": 1131,
+    "stopped": "end",
+    "served": 1211,
+    "tag": "opolskie",
+    "portal_pages": 20,
+    "portal_total": 1432,
+    "role": "parent",
+    "issue": "short_total"
+   }
+  ]
+ },
+ "photos": {
+  "schema": 3,
+  "enabled": true,
+  "listings": 6060,
+  "heuristic_fallback_enabled": false,
+  "critical": 3927,
+  "history_only": 1193,
+  "cache_hits": 4505,
+  "cover_cache_hits": 3796,
+  "gallery_cache_hits": 709,
+  "fetched": 615,
+  "cover_fetched": 185,
+  "gallery_fetched": 430,
+  "with_photos": 4968,
+  "identified": 940,
+  "deferred": 0,
+  "critical_deferred": 0,
+  "critical_with_photos": 3923,
+  "critical_without_photos": 4,
+  "unresolved_size_groups": 1,
+  "unresolved_size_listings": 2,
+  "history_deferred": 0,
+  "backlog": {
+   "count": 0,
+   "oldest": null,
+   "age_days": 0
+  }
+ },
+ "runtime": {
+  "seconds": 756.3,
+  "phases": {
+   "scrape_otodom": 62.5,
+   "scrape_olx": 3.2,
+   "scrape_gratka": 55.0,
+   "scrape_morizon": 54.8,
+   "scrape_nieruchomosci-online": 431.7,
+   "photos": 62.4,
+   "dedupe": 0.3,
+   "history_prepare": 0.4,
+   "delist": 74.1,
+   "history_update": 0.7,
+   "rcn": 5.9,
+   "geo": 3.6,
+   "write": 1.7,
+   "total": 756.3
+  }
+ },
+ "errors": [
+  "otodom flat/opolskie: search ended cleanly but short of the portal's own count — collected 1150 of 1432 (80.3%), kept 1131 — subdivide it",
+  "olx house/opolskie: failed after 1 page(s) (HTTP 403)"
+ ]
+}
