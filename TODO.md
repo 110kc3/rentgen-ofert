@@ -252,6 +252,7 @@ for the seven-day/three-cycle gate in this session.
 - [x] Confirm a healthy automatic Śląskie publication after Gratka HTTP 503
   recovery: scrape 39678803197/deploy 39689522871 passed; full live payload,
   continuity without override and archive reconciliation verified October 22.
+- [x] Standardize pytest configuration (`pytest.ini` with `pythonpath = .` and `testpaths = tests`), ensuring direct CLI invocations pass all 535 unit and integration tests cleanly without manual PYTHONPATH overrides.
 - [ ] Confirm both regions publish fresh healthy RCN snapshots under the repair.
   Reconcile changed matches, benchmarks and derived sale claims against broader
   export evidence. A rise in source records is not a sales-growth claim.
