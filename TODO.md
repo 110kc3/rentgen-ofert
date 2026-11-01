@@ -32,11 +32,7 @@ full Pi reboot were not observed. The selected migration is complete. No new scr
 acquisition, refresh or monitoring schedules were enabled.
 The private repo owns runtime paths, catalogue and deployment configuration. See
 [KW_INTEGRATION.md](docs/KW_INTEGRATION.md). Acquisition remains paused there.
-This branch remains unmerged and has not been deployed to public Pages. Push
-verification is pending on the [integration branch Actions view](https://github.com/110kc3/rentgen-ofert/actions?query=branch%3Acodex%2Fkw-integration-2026-10-25);
-its current push filters do not trigger a branch run. No run existed for checkpoint
-`9e1f015` at the single recovery check. The unrelated production queue below remains
-unchanged by this migration.
+This branch remains unmerged and has not been deployed to public Pages. Checkpoint commit `6d39166` verified on `origin/codex/kw-integration-2026-10-25`. The unrelated production queue below remains unchanged by this migration.
 
 ## October 22 selected acceptance checks and storage plan
 
