@@ -31,9 +31,7 @@ HTTP 429. Retaining the old checkpoint does not accept those unfinished cycles.
 The repaired two-region stability clock remains unstarted, with zero accepted
 cycles. Verify the next automatic publications rather than dispatching a run.
 
-This documentation-only push matches neither push workflow. Push verification
-is pending until the scoped commit is published; use the branch Actions view
-at the next session. No runtime or production configuration changes are included.
+Documentation push `bdccad5` verified on main; scheduled scrapes and site deployments continue automatically. No runtime or production configuration changes are included.
 
 ## October 22 scheduled source recovery — verified
 
