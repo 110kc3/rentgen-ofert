@@ -1,0 +1,23 @@
+{
+ "by_type": {
+  "flat": {
+   "archived": 40514,
+   "capped": [],
+   "current": 8304,
+   "failed": [],
+   "pages": 1324
+  },
+  "house": {
+   "archived": 9486,
+   "capped": [],
+   "current": 2502,
+   "failed": [],
+   "pages": 313
+  }
+ },
+ "complete": true,
+ "records": 50000,
+ "refreshed": "2026-11-04",
+ "region": "slaskie",
+ "schema": 2
+}
