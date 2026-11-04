@@ -19,9 +19,14 @@ import argparse
 import datetime as dt
 import json
 import pathlib
+import sys
 import time
 from collections import Counter
 from urllib.parse import unquote, urlsplit
+
+ROOT_DIR = pathlib.Path(__file__).resolve().parent.parent
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
 
 import requests
 

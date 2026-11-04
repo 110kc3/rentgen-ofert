@@ -253,7 +253,7 @@ for the seven-day/three-cycle gate in this session.
   recovery: scrape 39678803197/deploy 39689522871 passed; full live payload,
   continuity without override and archive reconciliation verified October 22.
 - [x] Standardize pytest configuration (`pytest.ini` with `pythonpath = .` and `testpaths = tests`), ensuring direct CLI invocations pass all 535 unit and integration tests cleanly without manual PYTHONPATH overrides.
-- [x] Ensure direct execution compatibility for standalone scripts (`scripts/validate_data.py`, `scripts/versioned_storage.py`, `scripts/deployment_dry_run.py`) by resolving root `sys.path` on invocation; verified CLI options and all 535 tests pass.
+- [x] Ensure direct execution compatibility for all standalone scripts (`scripts/validate_data.py`, `scripts/versioned_storage.py`, `scripts/deployment_dry_run.py`, `scripts/schedule_region.py`, `scripts/region_storage.py`, `scripts/scout_regions.py`) by resolving root `sys.path` on invocation; verified CLI options and all 538 tests pass.
 - [ ] Confirm both regions publish fresh healthy RCN snapshots under the repair.
   Reconcile changed matches, benchmarks and derived sale claims against broader
   export evidence. A rise in source records is not a sales-growth claim.

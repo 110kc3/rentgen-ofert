@@ -2,6 +2,8 @@
 import datetime as dt
 import json
 import pathlib
+import subprocess
+import sys
 
 import requests
 
@@ -320,3 +322,10 @@ def test_scout_workflow_is_manual_read_only_and_non_publishing():
     assert "actions/checkout@v7" in workflow
     assert "actions/setup-python@v7" in workflow
     assert "actions/upload-artifact@v7" in workflow
+
+
+def test_scout_regions_cli_help():
+    proc = subprocess.run([sys.executable, "scripts/scout_regions.py", "--help"],
+                          capture_output=True, text=True, check=True)
+    assert "run the bounded one-page scout" in proc.stdout
+

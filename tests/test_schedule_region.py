@@ -2,6 +2,8 @@
 import copy
 import datetime as dt
 import json
+import subprocess
+import sys
 import urllib.error
 
 import pytest
@@ -137,3 +139,11 @@ def test_attempt_reader_does_not_assume_api_order_or_ignore_incomplete_pages(mon
     monkeypatch.setattr(schedule, "read_api", lambda *args: {"total_count": 101, "artifacts": []})
     with pytest.raises(ValueError):
         schedule.read_last_attempt("owner/repo", "opolskie")
+
+
+def test_schedule_region_cli_imports_cleanly():
+    proc = subprocess.run([sys.executable, "scripts/schedule_region.py"],
+                          capture_output=True, text=True)
+    assert "ModuleNotFoundError" not in proc.stderr
+    assert "KeyError" in proc.stderr
+

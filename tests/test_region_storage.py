@@ -1,6 +1,7 @@
 """Two-region branch/cache isolation exercised against real temporary git repos."""
 import pathlib
 import subprocess
+import sys
 
 import pytest
 
@@ -169,3 +170,10 @@ def test_restore_propagates_fetch_and_extraction_failure(tmp_path, monkeypatch, 
     with pytest.raises(subprocess.CalledProcessError):
         region_storage.restore_region(root, "slaskie")
     assert not any(args[-1] == "refs/heads/data" for args in calls)
+
+
+def test_region_storage_cli_help():
+    proc = subprocess.run([sys.executable, "scripts/region_storage.py", "--help"],
+                          capture_output=True, text=True, check=True)
+    assert "isolate regional data branches" in proc.stdout
+
