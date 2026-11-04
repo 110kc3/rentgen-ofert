@@ -1,9 +1,28 @@
 # Current queue — rentgen-ofert
 
-Updated 2026-10-22. This file owns accepted work and the next-session handoff.
+Updated 2026-11-04. This file owns accepted work and the next-session handoff.
 [Development history](docs/HISTORY.md) preserves the former diary and unselected
 ideas. [POLAND_ROLLOUT.md](POLAND_ROLLOUT.md) owns expansion and capacity gates;
 its historical task lists do not authorize additional work.
+
+## Current — 2026-11-04
+
+Last completed slice: adopted canonical AGENTS.md, mirror CLAUDE.md, and agent-instructions CI workflow (`6e0ca66`). Fixed root sys.path in region_storage, schedule_region, and scout_regions for standalone CLI execution (`715fe4f`); 535 tests pass.
+
+### Accepted next work
+
+- [ ] Verify next scheduled automatic publication across Śląskie and Opolskie cohorts (scheduled scrapes and deploy workflows) without manual workflow dispatch.
+
+### Owner actions / blocked
+
+- Storage & expansion provider selection: S3/R2 object storage infrastructure selection remains unselected by owner; planning-only phase complete.
+- Two-region stability clock: observe scheduled publications; new region addition remains blocked pending 7-day stability clock.
+
+### Pending verification
+
+- Commit `6e0ca66` pushed to `origin/main`; [Actions runs](https://github.com/110kc3/rentgen-ofert/actions) pending observation next session.
+
+### History / deferred
 
 ## October 22 selected acceptance checks and storage plan
 
