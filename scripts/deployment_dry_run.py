@@ -11,14 +11,17 @@ import os
 import pathlib
 import shutil
 import subprocess
+import sys
 import tempfile
 import urllib.parse
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from scraper import regions
 from scripts import versioned_storage as storage
 from scripts.validate_data import validate_data_dir
-
-ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 
 def _json(path, value):

@@ -17,8 +17,13 @@ import os
 import pathlib
 import re
 import shutil
+import sys
 import tempfile
 import urllib.parse
+
+ROOT_DIR = pathlib.Path(__file__).resolve().parent.parent
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
 
 from scraper import regions
 from scripts.validate_data import DataValidationError, validate_data_dir
