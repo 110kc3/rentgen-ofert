@@ -8,15 +8,30 @@ Polish real estate sale listing aggregator and market intelligence engine, combi
 - **Static architecture:** Fast, searchable client-side UI with Leaflet map clusters and private KW (*księga wieczysta*) verification viewer.
 - **Documentation:** [`TODO.md`](TODO.md) · [`POLAND_ROLLOUT.md`](POLAND_ROLLOUT.md) · [`docs/`](docs/)
 
+**Status:** Śląskie and Opolskie are published. Coverage remains partial: OLX is
+blocked on GitHub-hosted runners and Otodom/Morizon coverage is partial. See
+[`TODO.md`](TODO.md) and the latest [audits](docs/audits/) for current counts.
+
 ## Quick Start
 
 ```bash
-# Run unit test suite
-.venv/bin/pytest -q tests
+.venv/bin/pip install -r scraper/requirements-test.txt
+.venv/bin/pytest -q
+```
 
-# Serve the static frontend locally
-python3 -m http.server 8000 --directory site
+The test suite is offline. A local preview needs scraped data first; the scraper
+contacts the live portals (limit it with `RENTGEN_MAX_PAGES` and `RENTGEN_DELAY`):
 
-# Run dry-run regional scrape
-python3 -m scraper.main --region slaskie --dry-run
+```bash
+RENTGEN_REGION=slaskie RENTGEN_MAX_PAGES=3 RENTGEN_DELAY=0.3 python -m scraper.main
+node scripts/update-summary.mjs
+python -m http.server 8000 -d site
+```
+
+Then open `http://localhost:8000/region/slaskie/`.
+
+The social card `site/og.png` is rendered from `scripts/og-card.html`:
+
+```bash
+npx playwright screenshot --viewport-size=1200,630 scripts/og-card.html site/og.png
 ```
