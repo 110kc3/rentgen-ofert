@@ -59,9 +59,9 @@ function appContext() {
     normLoc: s => s, $: () => empty, setSeg() {}, apply() {}, renderLocalityList() {},
     TYPE_LABEL: {}, SRC_LABEL: {}, OWNER_LABEL: {}, HIST_LABEL: {}, MARKET_LABEL: {}, label: s => s });
   for (const [start, end] of [
-    ['function passes(', '// ---- "cena vs'], ['function countWithout(', 'function topTowns('],
+    ['function passes(', 'const foldTown ='], ['function countWithout(', 'function topTowns('],
     ['function snapshot()', 'function isDefault('], ['function clearFilter(', 'function wireChips('],
-    ['function resetAll()', '// ---- active-filter'], ['function activeFilters()', '// ---- empty state'],
+    ['function resetAll()', 'function activeFilters()'], ['function activeFilters()', 'function filterDims()'],
   ]) vm.runInContext(source.slice(source.indexOf(start), source.indexOf(end, source.indexOf(start))), c);
   return c;
 }
@@ -94,7 +94,7 @@ test('the listing import handler cannot restore a cleared or superseded file', a
     addEventListener(event, handler) { this.handlers[event] = handler; }, close() {} });
   const get = id => { if (!nodes.has(id)) nodes.set(id, node()); return nodes.get(id); };
   const context = vm.createContext({ $: get, state, kwLinks: links, RentgenKW: require('../site/kw.js'), render() {} });
-  vm.runInContext(source.slice(source.indexOf('function wireKW()'), source.indexOf('// ---- persistence')), context);
+  vm.runInContext(source.slice(source.indexOf('function wireKW()'), source.indexOf('function snapshot()')), context);
   context.wireKW();
   function pending() {
     let resolve;

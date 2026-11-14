@@ -265,7 +265,6 @@ function buildSourceFilter() {
     }).join("");
 }
 
-
 function buildLocalityOptions() {
   const counts = new Map();
   for (const l of state.all) {
@@ -326,7 +325,6 @@ function wireLocality() {
     if (!$("#loc-ms").contains(e.target)) pop.hidden = true;
   });
 }
-
 
 function wireControls() {
   document.querySelectorAll(".seg").forEach((seg) => {
@@ -514,8 +512,6 @@ function wireKW() {
   });
 }
 
-// ---- persistence (localStorage + shareable URL) ----------------------------
-
 function snapshot() {
   return {
     type: state.type, source: state.source, owner: state.owner, history: state.history,
@@ -587,8 +583,6 @@ function resetAll() {
   apply();
 }
 
-// ---- active-filter chips ---------------------------------------------------
-
 function activeFilters() {
   const out = [];
   if (state.kwOnly) out.push({ k: "kw", label: "Tylko z KW" });
@@ -606,8 +600,6 @@ function activeFilters() {
   if (q) out.push({ k: "q", label: "„" + q + "”" });
   return out;
 }
-
-// ---- empty state that names the culprit ------------------------------------
 
 function filterDims() {
   const out = [];
@@ -697,7 +689,6 @@ function emptyMessage(pool, f) {
   return `<div class="empty">${parts.join("")}</div>`;
 }
 
-
 function setSegCount(sel, n, total) {
   const el = $(sel);
   if (!el || n == null) return;
@@ -742,13 +733,11 @@ function wireChips() {
     const b = e.target.closest("button.chip");
     if (b) clearFilter(b.dataset.k);
   });
-  // the empty state offers the same buttons; it lives inside #grid, whose card
   $("#grid").addEventListener("click", (e) => {
     const b = e.target.closest(".empty button[data-k]");
     if (b) { e.stopPropagation(); clearFilter(b.dataset.k); }
   });
 }
-
 
 function currentFilters() {
   const num = (id) => { const v = parseFloat($("#" + id).value); return Number.isFinite(v) ? v : null; };
@@ -795,8 +784,6 @@ function passes(l, f) {
   }
   return true;
 }
-
-// ---- "cena vs transakcje RCN" (benchmarks from data/rcnstats.json) ----------
 
 const foldTown = (s) => !s ? "" :
   s.replace(/ł/g, "l").replace(/Ł/g, "L").normalize("NFKD")
@@ -900,7 +887,6 @@ async function loadArchive() {
   return archiveRequest;
 }
 
-
 function shardOf(url, n) {
   let h = 0x811c9dc5 | 0;
   for (let i = 0; i < url.length; i++) h = Math.imul(h ^ url.charCodeAt(i), 0x01000193);
@@ -977,7 +963,6 @@ function wireLazyDetails() {
   }, true);
 }
 
-// Chunked rendering: with ~20k listings, building the whole grid at once
 const CHUNK = 60;
 let view = [];
 let rendered = 0;
@@ -1084,7 +1069,6 @@ function historyBlock(l) {
   return bits.length ? `<div class="hist">${bits.join(" · ")}</div>` : "";
 }
 
-
 const tlA = (url, text) =>
   `<a href="${escapeHtml(url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${text}</a>`;
 
@@ -1151,8 +1135,6 @@ function timelineBlock(l) {
   </details>`;
 }
 
-// "cena vs transakcje RCN" line under zł/m² + expandable negotiation arguments
-
 function vsRcnLine(l) {
   const b = l._bench;
   if (!b) return "";
@@ -1217,7 +1199,6 @@ function pastSaleLine(l) {
   return `<div class="pastsale">🔑 poprzednio sprzedane ${s.date} za <b>${PLN.format(s.price)} zł</b> (akt not., pewność: ${s.confidence})</div>`;
 }
 
-
 function pinBlock(l) {
   if (!l.url) return "";
   const extra = l.type === "flat"
@@ -1240,7 +1221,6 @@ function pinBlock(l) {
     </div>
   </details>`;
 }
-
 
 async function fetchGugik(url) {
   const response = await fetch(url, { signal: AbortSignal.timeout(15000) });
@@ -1413,7 +1393,6 @@ function wirePinButtons() {
     setTimeout(() => { btn.textContent = "📌 Kopiuj"; }, 2500);
   });
 }
-
 
 const MAP_KEY = RentgenRegion.storageKey("rentgen.map.v1", REGION);
 let lmap = null, lcluster = null, legendCtl = null, leafletLoading = null, mapFitted = false;

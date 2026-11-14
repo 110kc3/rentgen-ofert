@@ -1,5 +1,3 @@
-// Usage: node scripts/benchmark_payload.mjs LEGACY_DIR COMPACT_DIR
-// Offline CPU/byte comparison; browser/network timings belong in the dated audit.
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';

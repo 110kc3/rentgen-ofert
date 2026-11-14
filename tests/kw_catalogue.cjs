@@ -3,7 +3,6 @@ const assert = require('node:assert/strict');
 const catalogue = require('../site/kw-catalogue.js');
 const { create } = require('../site/kw-links.js');
 
-// Fictional property fixtures; no private catalogue observations are shipped.
 const request = { city: 'Gliwice', street: 'Testowa', number: '16A', unit: '05', register_type: 'unit' };
 const flat = { url: 'https://example.invalid/offer', locality: 'Gliwice', type: 'flat' };
 function fixture() {

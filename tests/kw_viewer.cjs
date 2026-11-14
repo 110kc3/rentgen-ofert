@@ -2,7 +2,6 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { validate, conflicts, scope, matches } = require('../site/kw.js');
 
-// Fictional identifiers only: no real private address/KW evidence in this repository.
 function fixture() {
   return { schema_version: 1, records: [{ address: { city: 'Gliwice', street: 'Testowa', number: '16A', unit: '05' },
     register_type: 'unit', kw_number: 'GL1G/00000002/0', parent_kw: 'GL1G/00000001/0',
@@ -39,7 +38,7 @@ test('exact building/unit filters preserve suffixes, leading zeros and land scop
   for (const filters of [{ number: '16' }, { unit: '5' }, { query: 'Testówa' }, { kind: 'land' }]) assert.equal(matches(r, filters), false);
   const land = { ...r, register_type: 'land', address: { ...r.address, unit: null } };
   assert.equal(matches(land, { unit: '05' }), false);
-  assert.ok(matches(r, { query: 'GL1G/00000001/0' })); // explicit parent reference is searchable
+  assert.ok(matches(r, { query: 'GL1G/00000001/0' }));
 });
 test('conflicts retain every source and are scoped to the exact address and type', () => {
   const [r] = validate(fixture()), second = { ...r, kw_number: 'GL1G/00000003/0' };

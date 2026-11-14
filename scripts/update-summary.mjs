@@ -1,8 +1,4 @@
 #!/usr/bin/env node
-// Build the national picker, regional pages and discovery files from the one
-// canonical catalog plus whichever site/data/<region>/ trees deploy.yml has
-// overlaid. Plain Node, no dependencies.
-
 import {
   existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync,
   writeFileSync,
@@ -23,8 +19,6 @@ if (catalog.schema !== 1 || !Array.isArray(catalog.regions)
     || catalog.regions.length !== 16) {
   throw new Error('site/regions.json is not a schema-1 16-region catalog');
 }
-// Only the explicit local dry-run supplies a plan. Direct Pages deployment
-// keeps its existing branch overlay and local regional directories.
 const plan = process.env.RENTGEN_PUBLICATION_PLAN
   ? readJson(process.env.RENTGEN_PUBLICATION_PLAN) : { schema: 1, regions: {} };
 if (plan.schema !== 1 || !plan.regions || typeof plan.regions !== 'object'
@@ -100,9 +94,6 @@ function publication(region) {
   const input = plan.regions[region.slug];
   const directory = input ? resolve(input.directory) : join(DATA_ROOT, region.slug);
   const metaPath = join(directory, 'meta.json');
-  // `enabled` is the catalog kill switch for both refresh and publication.
-  // Remove only the artifact copy: the recoverable data branch is untouched
-  // and a later re-enable/deploy can overlay it again.
   if (!region.enabled) {
     rmSync(join(DATA_ROOT, region.slug), { recursive: true, force: true });
     return { ...region, published: false, data: null };
@@ -161,9 +152,6 @@ const regions = catalog.regions.map(publication);
 const published = regions.filter((region) => region.published);
 mkdirSync(DATA_ROOT, { recursive: true });
 
-// Browser-facing derivative. It retains all configured regions so a valid but
-// unpublished stable path can explain itself. Scraper-only portal slugs and
-// TERYT stay solely in the canonical source file.
 const browserCatalog = {
   schema: 1,
   generated: new Date().toISOString(),
@@ -423,7 +411,7 @@ const llmsRegions = published.length ? published.map((region) => {
     const manifest = readJson(join(region._directory, 'manifest.json'));
     shards = `\n  - ${dataUrl}/d/00.json … d/${String(manifest.shards - 1).padStart(2, '0')}.json — detail shards (${manifest.shards})`;
     if (manifest.archive) shards += `\n  - ${dataUrl}/a/00.json … a/${String(manifest.archive.shards - 1).padStart(2, '0')}.json — archive detail shards keyed by detail_key (${manifest.archive.shards})`;
-  } catch { /* a legacy payload may have no manifest */ }
+  } catch {}
   return `### ${region.label}
 
 - Pages: ${BASE}/region/${region.slug}/ and ${BASE}/region/${region.slug}/stats/

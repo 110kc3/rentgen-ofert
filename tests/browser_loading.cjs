@@ -1,10 +1,9 @@
-// Exercise the actual app loaders and their UI handlers with offline DOM/fetch fixtures.
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const source = fs.readFileSync(require('node:path').join(__dirname, '../site/app.js'), 'utf8');
-const loaders = source.slice(source.indexOf('let archiveRequest ='), source.indexOf('// Chunked rendering:'));
+const loaders = source.slice(source.indexOf('let archiveRequest ='), source.indexOf('const CHUNK ='));
 const rendering = source.slice(source.indexOf('function render()'), source.indexOf('function priceLabel('));
 const settle = () => new Promise(resolve => setImmediate(resolve));
 const ok = value => ({ ok: true, json: async () => value });
@@ -100,7 +99,7 @@ for (const [name, fail] of [
     await assert.rejects(c.loadDetails(a));
     assert.equal(a._full, undefined);
     await Promise.all([c.loadDetails(a), c.loadDetails(b)]);
-    assert.equal(calls, 2); // same shard request shared by both cards
+    assert.equal(calls, 2);
     assert.equal(a.street, 'Lipowa');
     assert.equal(b.street, 'Polna');
     assert.equal(a._full, true);
