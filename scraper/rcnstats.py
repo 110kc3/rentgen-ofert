@@ -25,22 +25,16 @@ from collections import Counter
 from .rcn import _fold
 
 WINDOW_MONTHS = 24
-MIN_N = 5            # fewer deeds than this -> no benchmark published
-PPM_MIN, PPM_MAX = 500, 40000   # zl/m2 outside this is a data error / udział
-GAP_MAX_PCT = 40     # |deed vs ask| beyond this is a mismatch, not a discount
+MIN_N = 5
+PPM_MIN, PPM_MAX = 500, 40000
+GAP_MAX_PCT = 40
 
-STALE_DAYS = 90        # newest deed older than this -> the town is flagged stale
-STALE_MIN_DEEDS = 1000 # ...but only for towns big enough for it to be news.
-                       # Calibrated on the 2026-08 snapshot (479 towns): at 50 the
-                       # list is 64 hamlets that simply have no market (Paczynka's
-                       # last deed is 2021) and the real cities are buried; at 1000
-                       # it is 7 towns, all of them places you might actually buy in
-                       # (Tarnowskie Góry, Radzionków, Piekary, Gliwice, Sosnowiec…).
-STALE_MAX = 30         # cap the published list
+STALE_DAYS = 90
+STALE_MIN_DEEDS = 1000
+STALE_MAX = 30
 
 FLAT_BUCKETS = ((40, "<40"), (60, "40-59"), (80, "60-79"), (120, "80-119"), (None, "120+"))
 HOUSE_BUCKETS = ((100, "<100"), (150, "100-149"), (220, "150-219"), (None, "220+"))
-
 
 def bucket_of(typ, area):
     if area is None:
@@ -53,7 +47,6 @@ def bucket_of(typ, area):
             return name
     return None
 
-
 def _pctile(sorted_vals, q):
     """Linear-interpolation percentile of an already-sorted list."""
     if not sorted_vals:
@@ -62,7 +55,6 @@ def _pctile(sorted_vals, q):
     lo = int(pos)
     hi = min(lo + 1, len(sorted_vals) - 1)
     return sorted_vals[lo] + (sorted_vals[hi] - sorted_vals[lo]) * (pos - lo)
-
 
 def _bucket_stats(snapshot, cutoff, min_n):
     """towns[folded] = {"_names": Counter, "flat": {bucket: {mk: [ppm...]}}}
@@ -112,7 +104,6 @@ def _bucket_stats(snapshot, cutoff, min_n):
             out[town] = entry
     return out
 
-
 def _display_name(counter):
     """The register mixes casings — 'RYBNIK' and 'PIEKARY ŚLĄSKIE' arrive
     shouting next to 'Rybnik'. Prefer the commonest mixed-case spelling, and
@@ -123,7 +114,6 @@ def _display_name(counter):
             return name
         shouted = shouted or name
     return shouted.title() if shouted else None
-
 
 def _freshness(snapshot, today):
     """town(folded) -> {name, last, lag, n}: the newest deed the register holds
@@ -141,7 +131,7 @@ def _freshness(snapshot, today):
     """
     seen = {}
     names = {}
-    folded = {}          # msc -> folded key; _fold over ~666k rows is worth caching
+    folded = {}
     for rows in (snapshot.get("lokale") or [], snapshot.get("budynki") or []):
         for r in rows:
             d, msc = r.get("d"), r.get("msc")
@@ -170,7 +160,6 @@ def _freshness(snapshot, today):
             e["lag"] = None
     return seen
 
-
 def gap_pairs(records):
     """(town, town_display, type, gap_pct, days_on_market) for every watched
     property that vanished and got an RCN deed attached.
@@ -189,7 +178,7 @@ def gap_pairs(records):
             continue
         pct = (deed["price"] - ask) / ask * 100
         if abs(pct) > GAP_MAX_PCT:
-            continue          # almost certainly a mismatched deed / udział sale
+            continue
         days = None
         try:
             days = (dt.date.fromisoformat(rec["delisted"])
@@ -201,7 +190,6 @@ def gap_pairs(records):
         town = _fold(snap.get("locality")) or _fold(snap.get("district"))
         yield town, disp, rec.get("type"), pct, days
 
-
 def _gap_summary(pairs):
     pcts = sorted(p for _, _, _, p, _ in pairs)
     days = sorted(d for _, _, _, _, d in pairs if d is not None)
@@ -212,13 +200,10 @@ def _gap_summary(pairs):
         out["med_days"] = round(_pctile(days, 0.5))
     return out
 
-
 def build(snapshot, records, today=None,
           window_months=WINDOW_MONTHS, min_n=MIN_N, stale_days=STALE_DAYS):
     """Assemble the rcnstats.json payload. Small: towns x buckets x 2 markets."""
     today = today or dt.date.today().isoformat()
-    # real calendar months back, not months*30 days (720 days ≠ the advertised
-    # 24 months — deeds near the edge were silently dropped)
     d = dt.date.fromisoformat(today)
     m = d.year * 12 + (d.month - 1) - window_months
     cutoff = dt.date(m // 12, m % 12 + 1,
@@ -244,8 +229,6 @@ def build(snapshot, records, today=None,
         if g:
             gap[key] = g
 
-    # how current the register is, per town — attached to the towns the
-    # dashboard already looks up, plus a standalone list of the laggards
     fresh = _freshness(snapshot or {}, today)
     for town, entry in towns.items():
         f = fresh.get(town)

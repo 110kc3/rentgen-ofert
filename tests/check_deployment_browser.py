@@ -18,7 +18,6 @@ from scripts.deployment_dry_run import build
 from test_validate_data import _compact_dataset, _dataset
 from check_storage_browser import QuietHandler, _json, _rebuild, _stats
 
-
 def run(root, executable=None):
     data, store = root / "data", root / "objects"
     for slug, fixture in [("slaskie", _compact_dataset), ("opolskie", _dataset)]:
@@ -63,7 +62,6 @@ def run(root, executable=None):
             stats.wait_for_function("state.data && document.querySelector('#c-dom .chart-h')")
             assert stats.evaluate("state.data.built") == "version-one"
             checks.append("external statistics render from the same sealed version")
-            # Resolve every generated JSON-LD distribution.
             raw_links = old.evaluate("JSON.parse(document.querySelector('script[type=\"application/ld+json\"]').textContent)['@graph'].find(x=>x['@type']==='Dataset').distribution.map(x=>x.contentUrl)")
             assert len(raw_links) == 6
             for url in raw_links:
@@ -87,7 +85,6 @@ def run(root, executable=None):
             stats.wait_for_function("state.data && state.data.built==='version-one'")
             checks.append("statistics reload also stays on the catalog's verified version")
 
-            # An interrupted/corrupt remote candidate must not install a new artifact.
             corrupt = store / "slaskie/versions" / second["version"] / "a/00.json"
             valid_bytes = corrupt.read_bytes()
             corrupt.unlink()
@@ -137,7 +134,6 @@ def run(root, executable=None):
             server.shutdown()
             server.server_close()
     return {"checks": checks, "pages_bytes": report["pages_bytes"], "external_bytes": report["external_bytes"]}
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)

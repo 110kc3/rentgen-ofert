@@ -1,4 +1,3 @@
-/* Local-only evidence viewer. No fetch, storage, telemetry or automatic KW assignment. */
 (function (root) {
   'use strict';
   const MAX_BYTES = 4 * 1024 * 1024;

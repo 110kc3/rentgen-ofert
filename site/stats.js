@@ -1,17 +1,13 @@
 "use strict";
 
-/* Statystyki: renders site/data/stats.json (weekly listing series + monthly
-   RCN deed series) as hand-rolled responsive SVG charts. No libraries. */
 
 const PLN = new Intl.NumberFormat("pl-PL");
-// data lives per voivodeship in data/<region>/ — same convention as app.js
 const REGION = RentgenRegion.fromLocation(location, "stats");
 let DATA = `data/${REGION}`;
 const $ = (sel) => document.querySelector(sel);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
-// series identity is fixed: a series keeps its color no matter what's visible
 const COL = { ask: "var(--s1)", rcnW: "var(--s2)", rcnP: "var(--s3)" };
 const NAME = { ask: "oferty (cena ofertowa)", rcnW: "transakcje RCN — wtórny", rcnP: "transakcje RCN — pierwotny" };
 
@@ -76,8 +72,6 @@ async function boot() {
     ]);
     state.data = data;
     state.gap = rcnstats && rcnstats.gap ? rcnstats.gap : null;
-    // towns whose powiat stopped reporting deeds — the RCN line simply ends
-    // there, which looks like "no transactions" unless we say otherwise
     state.stale = (rcnstats && rcnstats.stale) || [];
   } catch (e) {
     showRegionMessage("Nie udało się wczytać statystyk regionu",
@@ -105,7 +99,6 @@ async function boot() {
   render();
 }
 
-// ---- data selection ---------------------------------------------------------
 
 const last = (arr) => { for (let i = (arr || []).length - 1; i >= 0; i--) if (arr[i] != null) return arr[i]; return null; };
 
@@ -115,7 +108,6 @@ function weeklySel() {
   return { weeks: w.weeks, s: pool || null, full: !state.town ? w.global[state.type] : null };
 }
 
-// weekly asking medians -> monthly (median of the month's weekly medians)
 function askMonthly() {
   const { weeks, s } = weeklySel();
   if (!s) return {};
@@ -141,7 +133,6 @@ function rcnSel() {
   return { months: r.months, w: r.global.w, p: r.global.p };
 }
 
-// ---- svg helpers ------------------------------------------------------------
 
 const W = 720, H = 240, PAD = { l: 50, r: 14, t: 14, b: 24 };
 
@@ -196,7 +187,6 @@ function linePath(values, sc, x) {
   return d;
 }
 
-// ---- generic charts (line with crosshair tooltip, bars with per-bar hover) --
 
 function fmtPLN(v) { return PLN.format(Math.round(v)); }
 
@@ -213,7 +203,6 @@ function lineChart(el, { title, sub, labels, series, unit, xEvery, note, int }) 
   }
   const paths = visible.map((s) =>
     `<path d="${linePath(s.values, sc, x)}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"></path>`).join("");
-  // selective direct labels: series name at its last point
   const ends = visible.map((s) => {
     let i = s.values.length - 1;
     while (i >= 0 && s.values[i] == null) i--;
@@ -265,14 +254,14 @@ function barChart(el, { title, labels, values, color, unit, xEvery, heading }) {
   const sc = yScale([0, ...values], true);
   if (!sc) { el.innerHTML = ""; return; }
   const n = labels.length;
-  const bw = Math.max(2, Math.min(40, (W - PAD.l - PAD.r) / n - 2));   // 2px surface gap
+  const bw = Math.max(2, Math.min(40, (W - PAD.l - PAD.r) / n - 2));
   const x = (i) => PAD.l + (W - PAD.l - PAD.r) * ((i + 0.5) / n) - bw / 2;
   const y0 = sc.y(0);
   const bars = values.map((v, i) => {
     if (v == null) return "";
     const y = sc.y(v);
     const h = Math.max(0, y0 - y);
-    const r = Math.min(4, bw / 2, h);       // rounded data-end, flat baseline
+    const r = Math.min(4, bw / 2, h);
     return `<path data-i="${i}" fill="${color}"
       d="M${x(i)},${y0} v${-(h - r)} q0,${-r} ${r},${-r} h${bw - 2 * r} q${r},0 ${r},${r} v${h - r} z"></path>`;
   }).join("");
@@ -310,7 +299,6 @@ function dataTable(labels, series, unit) {
     <div class="dtable-wrap"><table><thead>${head}</thead><tbody>${rows}</tbody></table></div></details>`;
 }
 
-// ---- page render ------------------------------------------------------------
 
 function tiles() {
   const { s } = weeklySel();
@@ -360,15 +348,10 @@ function priceChart() {
   });
 }
 
-// must fold town names exactly like scraper/rcn.py _fold() — stats.json is keyed
-// by display name, rcnstats.stale[] by the folded one
 const foldTown = (s) => !s ? "" :
   s.replace(/ł/g, "l").replace(/Ł/g, "L").normalize("NFKD")
    .replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9 ]/g, " ").trim();
 
-/** The generic "deeds arrive late" caveat is true everywhere, but some powiats
- *  are late by months and that is a different story — name them.
- *  Returned as plain text: lineChart() escapes the whole note itself. */
 function staleNote() {
   const stale = state.stale || [];
   if (!stale.length) return "";

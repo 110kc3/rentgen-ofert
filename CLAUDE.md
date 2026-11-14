@@ -21,3 +21,9 @@ Read [TODO.md](TODO.md) and [README.md](README.md) before changing implementatio
 
 - Verify exact file paths before editing; preserve unrelated files and formatting.
 - Append completed tasks to `TODO.md`'s shipped/completed sections.
+
+## Code style
+
+- Do not add comments to code. Make code self-explanatory through descriptive
+  names, small focused functions and clear control flow. Put rationale and usage
+  explanations in Markdown documentation.

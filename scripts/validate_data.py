@@ -26,24 +26,18 @@ if str(ROOT_DIR) not in sys.path:
 
 from scraper import payload
 
-
 class DataValidationError(ValueError):
     pass
 
-
 SOURCE_HEALTH_VALUES = frozenset({"healthy", "partial", "blocked", "unknown"})
 UNAVAILABLE_SOURCE_STATUSES = frozenset({"blocked", "unknown"})
-# An abrupt majority loss is a publication incident even if the portal reports
-# a plausible new total. Small samples and ordinary inventory drift can pass.
 SOURCE_VOLUME_BASELINE = 100
-
 
 def _read_json(path: pathlib.Path):
     try:
         return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, ValueError) as exc:
         raise DataValidationError(f"invalid JSON: {path}: {exc}") from exc
-
 
 def _read_gzip_json(path: pathlib.Path):
     try:
@@ -52,15 +46,12 @@ def _read_gzip_json(path: pathlib.Path):
     except (OSError, UnicodeError, ValueError) as exc:
         raise DataValidationError(f"invalid gzip JSON: {path}: {exc}") from exc
 
-
 def _require(condition, message):
     if not condition:
         raise DataValidationError(message)
 
-
 def _number(value) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool)
-
 
 def _human_bytes(size: int) -> str:
     value = float(size)
@@ -69,7 +60,6 @@ def _human_bytes(size: int) -> str:
             return f"{value:.1f} {unit}"
         value /= 1024
     return f"{size} B"
-
 
 def _source_transition(regression: dict) -> str:
     transition = (
@@ -80,7 +70,6 @@ def _source_transition(regression: dict) -> str:
     if regression.get("reason") == "volume":
         transition += " (more than 50% fewer current offers)"
     return transition
-
 
 def validate_source_continuity(current_sources: dict, previous_meta=None,
                                *, allow_regression: bool = False) -> dict:
@@ -182,7 +171,6 @@ def validate_source_continuity(current_sources: dict, previous_meta=None,
         )
     return result
 
-
 def validate_rcn(meta, stats, previous=None):
     """Fail closed on lost RCN evidence, independently of portal overrides."""
     health = meta.get("rcn_health")
@@ -227,7 +215,6 @@ def validate_rcn(meta, stats, previous=None):
             _require(new.get(key, 0) > 0,
                      f"RCN continuity regression: {key} disappeared")
     return health
-
 
 def validate_data_dir(data_dir, *, previous_meta=None,
                       allow_source_regression: bool = False,
@@ -329,8 +316,6 @@ def validate_data_dir(data_dir, *, previous_meta=None,
                      f"detail for {url} must be an object")
             detail_urls.add(url)
 
-    # Old regional branches remain readable during the serial rollout; new
-    # publications include detail bytes in the version, not just the index.
     archive_shards = set()
     if schema == 3:
         _require(detail_urls == index_urls, "missing current detail record(s)")
@@ -553,7 +538,6 @@ def validate_data_dir(data_dir, *, previous_meta=None,
         meta, parsed.get(root / "rcnstats.json"), previous_meta)
     return summary
 
-
 def github_summary(summary: dict) -> str:
     lines = [
         f"## Dataset: {summary['region']}",
@@ -646,7 +630,6 @@ def github_summary(summary: dict) -> str:
     lines.append("")
     return "\n".join(lines)
 
-
 def main(argv=None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     parser = argparse.ArgumentParser(
@@ -701,7 +684,6 @@ def main(argv=None) -> int:
         with open(destination, "a", encoding="utf-8") as handle:
             handle.write(github_summary(summary))
     return 0
-
 
 if __name__ == "__main__":
     raise SystemExit(main())

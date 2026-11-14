@@ -12,7 +12,6 @@ from scripts import versioned_storage as storage
 from scripts.validate_data import DataValidationError, validate_data_dir
 from test_validate_data import _compact_dataset
 
-
 @pytest.fixture
 def source(tmp_path):
     path = tmp_path / "source"
@@ -21,17 +20,14 @@ def source(tmp_path):
     (path / "rcnstats.json").write_text("{}")
     return path
 
-
 def _pointer(store):
     return json.loads((store / "slaskie/current.json").read_bytes())
-
 
 def _change_meta(source):
     path = source / "meta.json"
     meta = json.loads(path.read_bytes())
     meta["updated"] = "2026-10-19T12:00:00Z"
     path.write_text(json.dumps(meta))
-
 
 def test_public_validation_omits_only_pipeline_history(source):
     (source / "history.json.gz").unlink()
@@ -41,7 +37,6 @@ def test_public_validation_omits_only_pipeline_history(source):
     (source / "d/00.json").unlink()
     with pytest.raises(DataValidationError, match="missing detail shard"):
         validate_data_dir(source, require_history=False)
-
 
 def test_publish_pins_all_public_bytes_and_keeps_previous_version(source, tmp_path):
     store = tmp_path / "store"
@@ -54,13 +49,12 @@ def test_publish_pins_all_public_bytes_and_keeps_previous_version(source, tmp_pa
     assert storage.publish(source, store, "slaskie") == first
     _change_meta(source)
     second = storage.publish(source, store, "slaskie")
-    assert second["version"] != first["version"]  # metadata is pinned too
+    assert second["version"] != first["version"]
     assert (old / "meta.json").read_bytes() == original_meta
     assert _pointer(store)["version"] == second["version"]
     storage.activate(store, "slaskie", first["version"])
     assert _pointer(store)["version"] == first["version"]
     assert (store / "slaskie/versions" / second["version"]).is_dir()
-
 
 @pytest.mark.parametrize("first_upload", [True, False])
 def test_interrupted_upload_never_replaces_pointer_or_leaks_partial_version(source, tmp_path, first_upload):
@@ -76,7 +70,6 @@ def test_interrupted_upload_never_replaces_pointer_or_leaks_partial_version(sour
     assert not list((store / "slaskie").glob(".upload-*"))
     assert len(list((store / "slaskie/versions").iterdir())) == (0 if first_upload else 1)
 
-
 def test_bad_candidate_does_not_replace_good_pointer(source, tmp_path):
     store = tmp_path / "store"
     first = storage.publish(source, store, "slaskie")
@@ -85,7 +78,6 @@ def test_bad_candidate_does_not_replace_good_pointer(source, tmp_path):
         storage.publish(source, store, "slaskie")
     assert _pointer(store)["version"] == first["version"]
 
-
 @pytest.mark.parametrize("target", ["meta.json", "a/00.json", "release.json"])
 def test_corrupt_rollback_target_is_rejected_without_changing_current(source, tmp_path, target):
     store = tmp_path / "store"
@@ -93,11 +85,10 @@ def test_corrupt_rollback_target_is_rejected_without_changing_current(source, tm
     _change_meta(source)
     second = storage.publish(source, store, "slaskie")
     path = store / "slaskie/versions" / first["version"] / target
-    path.write_bytes(path.read_bytes() + b" ")  # even valid JSON byte drift is corruption
+    path.write_bytes(path.read_bytes() + b" ")
     with pytest.raises(ValueError, match="hash"):
         storage.activate(store, "slaskie", first["version"])
     assert _pointer(store)["version"] == second["version"]
-
 
 def test_regions_remain_isolated_and_unknown_region_is_refused(source, tmp_path):
     store = tmp_path / "store"
@@ -109,7 +100,6 @@ def test_regions_remain_isolated_and_unknown_region_is_refused(source, tmp_path)
     assert json.loads((store / "opolskie/current.json").read_bytes())["version"] == other["version"]
     with pytest.raises(ValueError):
         storage.publish(source, store, "../../elsewhere")
-
 
 def test_storage_http_cors_cache_policy_and_hidden_staging(source, tmp_path):
     store = tmp_path / "store"

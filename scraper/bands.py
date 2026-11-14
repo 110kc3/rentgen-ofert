@@ -42,20 +42,13 @@ from collections import deque
 
 from . import coverage
 
-# The most ads one search of this portal can ever hand over. Measured, not
-# assumed — see the module docstring.
 WINDOW = {
-    "otodom": 7_200,     # ~100 pages x 72/page before the results go erratic
-    "gratka": 7_000,     # 200-page 404 wall x 35/page
-    "morizon": 7_000,    # same frontend, same wall
-    "olx": 1_000,        # `totalElements`, the cap it states as a total
+    "otodom": 7_200,
+    "gratka": 7_000,
+    "morizon": 7_000,
+    "olx": 1_000,
 }
 
-# Price-filter parameters, one probe each (2026-08-08):
-#   otodom   ?priceMin=300000&priceMax=400000        -> 3 348 items / 93 pages
-#   gratka   ?cena-calkowita:min=200000&…:max=300000 -> 1 209 ogłoszeń
-#   morizon  ?ps[price_from]=200000&ps[price_to]=…   -> 1 000 ogłoszeń
-#   olx      ?search[filter_float_price:from|to]     -> 575 = visibleElements
 PARAMS = {
     "otodom":  ("priceMin", "priceMax"),
     "gratka":  ("cena-calkowita:min", "cena-calkowita:max"),
@@ -63,34 +56,16 @@ PARAMS = {
     "olx":     ("search[filter_float_price:from]", "search[filter_float_price:to]"),
 }
 
-# Seed cut points, in PLN. Chosen so no band holds a disproportionate share of a
-# Polish voivodeship's stock; bands that still overflow get bisected from here,
-# so these only have to be roughly right, not optimal.
 SEED_EDGES = (200_000, 300_000, 400_000, 500_000, 650_000,
               800_000, 1_000_000, 1_500_000, 3_000_000)
 
-MIN_BAND = 10_000      # stop bisecting: below this a band is one price point
-MAX_DEPTH = 3          # 9 seed bands -> at most 8 extra cuts each
+MIN_BAND = 10_000
+MAX_DEPTH = 3
 
-# Pacing between searches, as multiples of the caller's between-page delay
-# (0.7 s in CI). `time.sleep(delay)` inside every portal's page loop paces the
-# pages *within* one search and nothing at all paces one search against the
-# next — so a subdivision fires its whole queue of bands at a portal back to
-# back, which is precisely when a portal stops answering. Otodom 405'd at band
-# `300k-400k` page 5 and refused the next seven bands on page 1 before serving
-# the eighth (runs 31408840562, 31422141701); a search is a burst of requests,
-# so the gap after one has to be wider than the gap between two pages, and the
-# gap after a refusal wider still. `delay=0` (tests, dev) disables both.
-SEARCH_PAUSE = 4       # x delay -> 2.8 s between searches
-ERROR_COOLDOWN = 40    # x delay -> 28 s after a search the portal refused
+SEARCH_PAUSE = 4
+ERROR_COOLDOWN = 40
 
-# ...and a refused search is waited out at most this many times per portal per
-# run. A portal that is refusing everything refuses the retries too, and one
-# cooldown per refusal would turn an outage into an hour of sleeping: otodom
-# walks ~25 bands x 2 types and OLX ~120 towns, against a 350-min CI cap that
-# already has no headroom. 10 x 28 s caps it at ~5 min per portal.
 MAX_COOLDOWNS = 10
-
 
 class Pacer:
     """Between-search pacing, and a bounded "wait it out and ask once more".
@@ -138,12 +113,10 @@ class Pacer:
         self.sleep(wait)
         return best_of(row, walk())
 
-
 def _reach(r) -> tuple:
     """How far an attempt actually got, most significant first."""
     return (r.get("pages") or 0, coverage.seen_by(r) or 0,
             r.get("portal_total") or 0)
-
 
 def best_of(first, retry):
     """The better record of two attempts at the same search.
@@ -168,9 +141,6 @@ def best_of(first, retry):
     else:
         chosen = retry if _reach(retry) > _reach(first) else first
 
-    # Both attempts contributed to the additive caller-owned result set. Keep
-    # one diagnostic row, but do not throw away identities served by the other
-    # attempt: schema-v2 coverage unions these private sets across searches.
     private = ("_served_keys", "_kept_keys")
     if any(k in first or k in retry for k in private):
         chosen = dict(chosen)
@@ -179,7 +149,6 @@ def best_of(first, retry):
                 chosen[key] = frozenset(
                     set(first.get(key) or ()) | set(retry.get(key) or ()))
     return chosen
-
 
 def params(source, lo, hi) -> dict:
     """Query parameters selecting the half-open band ``[lo, hi)``."""
@@ -191,9 +160,8 @@ def params(source, lo, hi) -> dict:
     if lo:
         out[lo_key] = str(int(lo))
     if hi:
-        out[hi_key] = str(int(hi) - 1)   # inclusive filter, half-open band
+        out[hi_key] = str(int(hi) - 1)
     return out
-
 
 def qs(source, lo, hi) -> str:
     """Band parameters as a query fragment, e.g. 'priceMin=300000&priceMax=399999'.
@@ -203,7 +171,6 @@ def qs(source, lo, hi) -> str:
     portals. The values are integers, so nothing here needs escaping.
     """
     return "&".join(f"{k}={v}" for k, v in params(source, lo, hi).items())
-
 
 def label(lo, hi) -> str:
     """Short band name for logs and coverage rows: '300k-400k', '3M+'."""
@@ -217,17 +184,14 @@ def label(lo, hi) -> str:
         return f"{short(lo)}+"
     return f"{short(lo)}-{short(hi)}"
 
-
 def seed_bands(edges=SEED_EDGES):
     """The seed partition of the whole price line, as half-open [lo, hi)."""
     bounds = (0,) + tuple(edges)
     return [(lo, hi) for lo, hi in zip(bounds, bounds[1:] + (None,))]
 
-
 def bisect(lo, hi):
     """Split a band in two, or None when it is already too narrow to divide."""
     if hi is None:
-        # open-topped band: cut geometrically so it terminates
         mid = max((lo or 0) * 2, (lo or 0) + 1_000_000)
     else:
         if hi - lo <= MIN_BAND:
@@ -235,12 +199,7 @@ def bisect(lo, hi):
         mid = (lo + hi) // 2
     return ((lo, mid), (mid, hi))
 
-
-# Reasons to ask a narrower question. Deliberately NOT coverage.ERROR: a
-# request that failed will fail the same way with a price filter on it, and
-# treating it as overflow makes one broken search recurse into dozens.
 CAPPED = (coverage.OUR_CAP, coverage.PORTAL_CAP)
-
 
 def overflows(row, source) -> bool:
     """Is this search still bigger than its portal will serve?
@@ -254,7 +213,6 @@ def overflows(row, source) -> bool:
     if window and total and total > window:
         return True
     return row.get("stopped") in CAPPED
-
 
 def subdivide(source, walk, log=print, edges=SEED_EDGES, max_depth=MAX_DEPTH,
               delay=0.0, sleep=time.sleep, pacer=None):
@@ -293,13 +251,9 @@ def subdivide(source, walk, log=print, edges=SEED_EDGES, max_depth=MAX_DEPTH,
             log(f"  !! {source} band {label(lo, hi)} still overflows and cannot "
                 f"be split further — {row.get('portal_total')} ads at one price")
             continue
-        # This row diagnosed an overflow and was intentionally replaced by its
-        # two disjoint children. It must not count as an actionable failure or
-        # as another denominator/numerator row in the summary.
         row["replaced"] = True
         queue.extend((a, b, depth + 1) for a, b in halves)
     return rows, seeds
-
 
 def record_partition(parent, seeds, totals_ok):
     """Attach the price-partition accounting result to its inventory owner."""
@@ -312,7 +266,6 @@ def record_partition(parent, seeds, totals_ok):
     if missing:
         parent["partition_unaccounted"] = missing
     return totals_ok
-
 
 def check_totals(source, typ, unbanded_total, seeds, log=print) -> bool:
     """Do the seed bands account for the whole unbanded search?

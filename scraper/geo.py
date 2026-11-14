@@ -26,14 +26,8 @@ from collections import Counter
 from .rcn import _fold
 from .uldk import UUG, HEADERS
 
-RETRY_DAYS = 60          # re-ask UUG about a cached miss after this long
-DELAY = 0.15             # politeness between UUG calls (seconds)
-
-# ---- EPSG:2180 (PL-1992) -> WGS84 -------------------------------------------
-# Transverse Mercator on GRS80: lon0 19°E, k0 0.9993, FE 500 000, FN −5 300 000.
-# Standard Snyder inverse series — sub-metre accuracy, no pyproj dependency.
-# UUG returns x = easting, y = northing (despite EPSG:2180's official axis
-# names) — the same convention uldk.py already passes to GetParcelByXY.
+RETRY_DAYS = 60
+DELAY = 0.15
 
 _A = 6378137.0
 _F = 1 / 298.257222101
@@ -44,7 +38,6 @@ _LON0 = math.radians(19.0)
 _FE, _FN = 500000.0, -5300000.0
 _E1 = (1 - math.sqrt(1 - _E2)) / (1 + math.sqrt(1 - _E2))
 _MU_D = _A * (1 - _E2 / 4 - 3 * _E2 ** 2 / 64 - 5 * _E2 ** 3 / 256)
-
 
 def to_wgs84(x, y):
     """(easting, northing) in EPSG:2180 -> (lat, lon) rounded to ~1 m."""
@@ -67,24 +60,19 @@ def to_wgs84(x, y):
                    + (5 - 2 * c1 + 28 * t1 - 3 * c1 ** 2 + 8 * _EP2 + 24 * t1 ** 2) * d ** 5 / 120) / cos1
     return round(math.degrees(lat), 5), round(math.degrees(lon), 5)
 
-
-# ---- cache -------------------------------------------------------------------
-
 def load(path):
     try:
         return json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
     except Exception:
         return {}
 
-
 def save(path, cache):
     p = pathlib.Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
-    tmp = p.with_name(p.name + ".tmp")   # atomic: never leave a truncated cache
+    tmp = p.with_name(p.name + ".tmp")
     tmp.write_text(json.dumps(cache, ensure_ascii=False, separators=(",", ":")),
                    encoding="utf-8")
     os.replace(tmp, p)
-
 
 def _key(locality, street=None, teryt_prefix=None):
     k = _fold(locality)
@@ -92,17 +80,15 @@ def _key(locality, street=None, teryt_prefix=None):
         k = f"{k}|{_fold(street)}"
     return f"{teryt_prefix}|{k}" if teryt_prefix else k
 
-
 def _stale(entry, today):
     if entry.get("ll") is not None:
-        return False                      # hits never expire
+        return False
     try:
         age = (dt.date.fromisoformat(today)
                - dt.date.fromisoformat(entry.get("d", "1970-01-01"))).days
     except ValueError:
         return True
     return age >= RETRY_DAYS
-
 
 def _lookup(session, locality, street, today, teryt_prefix=None):
     """One UUG call -> cache entry. Point precision: street when UUG actually
@@ -119,7 +105,7 @@ def _lookup(session, locality, street, today, teryt_prefix=None):
         r.raise_for_status()
         results = r.json().get("results") or {}
     except Exception:
-        return None                       # transient -> don't cache
+        return None
     if isinstance(results, dict):
         candidates = list(results.values())
     elif isinstance(results, list):
@@ -143,7 +129,6 @@ def _lookup(session, locality, street, today, teryt_prefix=None):
         entry["teryt"] = str(res["teryt"])
     return entry
 
-
 def attach(listings, cache, session, today=None, max_new=500, delay=DELAY,
            log=print, teryt_prefix=None):
     """Set ll/llp on listings in place; grow the cache within ``max_new``.
@@ -156,7 +141,7 @@ def attach(listings, cache, session, today=None, max_new=500, delay=DELAY,
 
     towns = Counter()
     streets = Counter()
-    raw = {}                              # key -> (locality, street) for UUG
+    raw = {}
     for l in listings:
         loc = (l.get("locality") or "").strip()
         if not loc or not _fold(loc):
@@ -169,7 +154,6 @@ def attach(listings, cache, session, today=None, max_new=500, delay=DELAY,
             streets[k] += 1
             raw.setdefault(k, (loc, st))
 
-    # towns first (max coverage per request), then busiest streets
     wanted = [k for k, _ in towns.most_common()] + [k for k, _ in streets.most_common()]
     new = 0
     for k in wanted:

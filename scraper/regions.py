@@ -14,7 +14,6 @@ import pathlib
 import re
 from collections.abc import Mapping
 
-
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 CATALOG_PATH = ROOT / "site" / "regions.json"
 PORTALS = ("otodom", "olx", "gratka", "morizon")
@@ -23,26 +22,19 @@ SLUG_RE = re.compile(r"^[a-z]+(?:-[a-z]+)*$")
 PORTAL_SLUG_RE = re.compile(r"^[a-z]+(?:-{1,2}[a-z]+)*$")
 TERYT_RE = re.compile(r"^\d{2}$")
 
-# Poland assigns the 16 voivodeships the even two-digit prefixes 02..32. The
-# slug-to-prefix mapping itself exists only in the catalog; this set merely
-# catches a missing/duplicated/typoed official prefix.
 OFFICIAL_TERYT_PREFIXES = {f"{number:02d}" for number in range(2, 33, 2)}
-
 
 class RegionCatalogError(ValueError):
     """The catalog or a requested regional configuration is invalid."""
-
 
 def _require(condition, message):
     if not condition:
         raise RegionCatalogError(message)
 
-
 def _text(value, field, slug=None):
     where = f" for {slug!r}" if slug else ""
     _require(isinstance(value, str) and value.strip(),
              f"region field {field!r}{where} must be a non-empty string")
-
 
 def _validate_region(entry, number):
     _require(isinstance(entry, dict), f"regions[{number}] must be an object")
@@ -92,7 +84,6 @@ def _validate_region(entry, number):
                      for k, v in districts.items()),
              f"districts for {slug!r} must map names to parent localities")
 
-
 def load_catalog(path=CATALOG_PATH) -> dict:
     """Load and fully validate a catalog JSON file."""
     source = pathlib.Path(path)
@@ -123,12 +114,10 @@ def load_catalog(path=CATALOG_PATH) -> dict:
              "default region must be enabled")
     return document
 
-
 @functools.lru_cache(maxsize=1)
 def catalog() -> dict:
     """Return the validated production catalog (cached for this process)."""
     return load_catalog(CATALOG_PATH)
-
 
 def get_region(slug: str, document: Mapping | None = None) -> dict:
     """Return one canonical region or fail with an operator-friendly error."""
@@ -139,13 +128,11 @@ def get_region(slug: str, document: Mapping | None = None) -> dict:
     known = ", ".join(entry["slug"] for entry in source.get("regions", ()))
     raise RegionCatalogError(f"unknown region {slug!r}; known regions: {known}")
 
-
 def portal_slug(region: str, portal: str, document: Mapping | None = None) -> str:
     """Resolve one portal's explicit path slug for a canonical region."""
     if portal not in PORTALS:
         raise RegionCatalogError(f"unknown portal {portal!r}; expected one of {PORTALS}")
     return get_region(region, document)["portals"][portal]
-
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="validate the regional catalog")
@@ -169,7 +156,6 @@ def main(argv=None) -> int:
         print(f"region catalog: {len(document['regions'])} regions, "
               f"default {document['default']}")
     return 0
-
 
 if __name__ == "__main__":
     raise SystemExit(main())

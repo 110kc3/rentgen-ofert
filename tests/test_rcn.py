@@ -25,7 +25,6 @@ GML_PAGE = """<?xml version='1.0' encoding="UTF-8" ?>
   </wfs:member>
 </wfs:FeatureCollection>"""
 
-
 def test_parse_and_compact_lokale():
     rows = list(rcn._parse_members(GML_PAGE.encode(), "lokale"))
     assert len(rows) == 1
@@ -33,20 +32,17 @@ def test_parse_and_compact_lokale():
     assert c == {"d": "2021-07-13", "c": 329333, "a": 39.4, "izb": 2, "kond": 3,
                  "rynek": "w", "msc": "Gliwice", "ul": "Adama Asnyka", "nr": "11"}
 
-
 def test_gml_temporal_deed_date_is_not_discarded():
     page = GML_PAGE.replace("2021-07-13 02:00:00+02",
                             "<gml:timePosition>2021-07-13</gml:timePosition>")
     row = next(rcn._parse_members(page.encode(), "lokale"))
     assert rcn._compact_lok(row)["d"] == "2021-07-13"
 
-
 def test_ambiguous_gml_temporal_deed_date_is_rejected():
     page = GML_PAGE.replace("2021-07-13 02:00:00+02",
                             "<gml:timePosition>2021-07-13</gml:timePosition>" * 2)
     with pytest.raises(ValueError, match="date encoding"):
         list(rcn._parse_members(page.encode(), "lokale"))
-
 
 def test_compact_drops_non_market_and_priceless():
     row = {"dok_data": "2021-01-01", "tran_cena_brutto": "100",
@@ -56,7 +52,6 @@ def test_compact_drops_non_market_and_priceless():
             "tran_rodzaj_trans": "wolnyRynek"}
     assert rcn._compact_lok(row2) is None
 
-
 @pytest.mark.parametrize("price", [-100, 0, 0.01])
 def test_nonpositive_rounded_prices_are_not_usable_deeds(price):
     row = {"dok_data": "2026-01-02", "tran_cena_brutto": str(price),
@@ -64,11 +59,9 @@ def test_nonpositive_rounded_prices_are_not_usable_deeds(price):
     assert rcn._compact_lok(row) is None
     assert rcn._compact_bud(row) is None
 
-
 def test_negative_flat_area_is_not_a_usable_deed():
     assert rcn._compact_lok({"dok_data": "2026-01-02", "tran_cena_brutto": "200000",
                              "lok_pow_uzyt": "-40"}) is None
-
 
 def test_street_match():
     assert rcn.street_match("Asnyka", "Adama Asnyka")
@@ -78,7 +71,6 @@ def test_street_match():
     assert not rcn.street_match("Jana Pawła II", "Jana Kochanowskiego")
     assert not rcn.street_match("", "Gdańska")
 
-
 def _rec(**kw):
     base = {"type": "flat", "area": 39.4, "first_seen": "2026-06-01",
             "observations": [],
@@ -87,13 +79,11 @@ def _rec(**kw):
     base.update(kw)
     return base
 
-
 def _tx(**kw):
     base = {"d": "2021-07-13", "c": 329333, "a": 39.4, "izb": 2, "kond": 3,
             "rynek": "w", "msc": "Gliwice", "ul": "Adama Asnyka", "nr": "11"}
     base.update(kw)
     return base
-
 
 def test_match_past_sale_high_confidence():
     rec = _rec()
@@ -103,7 +93,6 @@ def test_match_past_sale_high_confidence():
     assert s["kind"] == "past" and s["price"] == 329333 and s["confidence"] == "wysoka"
     assert s["price_m2"] == round(329333 / 39.4)
 
-
 def test_match_sold_after_delisting():
     rec = _rec(delisted="2026-06-15")
     snap = {"lokale": [_tx(d="2026-07-20", c=310000)], "budynki": []}
@@ -111,38 +100,29 @@ def test_match_sold_after_delisting():
     kinds = {s["kind"] for s in rec["sales"]}
     assert "sold" in kinds
 
-
 def test_no_match_when_street_differs():
     rec = _rec()
     snap = {"lokale": [_tx(ul="Lipowa")], "budynki": []}
     assert rcn.match([rec], snap, log=lambda *a: None) == 0
     assert "sales" not in rec
 
-
 def test_no_street_attribute_and_uniqueness_rules():
     rec = _rec(snapshot={"locality": "Gliwice", "rooms": 2, "floor": 2})
-    # kond 3 == floor 2 + 1 (parter=1) -> attribute-anchored match
     snap = {"lokale": [_tx(ul=None)], "budynki": []}
     assert rcn.match([rec], snap, log=lambda *a: None) == 1
     assert rec["sales"][0]["confidence"] == "średnia"
-    # rooms-only IS enough when the area is decimal (39.4) and the deed is the
-    # town's only candidate...
     rec2 = _rec(snapshot={"locality": "Gliwice", "rooms": 2})
     assert rcn.match([rec2], snap, log=lambda *a: None) == 1
-    # ...but not when the area is a round number (weak identity)
     rec3 = _rec(area=39.0, snapshot={"locality": "Gliwice", "rooms": 2})
     snap3 = {"lokale": [_tx(ul=None, a=39.0)], "budynki": []}
     assert rcn.match([rec3], snap3, log=lambda *a: None) == 0
-    # ...and never when a known attribute disagrees
     rec4 = _rec(snapshot={"locality": "Gliwice", "rooms": 4})
     assert rcn.match([rec4], snap, log=lambda *a: None) == 0
-
 
 def test_street_declension_matches():
     assert rcn.street_match("ul. Gdańskiej", "Gdańska")
     assert rcn.street_match("Lipowej", "Lipowa")
     assert not rcn.street_match("Kwiatowa", "Kwiatkowskiego")
-
 
 def test_house_plot_corroboration():
     rec = _rec(type="house", area=141.5,
@@ -151,17 +131,14 @@ def test_house_plot_corroboration():
         {"d": "2020-05-05", "c": 610000, "a": 141.5, "grunt": 812.0,
          "rynek": "w", "msc": "Pyskowice", "ul": None, "nr": None}]}
     assert rcn.match([rec], snap, log=lambda *a: None) == 1
-    # plot off by >10% -> no match
     rec2 = _rec(type="house", area=141.5,
                 snapshot={"locality": "Pyskowice", "plot_area": 400})
     assert rcn.match([rec2], snap, log=lambda *a: None) == 0
 
-
 def test_area_tolerance():
     rec = _rec()
-    snap = {"lokale": [_tx(a=41.2)], "budynki": []}   # 1.8 m2 off -> no match
+    snap = {"lokale": [_tx(a=41.2)], "budynki": []}
     assert rcn.match([rec], snap, log=lambda *a: None) == 0
-
 
 def test_ambiguous_sold_not_attached():
     rec = _rec(delisted="2026-06-15")
@@ -170,47 +147,35 @@ def test_ambiguous_sold_not_attached():
     rcn.match([rec], snap, log=lambda *a: None)
     assert not any(s["kind"] == "sold" for s in rec.get("sales", []))
 
-
 def test_pinned_number_is_decisive():
-    # street+nr agree -> wysoka, even if rooms/floor unknown
     rec = _rec(snapshot={"locality": "Gliwice", "street": "Asnyka", "nr": "11"})
     snap = {"lokale": [_tx()], "budynki": []}
     assert rcn.match([rec], snap, log=lambda *a: None) == 1
     assert rec["sales"][0]["confidence"] == "wysoka"
-    # street agrees but number differs -> reject
     rec2 = _rec(snapshot={"locality": "Gliwice", "street": "Asnyka", "nr": "13"})
     assert rcn.match([rec2], snap, log=lambda *a: None) == 0
 
-
 def test_arealess_deed_needs_street_and_nr():
     deed = _tx(a=None)
-    # with pinned street+nr -> matches despite missing deed area
     rec = _rec(snapshot={"locality": "Gliwice", "street": "Asnyka", "nr": "11"})
     assert rcn.match([rec], {"lokale": [deed], "budynki": []},
                      log=lambda *a: None) == 1
-    # without a pinned nr the area-less deed is never considered
     rec2 = _rec(snapshot={"locality": "Gliwice", "street": "Asnyka"})
     assert rcn.match([rec2], {"lokale": [deed], "budynki": []},
                      log=lambda *a: None) == 0
-
 
 def test_parcel_extraction_and_decisive_scoring():
     assert rcn._parcel("221104_4.0004.921_BUD.22_LOK") == "221104_4.0004.921"
     assert rcn._parcel("246601_1.0041.1506") == "246601_1.0041.1506"
     assert rcn._parcel("") is None
-    # same parcel -> wysoka even with nothing else known
     rec = _rec(snapshot={"locality": "Gliwice", "dzialka_id": "246601_1.0041.1506"})
     snap = {"lokale": [_tx(ul=None, nr=None, dz="246601_1.0041.1506")], "budynki": []}
     assert rcn.match([rec], snap, log=lambda *a: None) == 1
     assert rec["sales"][0]["confidence"] == "wysoka"
-    # different parcel + no street agreement -> reject
     rec2 = _rec(snapshot={"locality": "Gliwice", "dzialka_id": "246601_1.0041.9999"})
     assert rcn.match([rec2], snap, log=lambda *a: None) == 0
 
-
 def test_renumbered_parcel_street_nr_still_wins():
-    # 2008 deed on działka 974; today's ULDK says 1506 (renumbered). The
-    # street+number agreement must override the parcel mismatch.
     deed = _tx(a=None, ul="Ignacego Daszyńskiego", nr="448", dz="246601_1.0041.974")
     rec = _rec(type="house", area=204.0,
                snapshot={"locality": "Gliwice", "street": "Ignacego Daszyńskiego",
@@ -218,7 +183,6 @@ def test_renumbered_parcel_street_nr_still_wins():
     assert rcn.match([rec], {"lokale": [], "budynki": [deed]},
                      log=lambda *a: None) == 1
     assert rec["sales"][0]["confidence"] == "wysoka"
-
 
 @pytest.mark.parametrize("anchor", ["street", "number", "parcel"])
 @pytest.mark.parametrize("conflict", [{"izb": 4}, {"kond": 8}])
@@ -232,7 +196,6 @@ def test_address_evidence_cannot_override_conflicting_flat_attributes(anchor, co
     assert rcn.match([rec], {"lokale": [deed], "budynki": []},
                      log=lambda *a: None) == 0
     assert "sales" not in rec
-
 
 @pytest.mark.parametrize("change", ["ambiguous", "empty", "attributes", "location", "development"])
 def test_previously_attached_sale_is_reconciled_when_evidence_changes(change):
@@ -254,7 +217,6 @@ def test_previously_attached_sale_is_reconciled_when_evidence_changes(change):
     assert rcn.match([rec], snap, log=lambda *a: None) == 0
     assert "sales" not in rec
 
-
 @pytest.mark.parametrize("unavailable", [None, {}, {"budynki": []}, {"lokale": None}])
 def test_unavailable_snapshot_or_layer_preserves_existing_evidence(unavailable):
     rec = _rec()
@@ -263,7 +225,6 @@ def test_unavailable_snapshot_or_layer_preserves_existing_evidence(unavailable):
     previous = rec["sales"]
     rcn.match([rec], unavailable, log=lambda *a: None)
     assert rec["sales"] == previous
-
 
 def test_ambiguous_sold_retraction_preserves_supported_past_deeds():
     rec = _rec(delisted="2026-06-15")
@@ -274,7 +235,6 @@ def test_ambiguous_sold_retraction_preserves_supported_past_deeds():
     rcn.match([rec], snap, log=lambda *a: None)
     assert {s["kind"] for s in rec["sales"]} == {"past"}
 
-
 def test_invalid_snapshot_fails_before_retracting_any_claim():
     rec = _rec()
     rcn.match([rec], {"lokale": [_tx()]}, log=lambda *a: None)
@@ -282,7 +242,6 @@ def test_invalid_snapshot_fails_before_retracting_any_claim():
     with pytest.raises(ValueError, match="budynki"):
         rcn.match([rec], {"lokale": [], "budynki": "invalid"}, log=lambda *a: None)
     assert rec["sales"] == previous
-
 
 def test_rcn_refresh_failure_preserves_cached_evidence(tmp_path, monkeypatch):
     path = tmp_path / "rcn.json.gz"
@@ -296,7 +255,6 @@ def test_rcn_refresh_failure_preserves_cached_evidence(tmp_path, monkeypatch):
     assert rcn.refresh(path, None, today="2026-09-05", log=lambda *a: None) == snapshot
     assert rcn.refresh(tmp_path / "missing.gz", None, today="2026-09-05",
                        log=lambda *a: None) is None
-
 
 def _page(rows=1, *, total="unknown", next_page=False, ident=1, uppercase=False):
     import xml.etree.ElementTree as ET
@@ -318,7 +276,6 @@ def _page(rows=1, *, total="unknown", next_page=False, ident=1, uppercase=False)
         root.append(copy)
     return ET.tostring(root)
 
-
 @pytest.mark.parametrize("value,expected", [
     ("pierwotny", "p"), ("wtórny", "w"), ("rynekPierwotny", "p"),
     ("rynekWtorny", "w"), (None, None), ("", None),
@@ -330,11 +287,9 @@ def test_market_vocabularies(value, expected):
     building = dict(row, bud_adres="MSC:Gliwice;UL:Polna;NR_PORZ:1")
     assert rcn._compact_bud(building)["rynek"] == expected
 
-
 def test_unknown_market_fails_closed():
     with pytest.raises(ValueError, match="unknown market"):
         rcn._market("newUnsupportedEnum")
-
 
 @pytest.mark.parametrize("page", [
     b"<html />", b"<ExceptionReport />", b"<broken",
@@ -344,7 +299,6 @@ def test_unknown_market_fails_closed():
 def test_invalid_wfs_pages_are_not_empty_evidence(page):
     with pytest.raises(Exception):
         list(rcn._parse_members(page, "lokale"))
-
 
 def _fetch_pages(monkeypatch, pages, totals=(None, None)):
     totals = iter(totals)
@@ -359,21 +313,17 @@ def _fetch_pages(monkeypatch, pages, totals=(None, None)):
                      rcn._compact_lok, log=lambda *a: None)
     return rows, starts
 
-
 def test_short_pages_without_next_links_are_not_eof(monkeypatch):
     rows, starts = _fetch_pages(monkeypatch, [
         _page(2), _page(1, ident=3, uppercase=True), _page(0, total=3),
     ])
-    # Per-page duplicates collapse; identical deeds on different pages survive.
     assert len(rows) == 2
     assert starts == [0, 2, 3]
     assert all(row["rynek"] == "w" for row in rows)
 
-
 def test_known_total_can_appear_after_unknown_total(monkeypatch):
     rows, starts = _fetch_pages(monkeypatch, [_page(), _page(total=2, ident=2)])
     assert len(rows) == 2 and starts == [0, 1]
-
 
 @pytest.mark.parametrize("pages,reason", [
     ([_page(), _page()], "repeated page"),
@@ -388,11 +338,9 @@ def test_incomplete_or_changed_pages_fail_closed(monkeypatch, pages, reason):
     with pytest.raises(ValueError, match=reason):
         _fetch_pages(monkeypatch, pages)
 
-
 def _snapshot(n=10, fetched="2026-09-17"):
     return {"fetched": fetched, "lokale": [_tx(msc="Gliwice" if i == 0 else f"Town{i}") for i in range(n)],
             "budynki": [_tx()] * n}
-
 
 @pytest.mark.parametrize("failure", ["empty", "shrunk", "interrupted", "save"])
 def test_failed_refresh_preserves_cache_bytes_and_reports_degraded(tmp_path, monkeypatch, failure):
@@ -419,7 +367,6 @@ def test_failed_refresh_preserves_cache_bytes_and_reports_degraded(tmp_path, mon
     rcn.match([rec], previous, log=lambda *a: None)
     assert rec["sales"]
 
-
 def test_recent_poisoned_cache_recovers_before_failed_refresh(tmp_path, monkeypatch):
     path = tmp_path / "rcn.json.gz"
     rcn.save_snapshot(path, {"fetched": "2026-09-26", "lokale": [], "budynki": []})
@@ -430,7 +377,6 @@ def test_recent_poisoned_cache_recovers_before_failed_refresh(tmp_path, monkeypa
     assert rcn.load_snapshot(path) == baseline
     assert rcn.refresh.last_health["status"] == "degraded"
     assert rcn.refresh.last_health["recovered_from"] == rcn.RECOVERY["24"]["ref"]
-
 
 def test_healthy_cache_skips_network_and_other_region_does_not_use_recovery(tmp_path, monkeypatch):
     def unexpected(*args, **kwargs):
@@ -445,7 +391,6 @@ def test_healthy_cache_skips_network_and_other_region_does_not_use_recovery(tmp_
     assert rcn.refresh(tmp_path / "missing.gz", None, teryt_prefix="16", today="2026-09-26") is None
     assert rcn.refresh.last_health["status"] == "unavailable"
 
-
 def test_recovery_checksum_is_required(monkeypatch):
     class Session:
         def get(self, *args, **kwargs):
@@ -455,7 +400,6 @@ def test_recovery_checksum_is_required(monkeypatch):
         content = b"not the audited snapshot"
     with pytest.raises(ValueError, match="checksum"):
         rcn.recover_snapshot(Session(), "24")
-
 
 def test_successful_refresh_replaces_cache_atomically(tmp_path, monkeypatch):
     path = tmp_path / "cache.gz"
@@ -470,16 +414,13 @@ def test_successful_refresh_replaces_cache_atomically(tmp_path, monkeypatch):
         "counts": {"lokale": 12, "budynki": 11}, "error": None,
     }
 
-
 def test_hits_total_verifies_terminal_page_without_empty_request(monkeypatch):
     rows, starts = _fetch_pages(monkeypatch, [_page(), _page(ident=2)], totals=(2, 2))
     assert len(rows) == 2 and starts == [0, 1]
 
-
 def test_hits_total_change_rejects_completed_pull(monkeypatch):
     with pytest.raises(ValueError, match="final total"):
         _fetch_pages(monkeypatch, [_page()], totals=(1, 2))
-
 
 @pytest.mark.parametrize("response,expected", [
     (_page(0, total=123), 123), (_page(0), None),
@@ -494,7 +435,6 @@ def test_hits_response_parsing(response, expected):
             pass
     assert rcn._get_total(Session(), 'ms:lokale', '') == expected
 
-
 @pytest.mark.parametrize("response", [b'<html/>', _page(1), _page(0, total=-1)])
 def test_hits_rejects_invalid_responses(response):
     class Session:
@@ -504,7 +444,6 @@ def test_hits_rejects_invalid_responses(response):
     with pytest.raises(ValueError):
         rcn._get_total(Session(), 'ms:lokale', '')
 
-
 def test_building_cache_allows_zero_area_as_unreported():
     snapshot = _snapshot(1)
     snapshot['budynki'][0]['a'] = 0
@@ -512,7 +451,6 @@ def test_building_cache_allows_zero_area_as_unreported():
     snapshot['lokale'][0]['a'] = 0
     with pytest.raises(ValueError, match='area'):
         rcn.validate_snapshot(snapshot)
-
 
 def test_no_recovery_and_small_fresh_pull_cannot_bypass_known_baseline(tmp_path, monkeypatch):
     def unavailable(*args, **kwargs): raise OSError('no recovery download')

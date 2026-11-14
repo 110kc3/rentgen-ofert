@@ -29,11 +29,9 @@ MS = "http://mapserver.gis.umn.edu/mapserver"
 GEO = {"results": {"1": {"street": "Audit Street", "number": "21",
                            "x": "476458.96", "y": "269949.11"}}}
 
-
 def collection(layer, *, matched=None, empty=False):
     features = ""
     if not empty and layer == "lokale":
-        # The neighbouring building's deed must not attach to the chosen address.
         for number, price in [("21", 250000), ("99", 999999)]:
             features += f'''<wfs:member><ms:lokale>
                 <ms:dok_data><gml:TimeInstant><gml:timePosition>2026-01-02</gml:timePosition></gml:TimeInstant></ms:dok_data>
@@ -44,7 +42,6 @@ def collection(layer, *, matched=None, empty=False):
     count = 2 if features else 0
     return f'''<wfs:FeatureCollection xmlns:wfs="{WFS}" xmlns:ms="{MS}" xmlns:gml="http://www.opengis.net/gml/3.2"
         numberMatched="{count if matched is None else matched}" numberReturned="{count}">{features}</wfs:FeatureCollection>'''
-
 
 def run(root, executable=None):
     site = root / "site"
@@ -170,7 +167,6 @@ def run(root, executable=None):
             assert dialogs == ["Skopiuj komendę:"]
             checks.append("clipboard refusal opens the manual copy prompt")
 
-            # A rerender replaces the card nodes; delegated controls must survive.
             page.evaluate("resetAll()")
             card = controls()
             card.locator(".pin-ul").fill("Audit Street")
@@ -206,7 +202,6 @@ def run(root, executable=None):
         server.shutdown()
         server.server_close()
     return {"checks": checks, "count": len(checks)}
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)

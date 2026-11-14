@@ -16,15 +16,11 @@ import json
 from scraper import bands, coverage, gratka, morizon, olx
 from scraper.normalize import stated_total
 
-
 def test_stop_reason():
-    # ran out of results -> fine, however few pages that took
     assert coverage.stop_reason(3, 200, total_pages=3) == coverage.OK
     assert coverage.stop_reason(1, 200, hit_end=True) == coverage.OK
-    # walked to our cap while the portal still had pages -> we truncated it
     assert coverage.stop_reason(200, 200, total_pages=812) == coverage.OUR_CAP
     assert coverage.stop_reason(50, 50) == coverage.OUR_CAP
-
 
 def test_summarise_and_warnings():
     rows = [
@@ -47,39 +43,27 @@ def test_summarise_and_warnings():
     assert len(w) == 2
     assert "812" in w[0] and "RENTGEN_MAX_PAGES" in w[0]
     assert "subdivision" in w[1]
-    # a clean run says nothing at all
     assert coverage.warnings([rows[0]]) == []
 
-
-# --- the portal's own count is the ground truth ------------------------------
-
-# verbatim from the live meta descriptions, 2026-08-08
 GRATKA_META = ('<meta content="Mieszkania na sprzedaż śląskie. 9856 ogłoszeń. '
                'Sprawdź!" name="description">')
 MORIZON_META = ('<meta content="Mieszkania na sprzedaż - ponad 9000 ogłoszeń '
                 '„sprzedam mieszkanie”" name="description">')
 
-
 def test_stated_total_reads_both_frontends():
     assert stated_total(GRATKA_META) == (9856, False)
-    # morizon says "ponad" and rounds to thousands -> a lower bound
     assert stated_total(MORIZON_META) == (9000, True)
-    # thousands separators (the portals use a non-breaking space)
     assert stated_total("18 505 ogłoszeń")[0] == 18505
-    # "Dodaj ogłoszenie" and friends carry no number and must not match
     assert stated_total("<span>Dodaj ogłoszenie</span>") == (None, False)
     assert stated_total("") == (None, False)
 
-
 def test_short_of_total_needs_a_total():
     assert coverage.short_of_total(7000, 9856) is True
-    assert coverage.short_of_total(2509, 2513) is False    # inside the slack
-    # an unknown total is not evidence of completeness
+    assert coverage.short_of_total(2509, 2513) is False
     assert coverage.short_of_total(7000, None) is False
     assert coverage.covered(7000, 9856) == 71.0
     assert coverage.covered(7000, None) is None
     assert coverage.covered(2500, 2000) == 100.0
-
 
 def test_warns_when_a_clean_stop_falls_short_of_the_portals_count():
     """The gratka trap: page 201 404s because the portal stops at 200, not
@@ -88,15 +72,12 @@ def test_warns_when_a_clean_stop_falls_short_of_the_portals_count():
                        portal_total=9856)
     w = coverage.warnings([row])
     assert len(w) == 1 and "9856" in w[0] and "71.0%" in w[0]
-    # a lower-bound total (morizon) proves truncation the same way...
     lo = coverage.row("morizon", "flat", "slaskie", 200, 7000, coverage.OK,
                       portal_total=9000, total_is_min=True)
     assert "≥9000" in coverage.warnings([lo])[0]
-    # ...but collecting MORE than a rounded-down total proves nothing
     over = coverage.row("morizon", "house", "slaskie", 72, 2513, coverage.OK,
                         portal_total=2000, total_is_min=True)
     assert coverage.warnings([over]) == []
-
 
 def test_summarise_carries_the_totals():
     rows = [
@@ -110,10 +91,8 @@ def test_summarise_carries_the_totals():
     assert s["pct"] == 76.9
     assert "total_is_min" not in s
 
-
 def _keys(typ, start, stop):
     return {coverage.listing_key(typ, i) for i in range(start, stop)}
-
 
 def test_partition_uses_one_parent_denominator_and_unique_numerator():
     """Parent + price rows overlap by design; neither side may be added."""
@@ -133,14 +112,13 @@ def test_partition_uses_one_parent_denominator_and_unique_numerator():
 
     summary = coverage.summarise([parent, cheap, dear])
     source = summary["by_source"]["otodom"]
-    assert source["portal_total"] == 100             # not parent + children
-    assert source["served_unique"] == 100            # overlap unioned once
+    assert source["portal_total"] == 100
+    assert source["served_unique"] == 100
     assert source["pct"] == 100.0
     assert source["status"] == coverage.HEALTHY
     assert source["truncated"] == 0
     assert coverage.warnings([parent, cheap, dear]) == []
-    json.dumps(summary)                               # private sets never leak
-
+    json.dumps(summary)
 
 def test_failed_partition_keeps_the_denominator_and_lowers_coverage():
     parent = coverage.row(
@@ -159,15 +137,14 @@ def test_failed_partition_keeps_the_denominator_and_lowers_coverage():
 
     source = coverage.summarise([parent, good, failed])["by_source"]["otodom"]
     typ = source["types"]["flat"]
-    assert source["portal_total"] == 100             # failed leaf did not vanish
+    assert source["portal_total"] == 100
     assert source["served_unique"] == 50
-    assert source["pct"] == 50.0                     # failure cannot improve pct
+    assert source["pct"] == 50.0
     assert source["status"] == coverage.PARTIAL
     assert source["http_statuses"] == [403]
     assert typ["partitions"]["missing"] == ["500k+"]
     assert typ["partitions"]["unaccounted"] == 50
     assert len(coverage.warnings([parent, good, failed])) == 1
-
 
 def test_source_health_distinguishes_blocked_clean_zero_and_missing():
     rows = [
@@ -186,7 +163,6 @@ def test_source_health_distinguishes_blocked_clean_zero_and_missing():
     assert summary["status"] == coverage.PARTIAL
     json.dumps(summary)
 
-
 def test_missing_expected_type_cannot_make_a_source_look_healthy():
     row = coverage.row(
         "gratka", "house", "region", 1, 0, coverage.OK,
@@ -198,7 +174,6 @@ def test_missing_expected_type_cannot_make_a_source_look_healthy():
     assert source["types"]["flat"]["status"] == coverage.UNKNOWN
     assert source["status"] == coverage.UNKNOWN
 
-
 def test_current_and_archived_are_reported_separately():
     keys = _keys("flat", 1, 4)
     row = coverage.row(
@@ -208,7 +183,6 @@ def test_current_and_archived_are_reported_separately():
     assert source["kept_unique"] == 3
     assert source["current"] == source["listings"] == 2
     assert source["archived"] == 1
-
 
 def test_resolved_partial_root_is_partial_but_no_partitions_is_unknown():
     partial = coverage.row(
@@ -224,9 +198,6 @@ def test_resolved_partial_root_is_partial_but_no_partitions_is_unknown():
     assert source["types"]["house"]["status"] == coverage.UNKNOWN
     assert source["status"] == coverage.PARTIAL
 
-
-# --- gratka / morizon: the 200-page wall ------------------------------------
-
 class FakeCardResp:
     def __init__(self, cards, total_html="", status=200):
         self.status_code = status
@@ -238,7 +209,6 @@ class FakeCardResp:
     def raise_for_status(self):
         if self.status_code >= 400:
             raise AssertionError("should not be raised for 404 (handled)")
-
 
 class WalledSession:
     """Serves `per_page` cards up to `wall`, then 404s — while the header keeps
@@ -253,7 +223,6 @@ class WalledSession:
         return FakeCardResp([f"{page}-{i}" for i in range(self.per_page)],
                             self.stated_html)
 
-
 def test_gratka_404_wall_is_reported_as_a_portal_cap():
     gratka.scrape(max_pages=500, delay=0, log=lambda *a: None, types=("flat",),
                   banded=False,
@@ -261,9 +230,8 @@ def test_gratka_404_wall_is_reported_as_a_portal_cap():
     row = gratka.scrape.last_coverage[0]
     assert row["pages"] == 200
     assert row["portal_total"] == 9856
-    assert row["listings"] == 7000                 # 200 x 35
-    assert row["stopped"] == coverage.PORTAL_CAP   # NOT "end" — 7000 < 9856
-
+    assert row["listings"] == 7000
+    assert row["stopped"] == coverage.PORTAL_CAP
 
 def test_gratka_real_end_stays_clean():
     """The same 404, but the portal's count agrees we got everything."""
@@ -275,7 +243,6 @@ def test_gratka_real_end_stays_clean():
     assert row["listings"] == 350 and row["stopped"] == coverage.OK
     assert coverage.warnings([row]) == []
 
-
 def test_morizon_lower_bound_total_still_catches_the_wall():
     morizon.scrape(max_pages=500, delay=0, log=lambda *a: None, types=("flat",),
                    banded=False,
@@ -284,14 +251,10 @@ def test_morizon_lower_bound_total_still_catches_the_wall():
     assert row["portal_total"] == 9000 and row["total_is_min"] is True
     assert row["stopped"] == coverage.PORTAL_CAP
 
-
-# --- OLX: the one portal with a cap of its own ------------------------------
-
 def _ad(i):
     return {"id": i, "url": f"https://www.olx.pl/d/oferta/{i}", "title": f"ad {i}",
             "price": {"regularPrice": {"value": 500000 + i}}, "params": [],
             "location": {"cityName": "Gliwice"}, "photos": [], "user": {}}
-
 
 class FakeResp:
     def __init__(self, ads, total_pages, visible=None, servable=None):
@@ -306,7 +269,6 @@ class FakeResp:
 
     def raise_for_status(self):
         pass
-
 
 class FakeSession:
     """Serves `per_page` ads per page but refuses to paginate past `hard_cap`,
@@ -326,7 +288,6 @@ class FakeSession:
         ads = [_ad(base * 1000 + page * 10 + i) for i in range(self.per_page)]
         return FakeResp(ads, self.total_pages, self.visible, self.servable)
 
-
 def test_olx_records_portal_cap_and_subdivides():
     s = FakeSession(total_pages=140)
     towns = {"gliwice": "Gliwice", "katowice": "Katowice"}
@@ -334,16 +295,13 @@ def test_olx_records_portal_cap_and_subdivides():
                      types=("house",), towns=towns, banded=False)
     cov = olx.scrape.last_coverage
     region = cov[0]
-    assert region["stopped"] == coverage.PORTAL_CAP   # 25 < 140 claimed pages
+    assert region["stopped"] == coverage.PORTAL_CAP
     assert region["pages"] == olx.HARD_PAGE_CAP
     assert region["portal_pages"] == 140
-    # ...so it subdivided, one extra search per town
     assert [r.get("tag") for r in cov[1:]] == ["gliwice", "katowice"]
     assert any("/domy/sprzedaz/gliwice/" in u for u in s.urls)
-    # subdivision is ADDITIVE: region ads kept, town ads merged in, no dupes
     assert len(out) == len({l["url"] for l in out})
     assert len(out) > region["listings"]
-
 
 def test_olx_does_not_subdivide_a_complete_search():
     """No cap hit -> no extra requests. Subdivision costs nothing when unneeded."""
@@ -354,7 +312,6 @@ def test_olx_does_not_subdivide_a_complete_search():
     assert len(cov) == 1 and cov[0]["stopped"] == coverage.OK
     assert all("slaskie" in u for u in s.urls)
 
-
 def test_olx_without_towns_still_reports_the_cap():
     """Subdivision needs a town list; without one we must still say we were cut
     off rather than silently returning a partial region."""
@@ -362,7 +319,6 @@ def test_olx_without_towns_still_reports_the_cap():
     olx.scrape(max_pages=200, delay=0, session=s, log=lambda *a: None,
                types=("house",), towns=None, banded=False)
     assert olx.scrape.last_coverage[0]["stopped"] == coverage.PORTAL_CAP
-
 
 def test_olx_cap_stated_as_a_smaller_total_is_still_a_cap():
     """The live shape (measured 2026-08-08): OLX answers visibleElements 5503,
@@ -374,11 +330,10 @@ def test_olx_cap_stated_as_a_smaller_total_is_still_a_cap():
     olx.scrape(max_pages=200, delay=0, session=s, log=lambda *a: None,
                types=("house",), towns=towns, banded=False)
     cov = olx.scrape.last_coverage
-    assert cov[0]["pages"] == 25                      # walked all it was offered
+    assert cov[0]["pages"] == 25
     assert cov[0]["portal_total"] == 5503
-    assert cov[0]["stopped"] == coverage.PORTAL_CAP   # was silently "end"
-    assert [r.get("tag") for r in cov[1:]] == ["gliwice"]   # so it subdivides
-
+    assert cov[0]["stopped"] == coverage.PORTAL_CAP
+    assert [r.get("tag") for r in cov[1:]] == ["gliwice"]
 
 def test_olx_complete_search_reports_its_total_without_warning():
     s = FakeSession(total_pages=3, hard_cap=99, visible=6, servable=6)
@@ -388,7 +343,6 @@ def test_olx_complete_search_reports_its_total_without_warning():
     assert row["stopped"] == coverage.OK and row["portal_total"] == 6
     assert len(olx.scrape.last_coverage) == 1
     assert coverage.warnings([row]) == []
-
 
 def test_olx_first_403_stops_the_whole_portal_without_a_cooldown():
     """GitHub-hosted runners have returned 403 on OLX page one for every
@@ -411,11 +365,11 @@ def test_olx_first_403_stops_the_whole_portal_without_a_cooldown():
     assert out == []
     assert len(sess.urls) == 1, "a portal-wide 403 must cost one real request"
     rows = olx.scrape.last_coverage
-    assert len(rows) == 2                       # both requested types explained
+    assert len(rows) == 2
     assert rows[0]["http_status"] == 403 and not rows[0].get("skipped")
     assert rows[1]["http_status"] == 403 and rows[1]["skipped"] is True
     assert rows[1]["pages"] == 0
-    assert len(coverage.warnings(rows)) == 1    # no duplicate synthetic warning
+    assert len(coverage.warnings(rows)) == 1
 
     source = coverage.summarise(
         rows, expected_types=("house", "flat"))["by_source"]["olx"]
@@ -426,9 +380,6 @@ def test_olx_first_403_stops_the_whole_portal_without_a_cooldown():
                for t in source["types"].values())
     assert any("stopping the portal" in line for line in said)
 
-
-# --- served vs kept: our own filtering is not missed coverage ----------------
-
 def test_pct_measures_what_the_portal_served_not_what_we_kept():
     """OLX states `visibleElements` for every ad matching a search, but we drop
     the ones it syndicates from Otodom (already collected at the source). On a
@@ -438,10 +389,9 @@ def test_pct_measures_what_the_portal_served_not_what_we_kept():
     row = coverage.row("olx", "house", "katowice", 2, 3, coverage.OK,
                        portal_total=63, served=63)
     assert coverage.seen_by(row) == 63
-    assert coverage.warnings([row]) == []          # saw everything, kept 3
+    assert coverage.warnings([row]) == []
     s = coverage.summarise([row])["by_source"]["olx"]
     assert s["listings"] == 3 and s["seen"] == 63 and s["pct"] == 100.0
-
 
 def test_a_genuinely_truncated_search_still_warns_loudly():
     """The suppression must key on what was SERVED, not merely on `served`
@@ -451,22 +401,11 @@ def test_a_genuinely_truncated_search_still_warns_loudly():
     w = coverage.warnings([row])
     assert len(w) == 1 and "1733" in w[0] and "kept 3" in w[0]
 
-
 def test_served_is_omitted_when_nothing_was_filtered():
     row = coverage.row("gratka", "flat", "slaskie", 10, 350, coverage.OK,
                        portal_total=350, served=350)
     assert "served" not in row
     assert "seen" not in coverage.summarise([row])["by_source"]["gratka"]
-
-
-# --- an empty search is not a refusal (regression, run 31367424054) ----------
-#
-# `_walk` decremented `page` to 0 on an empty first page and then read
-# `totalPages (1) > 0` as "the portal refused to serve", which `bands.overflows`
-# treats as overflow. Every empty town was therefore bisected into nine seed
-# bands, each of them equally empty, each bisected again to MAX_DEPTH — 1 890 of
-# that run's 1 948 warnings and ~110 of OLX's 144 scrape minutes, spent asking a
-# village for its 1.4M flats. A genuine refusal still states `visibleElements`.
 
 class TownSession(FakeSession):
     """Like FakeSession, but the towns in `empty` hand over nothing at all.
@@ -484,15 +423,12 @@ class TownSession(FakeSession):
         if where in self.empty:
             self.urls.append(url)
             return FakeResp([], 1, self.empty_visible, self.empty_visible)
-        # the band parameters ride behind `page=`, so read it up to the '&'
         page = int(url.rsplit("page=", 1)[1].split("&")[0])
         return super().get(url.split("?")[0] + f"?page={page}")
-
 
 def _band_urls(session, town):
     return [u for u in session.urls
             if f"/sprzedaz/{town}/" in u and "filter_float_price" in u]
-
 
 def test_an_empty_town_is_not_subdivided():
     s = TownSession(total_pages=140, empty=("kozy",))
@@ -505,9 +441,7 @@ def test_an_empty_town_is_not_subdivided():
     assert kozy[0]["pages"] == 0 and kozy[0]["listings"] == 0
     assert _band_urls(s, "kozy") == []
     assert coverage.warnings(kozy) == []
-    # one request answered the question; the old code spent dozens
     assert len([u for u in s.urls if "/sprzedaz/kozy/" in u]) == 1
-
 
 def test_an_empty_page_the_portal_says_has_ads_is_still_a_refusal():
     """The other half: OLX serving nothing while stating `visibleElements` IS

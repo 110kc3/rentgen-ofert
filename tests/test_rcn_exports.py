@@ -10,11 +10,9 @@ import requests
 
 from scraper import rcn, rcn_exports
 
-
 @pytest.fixture(autouse=True)
 def no_retry_wait(monkeypatch):
     monkeypatch.setattr(rcn_exports.time, "sleep", lambda seconds: None)
-
 
 def _row(layer="lokale", **changes):
     props = rcn.LOK_PROPS if layer == "lokale" else rcn.BUD_PROPS
@@ -27,12 +25,10 @@ def _row(layer="lokale", **changes):
     row.update(changes)
     return row
 
-
 def _parquet(rows):
     output = io.BytesIO()
     pq.write_table(pa.Table.from_pylist(rows), output)
     return output.getvalue()
-
 
 class Session:
     def __init__(self, files, declared=None):
@@ -50,24 +46,21 @@ class Session:
             def iter_content(self, size): yield data
         return Response()
 
-
 def _session(lok=None, bud=None, **kw):
     return Session({"lokale": _parquet(lok or [_row()]),
                     "budynki": _parquet(bud or [_row("budynki")])}, **kw)
-
 
 def test_complete_exports_read_dates_scope_and_residential_buildings():
     session = _session(lok=[_row(), _row(gid=2)],
                        bud=[_row("budynki"), _row("budynki", gid=2, bud_rodzaj="inny")])
     lok, bud, source = rcn_exports.fetch_exports(session, "16", log=lambda *a: None)
-    assert len(lok) == 2 and len(bud) == 1  # distinct IDs survive identical compact values
+    assert len(lok) == 2 and len(bud) == 1
     assert lok[0]["d"] == "2026-01-02" and lok[0]["rynek"] == "w"
     rcn.validate_snapshot({"fetched": "2026-10-17", "lokale": lok, "budynki": bud})
     assert source["kind"] == "gugik_exports"
     assert source["files"]["budynki"]["rows"] == 2
     assert len(source["files"]["lokale"]["sha256"]) == 64
     assert all("16_transakcje_ceny_" in url for url in session.urls)
-
 
 @pytest.mark.parametrize("changes,reason", [
     ({"teryt": "2401"}, "TERYT"), ({"teryt": None}, "TERYT"),
@@ -78,11 +71,9 @@ def test_bad_export_rows_are_rejected(changes, reason):
     with pytest.raises(ValueError, match=reason):
         rcn_exports.fetch_exports(_session(lok=[_row(**changes)]), "16")
 
-
 def test_duplicate_ids_are_rejected():
     with pytest.raises(ValueError, match="duplicate feature ID"):
         rcn_exports.fetch_exports(_session(lok=[_row(), _row()]), "16")
-
 
 def test_missing_fields_are_rejected():
     row = _row()
@@ -90,29 +81,24 @@ def test_missing_fields_are_rejected():
     with pytest.raises(ValueError, match="missing or ambiguous fields"):
         rcn_exports.fetch_exports(_session(lok=[row]), "16")
 
-
 def test_truncated_parquet_is_rejected():
     with pytest.raises(pa.ArrowInvalid, match="Parquet"):
         rcn_exports.fetch_exports(Session({"lokale": _parquet([_row()])[:-20]}), "16")
 
-
 def test_interrupted_download_is_rejected():
     with pytest.raises(ValueError, match="interrupted download"):
         rcn_exports.fetch_exports(_session(declared=999999), "16")
-
 
 def test_oversize_download_is_rejected(monkeypatch):
     monkeypatch.setattr(rcn_exports, "MAX_EXPORT_BYTES", 1)
     with pytest.raises(ValueError, match="download size"):
         rcn_exports.fetch_exports(_session(), "16")
 
-
 def test_invalid_region_makes_no_request():
     session = _session()
     with pytest.raises(ValueError, match="TERYT"):
         rcn_exports.fetch_exports(session, "../24")
     assert not session.urls
-
 
 def test_wfs_failure_uses_two_complete_export_layers(monkeypatch):
     def broken(*a, **kw):
@@ -122,7 +108,6 @@ def test_wfs_failure_uses_two_complete_export_layers(monkeypatch):
     lok, bud = rcn.fetch_all(_session(), "16", details=details)
     assert lok and bud and details["kind"] == "gugik_exports"
     assert "inconsistent total" in details["wfs_error"]
-
 
 def test_failed_second_export_preserves_previous_cache(tmp_path, monkeypatch):
     def broken(*a, **kw): raise ValueError("broken WFS")
@@ -136,7 +121,6 @@ def test_failed_second_export_preserves_previous_cache(tmp_path, monkeypatch):
     assert rcn.refresh(path, session, "16", today="2026-10-17") == previous
     assert path.read_bytes() == original and rcn.refresh.last_health["status"] == "degraded"
 
-
 def test_export_source_persists_across_cached_refresh(tmp_path, monkeypatch):
     def broken(*a, **kw): raise ValueError("broken WFS")
     monkeypatch.setattr(rcn, "fetch", broken)
@@ -146,7 +130,6 @@ def test_export_source_persists_across_cached_refresh(tmp_path, monkeypatch):
     assert rcn.refresh.last_health["source"] == candidate["source"]
     assert rcn.refresh(path, None, "16", today="2026-10-17") == candidate
     assert rcn.refresh.last_health["source"] == candidate["source"]
-
 
 def test_shrunken_complete_export_cannot_replace_cache(tmp_path, monkeypatch):
     def broken(*a, **kw): raise ValueError("broken WFS")
@@ -159,7 +142,6 @@ def test_shrunken_complete_export_cannot_replace_cache(tmp_path, monkeypatch):
     assert rcn.refresh(path, _session(), "16", today="2026-10-17") == previous
     assert path.read_bytes() == original
     assert "20%" in rcn.refresh.last_health["error"]
-
 
 @pytest.mark.parametrize("failure", [
     requests.ConnectTimeout, requests.ReadTimeout, requests.ConnectionError,
@@ -192,7 +174,6 @@ def test_transient_download_restarts_with_clean_bytes_and_hash(tmp_path, failure
     assert size == len(good.files["lokale"])
     assert digest == hashlib.sha256(good.files["lokale"]).hexdigest()
 
-
 def test_exhausted_second_layer_timeouts_retain_cache(tmp_path, monkeypatch):
     def broken(*a, **kw):
         raise ValueError("bad WFS")
@@ -218,7 +199,6 @@ def test_exhausted_second_layer_timeouts_retain_cache(tmp_path, monkeypatch):
     assert path.read_bytes() == original
     assert rcn.refresh.last_health["status"] == "degraded"
     assert rcn.refresh.last_health["fetched"] == "2026-09-28"
-
 
 def test_permanent_http_error_is_not_retried(tmp_path):
     class Missing:

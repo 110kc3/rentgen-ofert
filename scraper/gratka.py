@@ -20,7 +20,6 @@ from .normalize import location_parts, stated_total, take_unseen, to_float, to_i
 from .regions import portal_slug
 
 BASE = "https://gratka.pl"
-# Whole-voivodeship search by default; override with RENTGEN_REGION.
 REGION = os.environ.get("RENTGEN_REGION", "slaskie")
 PORTAL_REGION = portal_slug(REGION, "gratka")
 SEARCH = {
@@ -34,21 +33,16 @@ HEADERS = {
     ),
     "Accept-Language": "pl-PL,pl;q=0.9,en;q=0.8",
 }
-# Hard 404 past here whatever the search holds (bisected 2026-08-08: page 200
-# OK, 201 404). At ~35 ads a page that is the 7 000-ad ceiling in bands.WINDOW.
 PORTAL_PAGE_WALL = 200
-
 
 def _text(card, cy):
     el = card.select_one(f'[data-cy="{cy}"]')
     return el.get_text(" ", strip=True) if el else None
 
-
 def _first_price(text):
     if not text:
         return None
     return to_int(text.split("zł")[0])
-
 
 def _locality(location):
     """The city = the broadest (last) part of 'street, district, city, voivodeship',
@@ -67,17 +61,14 @@ def _locality(location):
         return None
     return parts[-1] or None
 
-
 def _district(location):
     """The narrower part(s) before the city, e.g. 'Szafirowa, Stare Gliwice'."""
     inner = location_parts(location)[:-1]
     return ", ".join(inner) if inner else None
 
-
 def _date(text):
     m = re.search(r"(\d{4})\.(\d{2})\.(\d{2})", text or "")
     return f"{m.group(1)}-{m.group(2)}-{m.group(3)}" if m else None
-
 
 def _image(card):
     img = (card.select_one('[data-cy="gallerySliderImgThumbnail"]')
@@ -96,7 +87,6 @@ def _image(card):
     srcset = img.get("srcset") or img.get("data-srcset") or ""
     first = srcset.split()[0] if srcset else ""
     return first if first.startswith("http") else None
-
 
 def parse_cards(html: str, typ: str):
     soup = BeautifulSoup(html, "html.parser")
@@ -133,12 +123,11 @@ def parse_cards(html: str, typ: str):
         })
     return out
 
-
 def _walk(base, typ, tag, max_pages, delay, session, log, seen, out, extra=""):
     """Page through one search (optionally price-banded). Returns its cov row."""
     page = 1
     got = 0
-    served = 0            # cards the portal handed over, before OUR dedupe
+    served = 0
     served_keys = set()
     kept_keys = set()
     total = None
@@ -157,13 +146,13 @@ def _walk(base, typ, tag, max_pages, delay, session, log, seen, out, extra=""):
             r = session.get(url, headers=HEADERS, timeout=30)
             if r.status_code == 404:
                 page -= 1
-                break  # gratka 404s once you page past the last results page
+                break
             r.raise_for_status()
             if total is None:
                 total, total_min = stated_total(r.text)
             cards = parse_cards(r.text, typ)
             batch = take_unseen(cards, seen)
-        except Exception as exc:  # keep what we have, move on
+        except Exception as exc:
             log(f"  gratka {typ}/{tag} page {page} error: {exc}")
             stopped = coverage.ERROR
             error, http_status = coverage.error_details(exc)
@@ -176,29 +165,10 @@ def _walk(base, typ, tag, max_pages, delay, session, log, seen, out, extra=""):
         got += len(batch)
         served += len(cards)
         log(f"  gratka {typ}/{tag} page {page}: +{len(batch)}")
-        # Stop on an empty PAGE, not an empty batch. A price band re-sorts the
-        # results, so its first pages are often ads the unbanded pass already
-        # took while later pages hold new ones — breaking on "nothing new here"
-        # would silently abandon the band at page 1.
         if not cards:
             break
         page += 1
         time.sleep(delay)
-    # gratka's 404 means "no more pages", NOT "no more results": it
-    # refuses to serve past page 200 whatever the search holds
-    # (bisected 2026-08-08 — page 200 OK, 201 404, on a search whose
-    # own header says 9 856 ads = 282 pages). The page loop cannot tell
-    # that from a genuine last page, so the stated total decides.
-    #
-    # `got` counts only URLs new to this search's `seen`, so once bands are
-    # running a band legitimately collects fewer ads than it states — the
-    # overlap was already taken by the unbanded pass. Judge truncation on the
-    # PAGE count against the wall, and fall back to the total only for the
-    # unbanded search that owns the whole `seen` set. `served` — every card the
-    # portal handed over — is recorded alongside so `coverage.seen_by` stops
-    # comparing a band's NEW count against the band's stated total: that read
-    # "collected 82 of 536 (15.3%) — subdivide it" for a band which had in fact
-    # walked all 16 of its pages (run 31367424054).
     if stopped == coverage.OK and page >= PORTAL_PAGE_WALL:
         stopped = coverage.PORTAL_CAP
     elif stopped == coverage.OK and not extra and coverage.short_of_total(got, total):
@@ -209,13 +179,11 @@ def _walk(base, typ, tag, max_pages, delay, session, log, seen, out, extra=""):
                         kept_keys=kept_keys, error=error,
                         http_status=http_status)
 
-
 def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
            types=("house", "flat"), banded=True):
     session = session or requests.Session()
     out = []
     cov = []
-    # One retry budget for the whole portal — see bands.Pacer.
     pacer = bands.Pacer("gratka", delay=delay, log=log)
     for typ, bases in SEARCH.items():
         if typ not in types:
@@ -224,16 +192,12 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
         for base in bases:
             tag = base.rstrip("/").split("/")[-1]
             pacer.pause()
-            # a refused first search leaves nothing to subdivide, so it gets
-            # the same one bounded retry a band does
             row = pacer.attempt(tag, lambda: _walk(base, typ, tag, max_pages,
                                                    delay, session, log, seen, out))
             row["role"] = coverage.PARENT
             cov.append(row)
             if not banded or not bands.overflows(row, "gratka"):
                 continue
-            # 9 856 flats behind a 7 000-ad wall: the rest are only reachable by
-            # asking a narrower question. Additive — the unbanded pass is kept.
             log(f"  gratka {typ}/{tag}: {row.get('portal_total')} ads stated, "
                 f"past the 200-page wall — subdividing by price")
             rows, seeds = bands.subdivide(

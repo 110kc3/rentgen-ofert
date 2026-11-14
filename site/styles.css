@@ -89,7 +89,7 @@ h1 { margin: 0; font-size: 22px; letter-spacing: -.02em; }
   .coverage-health.blocked, .seg button.source-blocked:disabled { color: #fda29b; }
   .source-blocked .source-count { background: #4a1d1a; color: #fda29b; }
 }
-/* how many rows a view holds — an empty archive view otherwise reads as broken */
+
 .segcount {
   display: inline-block; margin-left: 6px; padding: 0 5px; border-radius: 999px;
   background: var(--line); color: var(--muted);
@@ -174,7 +174,7 @@ main { max-width: 1280px; margin: 14px auto 60px; padding: 0 18px; }
 .empty-muted { font-size: 12.5px; opacity: .85; }
 .empty-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 14px; }
 .empty-actions .chip .n { color: var(--muted); font-size: 11px; font-weight: 700; }
-/* town multi-select */
+
 .ms { position: relative; }
 .ms-btn {
   background: var(--card); color: var(--text); border: 1px solid var(--line);
@@ -204,7 +204,6 @@ main { max-width: 1280px; margin: 14px auto 60px; padding: 0 18px; }
 .ms-foot { display: flex; justify-content: flex-end; border-top: 1px solid var(--line); padding-top: 6px; }
 .ms-foot button { background: transparent; border: 0; color: var(--accent); font-size: 12px; cursor: pointer; }
 
-/* active-filter chips */
 .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }
 .chip {
   display: inline-flex; align-items: center; gap: 6px; background: var(--chip);
@@ -218,7 +217,6 @@ main { max-width: 1280px; margin: 14px auto 60px; padding: 0 18px; }
 
 footer { text-align: center; color: var(--muted); font-size: 12px; padding: 20px; }
 
-/* ---- national region picker + regional navigation ----------------------- */
 .region-nav { display: inline-flex; align-items: center; gap: 6px; margin-left: 10px;
   color: var(--muted); font-size: 12px; }
 .region-nav select { max-width: 220px; padding: 4px 28px 4px 7px; }
@@ -267,7 +265,6 @@ a.region-card:hover { transform: translateY(-2px); border-color: var(--accent); 
   .picker-head { padding-top: 34px; }
 }
 
-/* ---- property lifetime timeline + archive (sold/withdrawn) ---- */
 .tl { margin-top: 7px; border-top: 1px dashed var(--line); padding-top: 6px; }
 .tl summary { cursor: pointer; font-size: 12px; color: var(--accent); font-weight: 600;
   list-style: none; }
@@ -289,20 +286,15 @@ a.region-card:hover { transform: translateY(-2px); border-color: var(--accent); 
   text-transform: uppercase; letter-spacing: .03em; }
 .tag-gone.sold { background: #1a7f37; }
 
-/* ---- chunked grid rendering ---- */
 .card { content-visibility: auto; contain-intrinsic-size: 420px; }
 .sentinel { height: 1px; grid-column: 1 / -1; }
 
-/* ---- developer new-builds ---- */
 .tag-dev { position: absolute; top: 8px; right: 8px; background: #6d28d9; color: #fff;
   font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 6px;
   text-transform: uppercase; letter-spacing: .03em; }
 
-/* [hidden] must win over display rules (lost in an earlier file truncation —
-   .ms-pop sets display:flex which otherwise overrides the UA hidden style) */
 [hidden] { display: none !important; }
 
-/* ---- pin-address form on cards ---- */
 .pinbox { margin-top: 6px; }
 .pinbox summary { cursor: pointer; font-size: 12px; color: var(--muted); list-style: none; }
 .pinbox summary:hover { color: var(--accent); }
@@ -316,7 +308,6 @@ a.region-card:hover { transform: translateY(-2px); border-color: var(--accent); 
   padding: 5px 9px; font-size: 12px; font-weight: 600; cursor: pointer; }
 .pin-hint { flex-basis: 100%; font-size: 11px; color: var(--muted); }
 
-/* ---- in-browser RCN check results ---- */
 .pin-check { background: #1a7f37; color: #fff; border: 0; border-radius: 6px;
   padding: 5px 9px; font-size: 12px; font-weight: 600; cursor: pointer; }
 .pin-check:disabled { opacity: .6; cursor: wait; }
@@ -330,7 +321,6 @@ a.region-card:hover { transform: translateY(-2px); border-color: var(--accent); 
 .hist .drop { background: #166534; color: #fff; font-weight: 700; font-size: 11px;
   padding: 1px 6px; border-radius: 6px; }
 
-/* ---- cena vs transakcje RCN + negotiation arguments ---- */
 .vsrcn { font-size: 12px; color: var(--muted); }
 .vsrcn b { font-weight: 700; }
 .vsrcn.over b { color: #b91c1c; }
@@ -348,7 +338,6 @@ a.region-card:hover { transform: translateY(-2px); border-color: var(--accent); 
 .nego-body { margin-top: 5px; display: flex; flex-direction: column; gap: 4px; }
 .nego-row { font-size: 12px; color: var(--text); }
 
-/* ---- map view ---- */
 .mapbtn { background: var(--card); color: var(--text); border: 1px solid var(--line);
   border-radius: 8px; padding: 6px 12px; font-size: 13px; cursor: pointer; }
 .mapbtn.active { border-color: var(--accent); color: var(--accent); font-weight: 600; }

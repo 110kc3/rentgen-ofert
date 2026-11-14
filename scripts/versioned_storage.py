@@ -31,16 +31,13 @@ from scripts.validate_data import DataValidationError, validate_data_dir
 VERSION = re.compile(r"^[a-f0-9]{64}$")
 OBJECT = re.compile(r"^(?:manifest|index|archive|meta|stats|rcnstats)\.json$|^[da]/\d{2,}\.json$")
 
-
 def _encode(value):
     return json.dumps(value, sort_keys=True, ensure_ascii=False,
                       separators=(",", ":")).encode("utf-8")
 
-
 def _sha(path):
     with path.open("rb") as stream:
         return hashlib.file_digest(stream, "sha256").hexdigest()
-
 
 def _region(store, slug):
     regions.get_region(slug)
@@ -48,13 +45,11 @@ def _region(store, slug):
     root.mkdir(parents=True, exist_ok=True)
     return root
 
-
 @contextlib.contextmanager
 def _locked(root):
     with (root / ".publish.lock").open("a") as handle:
         fcntl.flock(handle, fcntl.LOCK_EX)
         yield
-
 
 def _atomic_pointer(root, version):
     value = _encode({"schema": 1, "version": version})
@@ -72,7 +67,6 @@ def _atomic_pointer(root, version):
             os.close(descriptor)
     finally:
         pathlib.Path(temporary).unlink(missing_ok=True)
-
 
 def verify(directory, slug, version):
     """Recheck complete bytes, inventory and payload before any pointer switch."""
@@ -103,7 +97,6 @@ def verify(directory, slug, version):
     return {"version": version, "files": len(files), "bytes": summary["published_bytes"],
             "count": summary["count"], "rcn_health": (summary["rcn_health"] or {}).get("status")}
 
-
 def activate(store, slug, version):
     """Roll forward/back to an already complete version; never rewrite objects."""
     root = _region(store, slug)
@@ -111,7 +104,6 @@ def activate(store, slug, version):
         report = verify(root / "versions" / version, slug, version)
         _atomic_pointer(root, version)
         return report
-
 
 def public_files(source):
     """Explicit reader inputs, excluding lifecycle history and private caches."""
@@ -122,7 +114,6 @@ def public_files(source):
     if json.loads((source / "manifest.json").read_bytes()).get("schema") == 3:
         paths += sorted((source / "a").glob("*.json"))
     return paths
-
 
 def publish(source, store, slug, *, interrupt_after=None):
     """Stage a public tree, validate it, seal its version, then switch current.
@@ -143,8 +134,6 @@ def publish(source, store, slug, *, interrupt_after=None):
                 name = path.relative_to(source).as_posix()
                 destination = stage / name
                 destination.parent.mkdir(exist_ok=True)
-                # Copy instead of linking: a later source write cannot mutate
-                # an already published immutable version.
                 shutil.copyfile(path, destination)
                 files[name] = {"bytes": destination.stat().st_size, "sha256": _sha(destination)}
                 if interrupt_after is not None and number >= interrupt_after:
@@ -155,7 +144,7 @@ def publish(source, store, slug, *, interrupt_after=None):
             report = verify(stage, slug, version)
             destination = versions / version
             if destination.exists():
-                verify(destination, slug, version)  # refuse corrupted existing objects
+                verify(destination, slug, version)
             else:
                 os.rename(stage, destination)
             _atomic_pointer(root, version)
@@ -163,7 +152,6 @@ def publish(source, store, slug, *, interrupt_after=None):
         finally:
             if stage.exists():
                 shutil.rmtree(stage)
-
 
 class StorageHandler(http.server.SimpleHTTPRequestHandler):
     """Local CORS/cache policy rehearsal; only public storage paths are served."""
@@ -200,7 +188,6 @@ class StorageHandler(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *args):
         pass
 
-
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--store", type=pathlib.Path, required=True)
@@ -233,7 +220,6 @@ def main(argv=None):
     except (OSError, ValueError, DataValidationError, regions.RegionCatalogError) as exc:
         parser.exit(1, f"storage: {exc}\n")
     return 0
-
 
 if __name__ == "__main__":
     raise SystemExit(main())

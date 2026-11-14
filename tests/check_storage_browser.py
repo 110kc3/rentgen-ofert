@@ -20,18 +20,14 @@ from scraper import payload
 from scripts import versioned_storage as storage
 from test_validate_data import _compact_dataset, _dataset
 
-
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-
 
 class QuietHandler(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *args):
         pass
 
-
 def _json(path, value):
     path.write_text(json.dumps(value), encoding="utf-8")
-
 
 def _stats(path, built):
     series = {name: [] for name in ("med", "active", "new", "gone", "cuts")}
@@ -40,7 +36,6 @@ def _stats(path, built):
           "dom": {"buckets": [], "counts": []},
           "rcn": {"months": [], "towns": {}, "global": {}}})
     _json(path / "rcnstats.json", {})
-
 
 def _rebuild(path, dates):
     rows = payload.unpack_rows(json.loads((path / "index.json").read_bytes()))
@@ -52,7 +47,6 @@ def _rebuild(path, dates):
                 "timeline": [{"kind": "listed", "date": date},
                              {"kind": "delisted", "date": "2026-08-01"}]} for date in dates]
     payload.build(rows, path, archive=archive, shards=4, log=lambda *args: None)
-
 
 def run(root, executable=None):
     site = root / "site"
@@ -84,7 +78,6 @@ def run(root, executable=None):
     _json(site / "regions.json", catalog)
     subprocess.run(["node", str(ROOT / "scripts/update-summary.mjs")],
                    env=os.environ | {"RENTGEN_ROOT": str(root)}, check=True, capture_output=True)
-    # Only the object origin carries Śląskie bytes: accidental fallback must fail.
     shutil.move(current, root / "source")
     current = root / "source"
     servers = [ui, objects]
@@ -107,7 +100,6 @@ def run(root, executable=None):
             assert not any("/a/" in url for url in requests)
             checks.append("archive details remain lazy on the new backend")
 
-            # Change metadata and archive keys while the original tab is open.
             meta = json.loads((current / "meta.json").read_bytes())
             meta["updated"] = "2026-10-19T12:00:00Z"
             _json(current / "meta.json", meta)
@@ -147,7 +139,6 @@ def run(root, executable=None):
             checks.append("statistics resolve and pin the same storage protocol")
 
             storage.activate(store, "slaskie", first["version"])
-            # The already-open new tab must retain its lazy details after rollback.
             new_tab.locator('[data-key="history"] [data-val="sold"]').click()
             new_tab.wait_for_function("state.archive && state.archive.length===2")
             card = new_tab.locator(".card[data-detail]").first
@@ -185,7 +176,6 @@ def run(root, executable=None):
             server.shutdown()
             server.server_close()
     return {"checks": checks, "versions": [first["version"], second["version"]]}
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)

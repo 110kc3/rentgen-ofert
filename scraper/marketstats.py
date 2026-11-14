@@ -23,13 +23,12 @@ from collections import Counter, defaultdict
 
 from .rcn import _fold
 
-TOWN_LIMIT = 40        # towns that get their own weekly + monthly series
-RCN_SINCE = "2018-01"  # first month of the deed series
-MIN_MONTH_N = 5        # fewer deeds in a month -> null (a shaky median misleads)
-PPM_MIN, PPM_MAX = 500, 40000          # same sanity bounds as rcnstats
+TOWN_LIMIT = 40
+RCN_SINCE = "2018-01"
+MIN_MONTH_N = 5
+PPM_MIN, PPM_MAX = 500, 40000
 DOM_BUCKETS = ((30, "≤30"), (60, "31–60"), (90, "61–90"), (180, "91–180"),
                (365, "181–365"), (None, ">365"))
-
 
 def _week_of(date_str):
     """ISO date -> that week's Monday (the axis key)."""
@@ -39,7 +38,6 @@ def _week_of(date_str):
         return None
     return (d - dt.timedelta(days=d.weekday())).isoformat()
 
-
 def _median(vals):
     s = sorted(vals)
     n = len(s)
@@ -47,7 +45,6 @@ def _median(vals):
         return None
     mid = n // 2
     return s[mid] if n % 2 else (s[mid - 1] + s[mid]) / 2
-
 
 def _axis(first, last, step):
     """Inclusive list of week-Mondays or YYYY-MM months from first to last."""
@@ -67,7 +64,6 @@ def _axis(first, last, step):
                 y, m = y + 1, 1
     return out
 
-
 def _town_of(rec):
     snap = rec.get("snapshot") or {}
     for key in (snap.get("locality"), snap.get("district")):
@@ -76,10 +72,8 @@ def _town_of(rec):
             return f, key
     return None, None
 
-
 def _weekly(records, towns_top):
     """Weekly series from observations. towns_top: {folded: display}."""
-    # per (week, type) pools; per (week, type, town) pools for the top towns
     active = Counter()
     ppms = defaultdict(list)
     t_active = Counter()
@@ -97,8 +91,6 @@ def _weekly(records, towns_top):
             continue
         town, _ = _town_of(rec)
         in_top = town in towns_top
-        # count these weeks into the axis too — a withdrawal whose week has no
-        # live observation anywhere (e.g. archived-ad evidence) must still show
         w_first = _week_of(rec.get("first_seen") or "")
         if w_first:
             new[(w_first, typ)] += 1
@@ -108,7 +100,6 @@ def _weekly(records, towns_top):
             gone[(w_gone, typ)] += 1
             weeks_seen.add(w_gone)
 
-        # one snapshot per week the property was live: last price of the week
         by_week = {}
         last_price = {}
         for o in sorted(rec.get("observations") or [], key=lambda o: o.get("date") or ""):
@@ -164,11 +155,10 @@ def _weekly(records, towns_top):
             out_towns[disp] = entry
     return {"weeks": weeks, "global": out_global, "towns": out_towns}
 
-
 def _rcn_monthly(snapshot, towns_top, last_month):
     """Monthly deed medians for flats: global w+p, per-town w only."""
-    pools = defaultdict(list)      # (month, market) -> [ppm]
-    t_pools = defaultdict(list)    # (month, town) -> [ppm]  (wtorny only)
+    pools = defaultdict(list)
+    t_pools = defaultdict(list)
     for r in (snapshot or {}).get("lokale") or []:
         d, c, a, mk = r.get("d"), r.get("c"), r.get("a"), r.get("rynek")
         if not d or not c or not a or mk not in ("p", "w"):
@@ -213,7 +203,6 @@ def _rcn_monthly(snapshot, towns_top, last_month):
             out_towns[disp] = {"w": {"med": med, "n": n}}
     return {"months": months, "global": out_global, "towns": out_towns}
 
-
 def _dom_and_cuts(records):
     """Days-on-market histogram (delisted only) + share of records that cut."""
     dom = [0] * len(DOM_BUCKETS)
@@ -255,7 +244,6 @@ def _dom_and_cuts(records):
              for t in cut_n}
     return {"buckets": [b for _, b in DOM_BUCKETS], "counts": dom}, share
 
-
 def _top_towns(records, snapshot):
     """{folded: display} for the TOWN_LIMIT towns with most live records.
     Display spelling prefers the RCN deed register over portal free text."""
@@ -275,7 +263,6 @@ def _top_towns(records, snapshot):
             rcn_names[f] = r["msc"]
     return {t: rcn_names.get(t) or disp[t]
             for t, _ in live.most_common(TOWN_LIMIT)}
-
 
 def build(records, snapshot, today=None):
     today = today or dt.date.today().isoformat()

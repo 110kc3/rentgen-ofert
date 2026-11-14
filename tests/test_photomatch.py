@@ -16,20 +16,15 @@ from scraper import cache, net, normalize, photomatch
 
 FIXTURES = pathlib.Path(__file__).parent / "fixtures"
 
-
 def _html(name):
     return (FIXTURES / name).read_text(encoding="utf-8")
-
 
 def test_both_portals_extract_the_same_three_photos():
     gr = photomatch._EXTRACTORS["gratka"](_html("gratka_detail.html"))
     mz = photomatch._EXTRACTORS["morizon"](_html("morizon_detail.html"))
-    # the page shows one photo in five renditions before the second one starts,
-    # so a naive first-five slice hashed a single photo five times
     assert len(gr) == 3 and len(mz) == 3
     assert {photomatch.gratka_ad_id(u) for u in gr} == {"48557359"}
     assert {photomatch.gratka_ad_id(u) for u in mz} == {"48557359"}
-
 
 def test_blog_teasers_on_the_same_cdn_are_not_gallery_photos():
     """Both portals' article thumbnails ride the same `/thumb/<base64>/` path
@@ -37,7 +32,6 @@ def test_blog_teasers_on_the_same_cdn_are_not_gallery_photos():
     as if it were the property."""
     for name in ("gratka_detail.html", "morizon_detail.html"):
         html = _html(name)
-        # the decoy is only visible once decoded — which is the whole point
         all_thumbs = [m.group(0) for m in photomatch._CDN_THUMB.finditer(html)]
         decoded = [photomatch._decode_origin(m.group(1))
                    for m in photomatch._CDN_THUMB.finditer(html)]
@@ -48,15 +42,12 @@ def test_blog_teasers_on_the_same_cdn_are_not_gallery_photos():
         assert all("blog/wp-content" not in (photomatch._decode_origin(
             u.split("/thumb/")[1].split("/")[0]) or "") for u in urls)
 
-
 def test_morizon_host_rename_is_covered():
     """The break that started it: galleries moved to img*.staticmorizon.com.pl."""
     assert all("staticmorizon.com.pl" in u
                for u in photomatch._EXTRACTORS["morizon"](_html("morizon_detail.html")))
 
-
 def test_gratka_ad_id_ignores_anything_that_is_not_an_ad_photo():
-    # `gr-col` is a different id space (agency collections), not an ad id
     col = ("https://img1.staticmorizon.com.pl/thumb/"
            "aHR0cHM6Ly9kLWdyLmNkbmdyLnBsL2thZHJ5L2svci9nci1jb2wvMWUvNGYvMzk0NDVfMTM5MzQwNTk3NS5qcGc="
            "/3x2_s:fill_and_crop/x.jpg")
@@ -64,14 +55,10 @@ def test_gratka_ad_id_ignores_anything_that_is_not_an_ad_photo():
     assert photomatch.gratka_ad_id("https://example.com/photo.jpg") is None
     assert photomatch.gratka_ad_id("") is None
     assert photomatch.gratka_ad_id(None) is None
-    # unpadded base64 must still decode
     assert photomatch.gratka_ad_id(
         "https://thumbs.cdngr.pl/thumb/"
         "aHR0cHM6Ly9kLWdyLmNkbmdyLnBsL2thZHJ5L2svci9nci1vZ2wvMWUvMGYvNDg1NTczNTlfMTU0NjcwMDM4NS5qcGc"
         "/3x2_l/x.jpg") == "48557359"
-
-
-# ---- the budget, and not lying to the cache about it ------------------------
 
 class _Sess:
     """Counts detail-page fetches; every gallery comes back empty."""
@@ -81,7 +68,6 @@ class _Sess:
     def get(self, url, **kw):
         self.calls += 1
         raise RuntimeError("no photos here")
-
 
 def test_a_photoless_ad_stops_being_refetched_every_run():
     """morizon's 9 505 detail pages were re-fetched every run, always returned
@@ -93,12 +79,9 @@ def test_a_photoless_ad_stops_being_refetched_every_run():
         photomatch.attach_hashes([dict(listing)], session=sess, cache=pc,
                                  today=f"2026-08-0{day}", log=lambda *a: None,
                                  max_workers=1)
-    # tried MISS_RETRIES times, then believed
     assert sess.calls == cache.MISS_RETRIES
     assert cache.get(pc, "https://m/1", "2026-08-05") == []
-    # ...and re-probed once the verdict ages out
     assert cache.get(pc, "https://m/1", "2026-09-01") is None
-
 
 def test_budget_skips_are_not_recorded_as_photo_misses():
     """An ad we never tried must not teach the cache it has no photos, or a few
@@ -107,9 +90,8 @@ def test_budget_skips_are_not_recorded_as_photo_misses():
     photomatch.attach_hashes([{"source": "morizon", "url": "https://m/2"}],
                              session=sess, cache=pc, today="2026-08-01",
                              log=lambda *a: None, budget_s=-1, max_workers=1)
-    assert sess.calls == 0                       # budget was already blown
-    assert pc["entries"] == {}                   # and nothing was learned
-
+    assert sess.calls == 0
+    assert pc["entries"] == {}
 
 def test_photo_queue_puts_current_collisions_and_untried_work_first():
     cached = {"source": "gratka", "type": "flat", "area": 50, "rooms": 2,
@@ -141,19 +123,14 @@ def test_photo_queue_puts_current_collisions_and_untried_work_first():
          cross_size, cached],
         cache=pc, today="2026-08-03")
 
-    # Exact-size and same-town/same-price collisions both affect today's
-    # normalization. The positive cache hit is free and leads that queue.
     assert critical == {"cached", "same-size", "cross-size"}
     assert [row["url"] for row in ordered[:3]] == [
         "cached", "cross-size", "same-size",
     ]
-    # In the history queue, old deferred work beats fresh work, while a prior
-    # empty response is retried only after never-attempted listings.
     history_order = [row["url"] for row in ordered[3:]]
     assert history_order[0] == "old"
     assert history_order[-1] == "retry"
     assert history_order.index("fresh") < history_order.index("retry")
-
 
 def test_legacy_gallery_miss_is_not_sorted_as_a_free_cover_hit():
     positive = {
@@ -176,7 +153,6 @@ def test_legacy_gallery_miss_is_not_sorted_as_a_free_cover_hit():
     assert [listing["url"] for listing in ordered] == [
         "positive", "gallery-miss",
     ]
-
 
 def test_photo_metrics_separate_critical_and_history_deferrals(monkeypatch):
     ticks = iter([0, 0, 2, 2])
@@ -214,7 +190,6 @@ def test_photo_metrics_separate_critical_and_history_deferrals(monkeypatch):
         "history_deferred": 2,
         "deferred_urls": ["history-1", "history-2"],
     }
-
 
 def test_critical_ads_hash_card_covers_while_history_keeps_galleries(monkeypatch):
     calls = []
@@ -254,7 +229,6 @@ def test_critical_ads_hash_card_covers_while_history_keeps_galleries(monkeypatch
     assert stats["critical_with_photos"] == 1
     assert stats["critical_without_photos"] == 0
 
-
 def test_cover_hashes_fetches_only_the_card_image(monkeypatch):
     class Response:
         content = b"card bytes"
@@ -278,7 +252,6 @@ def test_cover_hashes_fetches_only_the_card_image(monkeypatch):
     ) == ([123], ["https://img.test/card.jpg"])
     assert session.urls == ["https://img.test/card.jpg"]
 
-
 def test_photo_fetching_defaults_to_the_no_retry_session(monkeypatch):
     session = object()
     seen = []
@@ -294,7 +267,6 @@ def test_photo_fetching_defaults_to_the_no_retry_session(monkeypatch):
     )
 
     assert seen == [session]
-
 
 def test_legacy_gallery_miss_cannot_suppress_a_critical_cover(monkeypatch):
     listing = {
@@ -322,7 +294,6 @@ def test_legacy_gallery_miss_cannot_suppress_a_critical_cover(monkeypatch):
     assert stats["cover_fetched"] == 1
     assert stats["critical_without_photos"] == 0
 
-
 def test_believed_cover_miss_still_gets_its_one_week_rest(monkeypatch):
     listing = {
         "source": "otodom", "url": "u", "image": "card.jpg",
@@ -346,7 +317,6 @@ def test_believed_cover_miss_still_gets_its_one_week_rest(monkeypatch):
     assert stats["cover_cache_hits"] == 1
     assert stats["critical_without_photos"] == 1
 
-
 def test_unresolved_size_groups_are_counted_for_the_conservative_gate(
         monkeypatch):
     listings = [
@@ -366,16 +336,12 @@ def test_unresolved_size_groups_are_counted_for_the_conservative_gate(
     assert stats["unresolved_size_groups"] == 1
     assert stats["unresolved_size_listings"] == 2
 
-
-# ---- the merge key, end to end ---------------------------------------------
-
 def _mz(**kw):
     base = dict(source="morizon", source_id="2047889133", type="house",
                 url="https://www.morizon.pl/oferta/x-mzn2047889133",
                 area=130.0, rooms=4, price=799000, locality="Bieruń")
     base.update(kw)
     return base
-
 
 def _gr(**kw):
     base = dict(source="gratka", source_id="48557359", type="house",
@@ -384,23 +350,19 @@ def _gr(**kw):
     base.update(kw)
     return base
 
-
 def test_twins_merge_with_no_photos_at_all():
     props = normalize.dedupe([_mz(gratka_id="48557359"), _gr()])
     assert len(props) == 1
     assert props[0]["sources"] == ["gratka", "morizon"]
-
 
 def test_twins_merge_even_when_the_areas_disagree():
     """Usable vs total m2 splits the size groups; the portal id doesn't care."""
     props = normalize.dedupe([_mz(gratka_id="48557359", area=118.0), _gr(area=130.0)])
     assert len(props) == 1 and props[0]["area"] == 130.0
 
-
 def test_twins_merge_when_neither_states_an_area():
     props = normalize.dedupe([_mz(gratka_id="48557359", area=None), _gr(area=None)])
     assert len(props) == 1 and props[0]["sources"] == ["gratka", "morizon"]
-
 
 def test_an_unmatched_gratka_id_changes_nothing():
     props = normalize.dedupe([_mz(gratka_id="99999999", area=61.0), _gr(area=88.0)])
@@ -408,12 +370,10 @@ def test_an_unmatched_gratka_id_changes_nothing():
     props = normalize.dedupe([_mz(gratka_id=None, area=61.0), _gr(area=88.0)])
     assert len(props) == 2
 
-
 def test_a_twin_never_swallows_a_different_property_type():
     props = normalize.dedupe([_mz(gratka_id="48557359", type="flat", area=61.0),
                               _gr(type="house", area=61.0)])
     assert len(props) == 2
-
 
 def test_twins_keep_merging_with_the_other_portals():
     """gratka merges with otodom on size+photos; pairing it with morizon must
@@ -426,7 +386,6 @@ def test_twins_keep_merging_with_the_other_portals():
     assert len(props) == 1
     assert props[0]["sources"] == ["otodom", "gratka", "morizon"]
 
-
 def test_a_twin_costs_no_photo_fetch():
     """A morizon ad carrying gratka's ad id is already identified; hashing it
     answers a question nobody is asking. ~8 700 fetches a run, out of a phase
@@ -438,7 +397,6 @@ def test_a_twin_costs_no_photo_fetch():
     assert sess.calls == 1, "the identified half was still fetched"
     assert "identified by their twin" in said[0]
 
-
 def test_a_skipped_twin_is_not_recorded_as_a_photo_miss():
     """Same rule as a budget skip: an ad we deliberately never fetched must not
     teach the cache it has no photos."""
@@ -449,7 +407,6 @@ def test_a_skipped_twin_is_not_recorded_as_a_photo_miss():
                              log=lambda *a: None, max_workers=1)
     assert raw[0]["url"] not in pc["entries"]
 
-
 def test_linking_twins_early_leaves_the_merge_exactly_as_it_was():
     """`dedupe` calls `link_twins` again — the linking must also hold when
     hashing is off entirely — so running it early has to be idempotent."""
@@ -457,7 +414,6 @@ def test_linking_twins_early_leaves_the_merge_exactly_as_it_was():
     normalize.link_twins(raw)
     props = normalize.dedupe(raw)
     assert len(props) == 1 and props[0]["sources"] == ["gratka", "morizon"]
-
 
 def test_a_twins_photos_come_from_the_half_that_was_fetched():
     """Skipping the morizon half must not cost the property its photos, or the
@@ -471,7 +427,6 @@ def test_a_twins_photos_come_from_the_half_that_was_fetched():
     assert raw[0]["phashes"] == [] and raw[1]["phashes"] == [7]
     props = normalize.dedupe(raw)
     assert props[0]["phashes"] == [7] and props[0]["photo_urls"] == ["g1.jpg"]
-
 
 def test_internal_link_field_never_reaches_the_payload():
     props = normalize.dedupe([_mz(gratka_id="48557359"), _gr()])

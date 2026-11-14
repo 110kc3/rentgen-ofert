@@ -26,31 +26,27 @@ try:
 except Exception:  # pragma: no cover - very old urllib3
     from requests.packages.urllib3.util.retry import Retry
 
-RETRY_AFTER_CAP = 90.0   # seconds; longest single Retry-After sleep we honour
-# Every status worth asking again about. 405: see the module docstring.
+RETRY_AFTER_CAP = 90.0
 RETRY_STATUSES = (405, 429, 500, 502, 503, 504)
-
 
 class CappedRetry(Retry):
     def get_retry_after(self, response):
         ra = super().get_retry_after(response)
         return min(ra, RETRY_AFTER_CAP) if ra is not None else ra
 
-
 def session() -> requests.Session:
     s = requests.Session()
     retry = CappedRetry(
         total=5,
         status_forcelist=RETRY_STATUSES,
-        backoff_factor=2,          # sleeps ~0, 2, 4, 8, 16 s between tries
+        backoff_factor=2,
         respect_retry_after_header=True,
-        raise_on_status=False,     # return the final response; caller decides
+        raise_on_status=False,
     )
     adapter = HTTPAdapter(max_retries=retry)
     s.mount("https://", adapter)
     s.mount("http://", adapter)
     return s
-
 
 def probe_session() -> requests.Session:
     """A session for best-effort work: asks once, waits for nobody.
@@ -74,7 +70,6 @@ def probe_session() -> requests.Session:
     s.mount("https://", adapter)
     s.mount("http://", adapter)
     return s
-
 
 def rcn_session() -> requests.Session:
     """Keep GUGiK outages out of the portal crawler's six-attempt ladder.

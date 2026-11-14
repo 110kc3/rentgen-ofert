@@ -6,12 +6,10 @@ import pytest
 
 from scraper import payload
 
-
 def test_column_table_roundtrip_preserves_false_zero_and_missing_fields():
     rows = [{"url": "a", "price": 0, "is_private": False}, {"url": "b", "sales": []}]
     assert payload.unpack_rows(payload.pack_rows(rows)) == rows
     assert payload.unpack_rows(rows) == rows
-
 
 @pytest.mark.parametrize("value", [
     {"schema": 2, "fields": [], "rows": []},
@@ -23,7 +21,6 @@ def test_column_table_roundtrip_preserves_false_zero_and_missing_fields():
 def test_invalid_column_tables_fail_closed(value):
     with pytest.raises(ValueError):
         payload.unpack_rows(value)
-
 
 def test_compact_archive_preserves_histories_with_the_same_url(tmp_path):
     first = _listing(delisted="2026-10-01", sold={"price": 350000, "date": "2026-10-02"})
@@ -46,7 +43,6 @@ def test_compact_archive_preserves_histories_with_the_same_url(tmp_path):
     assert payload.build([_listing(url="current")], tmp_path, shards=4,
                          archive=[first, second, second], log=lambda *a: None) != v
 
-
 def _listing(url="https://otodom.pl/pl/oferta/x-1", **kw):
     base = dict(
         title="Mieszkanie", type="flat", area=50.0, rooms=2, locality="Gliwice",
@@ -68,7 +64,6 @@ def _listing(url="https://otodom.pl/pl/oferta/x-1", **kw):
     base.update(kw)
     return base
 
-
 def test_build_splits_index_and_shards(tmp_path):
     ls = [_listing(), _listing(url="https://olx.pl/d/oferta/z-2.html", sales=None)]
     v = payload.build(ls, tmp_path, shards=4, log=lambda *a: None)
@@ -77,16 +72,13 @@ def test_build_splits_index_and_shards(tmp_path):
     idx = json.loads((tmp_path / "index.json").read_text(encoding="utf-8"))
     assert len(idx) == 2
     slim = idx[0]
-    # heavy/expand-only fields are NOT in the index …
     for k in ("offers", "cheapest", "timeline", "photo_urls", "street", "agency"):
         assert k not in slim
-    # … but their face summaries are
     assert slim["offers_n"] == 2 and slim["tl_n"] == 2 and slim["ph_n"] == 1
     assert slim["sales"] == [{"kind": "past", "date": "2021-01-01",
-                              "price": 300000, "confidence": "wysoka"}]  # no addr/dz
+                              "price": 300000, "confidence": "wysoka"}]
     assert slim["also_listed"] == [{"price": 410000}]
     assert slim["price_history"] == [{"date": "2026-06-01", "price": 400000}]
-    # the shard carries the full detail record under the listing URL
     found = {}
     for i in range(4):
         found.update(json.loads((tmp_path / "d" / f"{i:02d}.json").read_text(encoding="utf-8")))
@@ -94,7 +86,6 @@ def test_build_splits_index_and_shards(tmp_path):
     assert len(det["offers"]) == 2 and det["street"] == "Asnyka"
     assert det["sales"][0]["addr"] == "Asnyka 11"
     assert payload.shard_of("https://otodom.pl/pl/oferta/x-1", 4) in range(4)
-
 
 def test_detail_only_changes_invalidate_version_and_identical_payload_is_stable(tmp_path):
     listing = _listing()
@@ -109,11 +100,10 @@ def test_detail_only_changes_invalidate_version_and_identical_payload_is_stable(
     listing["price"] = 350000
     assert payload.build([listing], tmp_path, shards=4, log=lambda *a: None) != second
 
-
 def test_shard_hash_matches_js_implementation():
     """scraper/payload.py and site/app.js MUST shard identically."""
     if not shutil.which("node"):
-        return  # environment without node — python side alone is deterministic
+        return
     urls = ["https://otodom.pl/pl/oferta/mieszkanie-m3-ID4abc",
             "https://www.olx.pl/d/oferta/dom-CID3-ID18kaq1.html",
             "https://gratka.pl/nieruchomosci/dom/ob/123456", "x"]

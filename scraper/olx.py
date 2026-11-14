@@ -21,11 +21,9 @@ from . import bands, coverage
 from .normalize import olx_rooms, take_unseen, to_float, to_int
 from .regions import portal_slug
 
-# Whole-voivodeship search by default; override with RENTGEN_REGION.
 REGION = os.environ.get("RENTGEN_REGION", "slaskie")
 PORTAL_REGION = portal_slug(REGION, "olx")
 PATHS = {"house": "domy", "flat": "mieszkania"}
-
 
 def search_url(typ: str, where: str) -> str:
     """The location is one slug in a fixed path position, so the same builder
@@ -35,13 +33,8 @@ def search_url(typ: str, where: str) -> str:
     answer with that town's listings from the region URL's slug position."""
     return f"https://www.olx.pl/nieruchomosci/{PATHS[typ]}/sprzedaz/{where}/"
 
-
 SEARCH = {typ: search_url(typ, PORTAL_REGION) for typ in PATHS}
 
-# OLX stops paginating long before it runs out of ads — the region search dies
-# at page 25 whatever `totalPages` claims. That is not our cap and no amount of
-# RENTGEN_MAX_PAGES fixes it; the only way to see the rest is to ask narrower
-# questions, so an overflowing search is re-run per town and merged.
 HARD_PAGE_CAP = 25
 HEADERS = {
     "User-Agent": (
@@ -51,10 +44,7 @@ HEADERS = {
     "Accept-Language": "pl-PL,pl;q=0.9,en;q=0.8",
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
 }
-# escape-aware: the state is a JSON-encoded string, so a `\";` sequence inside it
-# (an escaped quote followed by a semicolon in some ad text) must not end the match
 _STATE = re.compile(r'__PRERENDERED_STATE__\s*=\s*"((?:[^"\\]|\\.)*)";', re.S)
-
 
 def extract_state(html: str) -> dict:
     m = _STATE.search(html)
@@ -62,20 +52,11 @@ def extract_state(html: str) -> dict:
         raise ValueError("OLX: __PRERENDERED_STATE__ not found")
     return json.loads(json.loads('"' + m.group(1) + '"'))
 
-
 _TITLE = re.compile(r"<title[^>]*>(.*?)</title>", re.S | re.I)
-# Words a bot wall puts on the page it serves instead of the results. Lowercase
-# substrings, matched against the whole body — the challenge vendors change
-# their markup far more often than they change these.
-# ("cloudflare" itself is NOT one: plenty of ordinary pages load a CF asset,
-# and a false "you were blocked" is exactly the wrong answer to hand item 3.)
 CHALLENGE_MARKERS = ("captcha", "datadome", "cf-chl", "just a moment",
                      "attention required", "access denied", "are you a human",
                      "verify you are human", "unusual traffic", "zablokowan")
-# Something only a real OLX page carries. Present + no state blob = OLX really
-# did re-skin; absent = we were served something that is not OLX's search page.
 OLX_MARKERS = ("olx.pl", "olxcdn", "__NEXT_DATA__", "prerendered")
-
 
 def fingerprint(resp) -> str:
     """What we were actually served, for a page with no state blob in it.
@@ -98,21 +79,19 @@ def fingerprint(resp) -> str:
             f"title={title!r}, challenge={challenge or 'none'}, "
             f"olx-markers={olx or 'none'}")
 
-
 def _params(ad) -> dict:
     return {p["key"]: (p.get("normalizedValue") or p.get("value"))
             for p in ad.get("params", [])}
-
 
 def parse_ads(ads, typ: str):
     out = []
     for ad in ads:
         partner = (ad.get("partner") or {}).get("code")
         if partner or ad.get("externalUrl"):
-            continue  # syndicated (e.g. Otodom) -> collected at the source
+            continue
         price = ((ad.get("price") or {}).get("regularPrice") or {})
         if not price.get("value"):
-            continue  # "free"/"exchange"/price-on-request ads
+            continue
         pm = _params(ad)
         loc = ad.get("location") or {}
         photos = ad.get("photos") or []
@@ -142,17 +121,16 @@ def parse_ads(ads, typ: str):
         })
     return out
 
-
 def _walk(base_url, typ, tag, max_pages, delay, session, log, seen, out, extra=""):
     """Page through one search (optionally price-banded). Returns its cov row."""
     page = 1
     got = 0
-    served = 0             # ads OLX handed over, before our own filtering
+    served = 0
     served_keys = set()
     kept_keys = set()
     total_pages = None
-    visible = None          # ads OLX says match the search   (5 503 for śląskie flats)
-    servable = None         # ads OLX will actually hand over (1 000 — its cap)
+    visible = None
+    servable = None
     stopped = coverage.OK
     error = None
     http_status = None
@@ -161,7 +139,7 @@ def _walk(base_url, typ, tag, max_pages, delay, session, log, seen, out, extra="
         try:
             r = session.get(url, headers=HEADERS, timeout=30)
             r.raise_for_status()
-        except Exception as exc:  # keep what we have, stop this search
+        except Exception as exc:
             log(f"  olx {typ}/{tag} page {page} error: {exc}")
             stopped = coverage.ERROR
             error, http_status = coverage.error_details(exc)
@@ -170,8 +148,6 @@ def _walk(base_url, typ, tag, max_pages, delay, session, log, seen, out, extra="
             state = extract_state(r.text)
             listing = state["listing"]["listing"]
         except Exception as exc:
-            # 200 OK with no results in it: say what the page WAS, so a block
-            # and a re-skin are distinguishable from the log alone.
             log(f"  olx {typ}/{tag} page {page} error: {exc} — {fingerprint(r)}")
             stopped = coverage.ERROR
             error, http_status = coverage.error_details(exc)
@@ -193,18 +169,7 @@ def _walk(base_url, typ, tag, max_pages, delay, session, log, seen, out, extra="
         servable = listing.get("totalElements") or servable
         log(f"  olx {typ}/{tag} page {page}/{min(total_pages, max_pages)}: +{len(batch)}")
         if not ads:
-            # An empty page is how OLX enforces its own limit: it keeps claiming
-            # `totalPages` in the hundreds and just stops serving ads. Running
-            # out for real means we reached the last page it claimed.
-            page -= 1                     # the empty page held nothing
-            # ...but an empty FIRST page with nothing matching at all is simply
-            # an empty search — a village with no flats, a price band nothing
-            # falls into. `totalPages` defaults to 1 there, so `1 > 0` used to
-            # call it a refusal, `bands.overflows` read that as overflow, and
-            # every empty half was bisected again to MAX_DEPTH. That was 1 890
-            # of run 31367424054's 1 948 warnings and ~110 of OLX's 144 scrape
-            # minutes, spent asking Kozy for its 1.4M flats. A real refusal
-            # still states `visibleElements`, which is what tells them apart.
+            page -= 1
             if total_pages > page and not (page == 0 and not visible):
                 stopped = coverage.PORTAL_CAP
             break
@@ -214,11 +179,6 @@ def _walk(base_url, typ, tag, max_pages, delay, session, log, seen, out, extra="
             break
         page += 1
         time.sleep(delay)
-    # The cap OLX actually enforces is stated, not hit: for a region search it
-    # answers `visibleElements: 5503` (ads matching) with `totalElements: 1000`
-    # and `totalPages: 25` (ads it will serve). Walking those 25 pages therefore
-    # looks like a completed search — which is why śląskie yielded 470 listings
-    # and the town subdivision below never once fired. Measured 2026-08-08.
     if stopped == coverage.OK and visible and servable and visible > servable:
         stopped = coverage.PORTAL_CAP
     return coverage.row("olx", typ, tag, page, got, stopped,
@@ -226,7 +186,6 @@ def _walk(base_url, typ, tag, max_pages, delay, session, log, seen, out, extra="
                         served=served, served_keys=served_keys,
                         kept_keys=kept_keys, error=error,
                         http_status=http_status)
-
 
 def _portal_blocked_on_first_request(row) -> bool:
     """A root-page 403 on a fresh run is a runner/IP block, not a search miss.
@@ -240,7 +199,6 @@ def _portal_blocked_on_first_request(row) -> bool:
             and (row.get("pages") or 0) <= 1
             and coverage.unique_seen_by(row) == 0)
 
-
 def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
            types=("house", "flat"), towns=None, banded=True):
     """`towns`: {slug: display} used ONLY to subdivide a search that OLX refused
@@ -250,17 +208,11 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
     session = session or requests.Session()
     out = []
     cov = []
-    # One retry budget for the whole portal — see bands.Pacer. It matters most
-    # here: OLX has ~120 town searches, so a per-search cooldown with no budget
-    # would be an hour of sleeping the run cannot afford.
     pacer = bands.Pacer("olx", delay=delay, log=log)
     requested_types = [typ for typ in PATHS if typ in types]
     for type_index, typ in enumerate(requested_types):
         seen = set()
         pacer.pause()
-        # Keep the bounded retry for transient failures, but a first-request
-        # 403 is the portal-wide runner block production has repeated for days.
-        # It is terminal evidence: no cooldown, no second type, towns or bands.
         row = pacer.attempt(
             typ,
             lambda: _walk(SEARCH[typ], typ, REGION, max_pages,
@@ -284,14 +236,11 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
             break
         if row["stopped"] != coverage.PORTAL_CAP:
             continue
-        # Two independent axes, and OLX needs both: towns cut the region into
-        # ~60 pieces but a big city's own search hits the same 1 000-ad cap, and
-        # price cuts every one of them further. Both are additive into `seen`.
         if towns:
             log(f"  olx {typ}: region search capped at page {row['pages']} of "
                 f"{row.get('portal_pages')} — subdividing into {len(towns)} towns")
         for slug in (towns or {}):
-            pacer.pause()                  # a town is a search, not a page
+            pacer.pause()
             town_row = pacer.attempt(slug, lambda s=slug: _walk(
                 search_url(typ, s), typ, s, max_pages, delay, session, log,
                 seen, out))
@@ -308,8 +257,6 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
                     band_row["role"] = coverage.SUPPLEMENT
                 cov.extend(rows)
         if banded:
-            # …and band the region search itself, so a region whose town list is
-            # empty (a brand-new one) still gets past the cap.
             rows, seeds = bands.subdivide(
                 "olx",
                 lambda lo, hi, btag: _walk(SEARCH[typ], typ, btag, max_pages,

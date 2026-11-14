@@ -7,16 +7,13 @@ import subprocess
 
 import pytest
 
-
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-
 
 def _copy(root, relative):
     source = ROOT / relative
     target = root / relative
     target.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(source, target)
-
 
 def _meta(count, updated, health):
     return {
@@ -30,7 +27,6 @@ def _meta(count, updated, health):
         "rcn": {"records": 20, "matched": 5},
         "rcn_stats": {"towns": 2},
     }
-
 
 def _dataset(root, slug, count, updated, health):
     directory = root / "site" / "data" / slug
@@ -48,7 +44,6 @@ def _dataset(root, slug, count, updated, health):
     (shard_dir / "00.json").write_text("{}", encoding="utf-8")
     (shard_dir / "01.json").write_text("{}", encoding="utf-8")
 
-
 def _set_enabled(root, slug, enabled):
     path = root / "site" / "regions.json"
     document = json.loads(path.read_text(encoding="utf-8"))
@@ -56,14 +51,12 @@ def _set_enabled(root, slug, enabled):
          if region["slug"] == slug)["enabled"] = enabled
     path.write_text(json.dumps(document, ensure_ascii=False), encoding="utf-8")
 
-
 def _run(root):
     env = os.environ.copy()
     env["RENTGEN_ROOT"] = str(root)
     subprocess.run(["node", str(ROOT / "scripts/update-summary.mjs")],
                    cwd=ROOT, env=env, check=True,
                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-
 
 def test_optional_storage_configuration_reaches_both_page_readers(tmp_path):
     for relative in (
@@ -84,7 +77,6 @@ def test_optional_storage_configuration_reaches_both_page_readers(tmp_path):
     for page, app in [("index.html", "app.js"), ("stats/index.html", "stats.js")]:
         html = (tmp_path / "site/region/slaskie" / page).read_text()
         assert html.index('src="storage.js?') < html.index(f'src="{app}?')
-
 
 def test_generates_picker_catalog_stable_pages_and_discovery(tmp_path):
     for relative in (
@@ -154,8 +146,6 @@ def test_generates_picker_catalog_stable_pages_and_discovery(tmp_path):
     assert "/data/regions.json" in llms
     assert "### woj. śląskie" in llms
 
-    # The catalog kill switch removes only this region from the Pages artifact
-    # and discovery, keeping its configured placeholder and its sibling.
     _set_enabled(tmp_path, "malopolskie", False)
     _run(tmp_path)
     sitemap = (tmp_path / "site/sitemap.xml").read_text(encoding="utf-8")
@@ -167,8 +157,6 @@ def test_generates_picker_catalog_stable_pages_and_discovery(tmp_path):
     assert not (tmp_path / "site/data/malopolskie").exists()
     assert (tmp_path / "site/data/slaskie/meta.json").exists()
 
-    # A directory claiming publication via meta.json must be atomic enough for
-    # the app to load; deployment should fail and keep the previous Pages build.
     (tmp_path / "site/data/slaskie/index.json").unlink()
     with pytest.raises(subprocess.CalledProcessError):
         _run(tmp_path)
@@ -176,7 +164,6 @@ def test_generates_picker_catalog_stable_pages_and_discovery(tmp_path):
     (tmp_path / "site/data/slaskie/rcnstats.json").unlink()
     with pytest.raises(subprocess.CalledProcessError):
         _run(tmp_path)
-
 
 def test_rejects_every_data_directory_outside_the_catalog(tmp_path):
     for relative in (
@@ -191,7 +178,6 @@ def test_rejects_every_data_directory_outside_the_catalog(tmp_path):
     with pytest.raises(subprocess.CalledProcessError):
         _run(tmp_path)
 
-
 def test_rejects_nonempty_regional_tree_without_publication_marker(tmp_path):
     for relative in (
         "site/regions.json", "site/index.html",
@@ -203,7 +189,6 @@ def test_rejects_nonempty_regional_tree_without_publication_marker(tmp_path):
 
     with pytest.raises(subprocess.CalledProcessError):
         _run(tmp_path)
-
 
 def test_compact_publication_requires_complete_archive_shards(tmp_path):
     for relative in ("site/regions.json", "site/index.html",

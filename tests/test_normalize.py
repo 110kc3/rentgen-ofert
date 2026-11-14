@@ -5,7 +5,6 @@ from scraper.normalize import (
 import pytest
 from scraper.normalize import link_same_size
 
-
 def test_room_maps():
     assert otodom_rooms("SEVEN") == 7
     assert otodom_rooms("one") == 1
@@ -15,7 +14,6 @@ def test_room_maps():
     assert olx_rooms("3") == 3
     assert olx_rooms("studio") is None
 
-
 def test_number_coercion():
     assert to_float("268,87") == 268.87
     assert to_float("1 124") == 1124.0
@@ -23,7 +21,6 @@ def test_number_coercion():
     assert to_float(None) is None
     assert to_int("3 644,88") == 3645
     assert to_int("nonsense") is None
-
 
 def test_duplicate_url_diagnostic_includes_conflicting_provenance():
     rows = [
@@ -40,7 +37,6 @@ def test_duplicate_url_diagnostic_includes_conflicting_provenance():
     assert "source_id=44 type=house" in message
     assert "source_id=44 type=flat" in message
 
-
 def test_take_unseen_removes_clones_inside_one_page():
     seen = {"old"}
     rows = [
@@ -53,7 +49,6 @@ def test_take_unseen_removes_clones_inside_one_page():
     assert take_unseen(rows, seen) == [rows[1]]
     assert seen == {"old", "new"}
 
-
 def _l(**kw):
     base = dict(source="otodom", source_id="1", url="u1", title="t", type="flat",
                 price=None, area=None, price_per_m2=None, rooms=None, plot_area=None,
@@ -61,7 +56,6 @@ def _l(**kw):
                 image=None, created=None)
     base.update(kw)
     return base
-
 
 @pytest.mark.parametrize("conflict", [
     {"locality": "Częstochowa"}, {"street": "Lipowa"}, {"floor": 8},
@@ -74,7 +68,6 @@ def test_shared_photo_cannot_override_known_identity_conflict(conflict):
     assert len(out) == 2
     assert not any(p.get("also_listed") or p.get("relisted") for p in out)
 
-
 def test_unknown_metadata_cannot_bridge_incompatible_photo_clusters():
     rows = [_l(url="a", area=50, rooms=2, locality="Gliwice", phashes=[3]),
             _l(url="unknown", area=50, rooms=2, phashes=[3]),
@@ -85,7 +78,6 @@ def test_unknown_metadata_cannot_bridge_incompatible_photo_clusters():
         assert len(out) == 2
         assert not any({"a", "b"} <= {o["url"] for o in p["offers"]} for p in out)
 
-
 def test_normalized_addresses_and_unknown_floor_still_photo_match():
     a = _l(url="a", area=50, rooms=2, locality="Bielsko-Biała",
            street="ul. Adama Asnyka", floor="parter", phashes=[3])
@@ -94,7 +86,6 @@ def test_normalized_addresses_and_unknown_floor_still_photo_match():
     assert len(dedupe([a, b])) == 1
     b["floor"] = None
     assert len(dedupe([a, b])) == 1
-
 
 def test_exact_twins_survive_conflicts_without_bridging_other_properties():
     a = _l(url="a", source="gratka", source_id="42", area=50, rooms=2,
@@ -106,7 +97,6 @@ def test_exact_twins_survive_conflicts_without_bridging_other_properties():
     assert len(out) == 2
     assert any({"a", "b"} == {o["url"] for o in p["offers"]} for p in out)
 
-
 def test_cross_size_photo_unification_rejects_room_and_floor_conflicts():
     for conflict in ({"rooms": 3}, {"floor": 8}):
         a = _l(url="a", area=50, price=400000, rooms=2, floor=1,
@@ -115,42 +105,35 @@ def test_cross_size_photo_unification_rejects_room_and_floor_conflicts():
         assert len(dedupe([a, b])) == 2
         assert (a["area"], b["area"]) == (50, 51)
 
-
 def test_dedupe_merges_cross_portal_same_price():
-    # same flat on two portals at the same asking price (small rounding diff ok)
     a = _l(source="otodom", url="oto", price=900000, area=120.0, rooms=5,
            district="Sośnica", image="x", plot_area=600, created="2026-06-10")
     b = _l(source="gratka", url="gra", price=900400, area=120.0, rooms=5,
-           district="sośnica", created="2026-06-12")          # same 1k bucket, case-diff
+           district="sośnica", created="2026-06-12")
     out = dedupe([a, b], allow_heuristic_fallback=True)
     assert len(out) == 1
     p = out[0]
-    assert p["sources"] == ["otodom", "gratka"]               # otodom ranked first
-    assert p["price"] == 900000 and p["price_max"] == 900400  # range across offers
+    assert p["sources"] == ["otodom", "gratka"]
+    assert p["price"] == 900000 and p["price_max"] == 900400
     assert len(p["offers"]) == 2
-    assert p["created"] == "2026-06-12"                        # most recent across offers
-    assert p["plot_area"] == 600                              # filled from the offer that had it
-
+    assert p["created"] == "2026-06-12"
+    assert p["plot_area"] == 600
 
 def test_dedupe_keeps_distinct_and_unmatchable():
     a = _l(source="otodom", url="o", price=500000, area=50.0, rooms=2, district="Trynek")
     b = _l(source="olx", url="x", price=640000, area=70.0, rooms=3, district="Trynek")
-    c = _l(source="olx", url="x2", price=None, area=None)      # no area -> unmatchable
+    c = _l(source="olx", url="x2", price=None, area=None)
     out = dedupe([a, b, c])
     assert len(out) == 3
     assert all(len(p["offers"]) == 1 for p in out)
 
-
 def test_dedupe_price_only_match_when_rooms_missing():
-    # same type+area+exact price, rooms missing on both -> still merged
     a = _l(source="otodom", url="o", price=430000, area=51.0)
     b = _l(source="olx", url="x", price=430000, area=51.0)
     out = dedupe([a, b], allow_heuristic_fallback=True)
     assert len(out) == 1 and len(out[0]["offers"]) == 2
 
-
 def test_dedupe_merges_same_size_at_different_prices():
-    # same flat, two portals, different price -> one card, cheapest highlighted
     a = _l(source="otodom", url="o", price=480000, area=50.0, rooms=2)
     b = _l(source="olx", url="x", price=520000, area=50.0, rooms=2)
     out = dedupe([a, b], allow_heuristic_fallback=True)
@@ -158,7 +141,6 @@ def test_dedupe_merges_same_size_at_different_prices():
     p = out[0]
     assert p["price"] == 480000 and p["price_max"] == 520000
     assert p["cheapest"]["price"] == 480000 and p["cheapest"]["source"] == "otodom"
-
 
 def test_photo_mode_keeps_an_all_unresolved_size_group_separate():
     a = _l(source="otodom", url="o", price=500000, area=50.0, rooms=2)
@@ -168,7 +150,6 @@ def test_photo_mode_keeps_an_all_unresolved_size_group_separate():
 
     assert len(out) == 2
     assert all(len(prop["offers"]) == 1 for prop in out)
-
 
 def test_photo_mode_still_unions_exact_portal_id_twins_without_hashes():
     a = _l(source="gratka", url="g", price=500000, area=50.0, rooms=2,
@@ -183,61 +164,48 @@ def test_photo_mode_still_unions_exact_portal_id_twins_without_hashes():
         "gratka", "morizon",
     }
 
-
 def test_dedupe_splits_on_huge_price_gap():
-    # a 0.8M and a 1.8M "220 m2" house are never the same house -> stay separate
     a = _l(source="otodom", url="o", price=800000, area=220.0, rooms=5)
     b = _l(source="olx", url="x", price=1800000, area=220.0, rooms=5)
     out = dedupe([a, b], allow_heuristic_fallback=True)
     assert len(out) == 2
 
-
 def test_same_photos_threshold():
     from scraper.normalize import same_photos
-    assert same_photos([0b0], [0b0]) is True              # identical hash
-    assert same_photos([0], [(1 << 40) - 1]) is True      # hamming 40 == threshold
-    assert same_photos([0], [(1 << 41) - 1]) is False     # hamming 41 > threshold
-    assert same_photos([], [123]) is False                # no photos -> no match
-
+    assert same_photos([0b0], [0b0]) is True
+    assert same_photos([0], [(1 << 40) - 1]) is True
+    assert same_photos([0], [(1 << 41) - 1]) is False
+    assert same_photos([], [123]) is False
 
 def test_dedupe_photo_match_overrides_price():
-    # same size + matching galleries -> merge even at very different prices
     a = _l(source="otodom", url="o", price=400000, area=55.0, rooms=2)
     b = _l(source="olx", url="x", price=560000, area=55.0, rooms=2)
-    a["phashes"], b["phashes"] = [123456789], [123456789]   # identical photo
+    a["phashes"], b["phashes"] = [123456789], [123456789]
     out = dedupe([a, b])
     assert len(out) == 1 and out[0]["price"] == 400000 and out[0]["price_max"] == 560000
 
-
 def test_dedupe_photo_mismatch_keeps_separate():
-    # same size, same price, but different galleries -> two properties
     a = _l(source="otodom", url="o", price=500000, area=55.0, rooms=2)
     b = _l(source="olx", url="x", price=500000, area=55.0, rooms=2)
-    a["phashes"], b["phashes"] = [0], [(1 << 63) - 1]       # ~63 apart, far > 40
+    a["phashes"], b["phashes"] = [0], [(1 << 63) - 1]
     out = dedupe([a, b])
     assert len(out) == 2
 
-
 def test_dedupe_merges_when_rooms_missing_on_one_side():
-    # houses ignore rooms (OLX omits them); same area+price still merges
     a = _l(source="otodom", url="o", type="house", price=990000, area=150.0, rooms=5)
     b = _l(source="olx", url="x", type="house", price=990000, area=150.0, rooms=None)
     out = dedupe([a, b], allow_heuristic_fallback=True)
     assert len(out) == 1 and len(out[0]["offers"]) == 2
 
-
 def test_developer_cluster_not_merged_into_one_flat():
     from scraper.normalize import dedupe, is_development
     H = 7
-    # 4 same-size, same-photo ads from one portal at two prices = a development
     ads = [_l(source="otodom", source_id=str(i), url=f"u{i}", area=52.0, rooms=3,
               price=420000 if i < 2 else 455000, phashes=[H],
               title="Apartamenty Zielone Wzgórze — etap II") for i in range(4)]
     props = dedupe(ads)
     assert all(p.get("development") for p in props)
-    # one card per price point, not one merged "flat" and not 4 cards
     assert sorted(p["price"] for p in props) == [420000, 455000]
-
 
 def test_secondary_flat_on_three_portals_still_merges():
     from scraper.normalize import dedupe
@@ -250,18 +218,15 @@ def test_secondary_flat_on_three_portals_still_merges():
     assert not props[0].get("development")
     assert len(props[0]["offers"]) == 3
 
-
 def test_is_development_signals():
     from scraper.normalize import is_development
     assert is_development({"market": "primary", "title": "Mieszkanie"})
     assert is_development({"title": "Nowa inwestycja — Osiedle Parkowe etap III"})
     assert not is_development({"market": "secondary", "title": "Mieszkanie po remoncie"})
 
-
 def test_cross_size_same_price_same_photos_merges():
     from scraper.normalize import dedupe
     H = 21
-    # one house: 204 m2 on otodom, 280 m2 on n-online — same price, same photos
     a = _l(source="otodom", source_id="1", url="u-oto", type="house",
            area=204.0, price=999000, locality="Gliwice", phashes=[H])
     b = _l(source="nieruchomosci-online", source_id="2", url="u-nol", type="house",
@@ -269,8 +234,7 @@ def test_cross_size_same_price_same_photos_merges():
     props = dedupe([a, b])
     assert len(props) == 1
     assert len(props[0]["offers"]) == 2
-    assert props[0]["area"] == 204.0          # preferred source's figure wins
-
+    assert props[0]["area"] == 204.0
 
 def test_cross_size_different_photos_stay_apart():
     from scraper.normalize import dedupe
