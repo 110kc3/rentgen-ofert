@@ -1,4 +1,3 @@
-/* Private catalogue client. Requests and associations stay in the current tab. */
 (function (root, factory) {
   'use strict';
   const api = factory(root);
@@ -100,8 +99,6 @@
     const location = options.location || root.location, fetcher = options.fetch || (root.fetch && root.fetch.bind(root));
     const document = options.document || root.document;
     const marker = document && document.querySelector('meta[name="rentgen-kw-origin"]');
-    // Only the private server inserts this marker. Public build assets contain
-    // no deployment origin and make no discovery request on HTTPS Pages.
     const privateOrigin = !!location && location.protocol === 'https:' && !!location.origin
       && !!marker && marker.getAttribute('content') === location.origin;
     const available = (isLocal(location) || privateOrigin) && typeof fetcher === 'function';

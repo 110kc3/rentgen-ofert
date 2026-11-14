@@ -1,4 +1,3 @@
-/* Address search in the user's local private catalogue; no persistent state. */
 (function (root) {
   'use strict';
   if (!root.document || !root.document.getElementById('catalogue-form')) return;

@@ -7,16 +7,11 @@ from scraper import coverage, delist, gratka, history, morizon, olx, rcn
 from scraper import nieruchomosci_online as nol
 from scraper.normalize import location_parts
 
-
-# ---- delist ------------------------------------------------------------------
-
 def test_gone_marker_ignores_ordinary_prose():
-    # "zakończone" in a live ad's description must not mark it dead
     assert not delist._GONE_MARKERS.search(
         "Prace remontowe zostały zakończone w 2024 roku.")
     assert delist._GONE_MARKERS.search("Ogłoszenie zakończone")
     assert delist._GONE_MARKERS.search("oferta zakończona")
-
 
 def test_last_seen_ignores_archived_observations():
     rec = {"first_seen": "2026-06-01",
@@ -25,10 +20,7 @@ def test_last_seen_ignores_archived_observations():
                {"date": "2026-06-10", "url": "u1", "status": "archived"}]}
     assert delist.last_seen(rec) == "2026-06-01"
 
-
 def test_sweep_preserves_archived_delisting_same_run():
-    # observe_archived marks delisted=today; the sweep that runs right after
-    # must not clear it just because the record was live within the grace window
     records = []
     history.update([dict(type="flat", area=50.0, url="u1", price=1,
                          source="olx", phashes=[3], offers=[])],
@@ -37,13 +29,12 @@ def test_sweep_preserves_archived_delisting_same_run():
                                    archived=True)], records, "2026-06-10")
     assert records[0]["delisted"] == "2026-06-10"
 
-    class _S:  # any URL check would say "live" — must not even get there
+    class _S:
         def get(self, url, **kw):
             raise AssertionError("no URL should be checked")
 
     delist.sweep(records, "2026-06-10", _S(), active_urls=set(), log=lambda *a: None)
     assert records[0]["delisted"] == "2026-06-10"
-
 
 def test_sweep_sort_survives_equal_keys():
     obs = [{"date": "2026-01-01", "url": "same", "price": 1}]
@@ -59,11 +50,7 @@ def test_sweep_sort_survives_equal_keys():
                 url = ""
             return R()
 
-    # two candidates tie on (seen, url) — sorting must not compare the dicts
     delist.sweep(records, "2026-06-01", _S(), active_urls=set(), log=lambda *a: None)
-
-
-# ---- history: relist semantics -------------------------------------------------
 
 def _flat(**kw):
     base = dict(type="flat", area=48.0, url="https://otodom.pl/a", price=400000,
@@ -71,19 +58,16 @@ def _flat(**kw):
     base.update(kw)
     return base
 
-
 def test_portal_dropoff_is_not_a_relist():
     records = []
     two_offers = [{"source": "otodom", "url": "https://otodom.pl/a", "price": 400000},
                   {"source": "olx", "url": "https://olx.pl/b", "price": 390000}]
     history.update([_flat(offers=list(two_offers))], records, "2026-06-01")
-    # the OLX ad expires; the flat stays live on Otodom — NOT a relist
     p = _flat(offers=[two_offers[0]])
     history.update([p], records, "2026-06-05")
     assert len(records) == 1
     assert p["relisted"] is False
     assert p["prev_price"] is None
-
 
 def test_repost_under_new_url_is_a_relist():
     records = []
@@ -93,7 +77,6 @@ def test_repost_under_new_url_is_a_relist():
     assert p["relisted"] is True
     assert p["prev_price"] == 400000
 
-
 def test_all_offers_observed_and_price_trail_uses_min():
     records = []
     offers = [{"source": "otodom", "url": "u-oto", "price": 500000},
@@ -102,16 +85,11 @@ def test_all_offers_observed_and_price_trail_uses_min():
     history.update([p], records, "2026-06-01")
     urls = {o["url"] for o in records[0]["observations"]}
     assert urls == {"u-oto", "u-olx"}
-    # cheaper OLX offer gone -> card price rises to 500k; that IS a trail point,
-    # but no phantom "price change" is invented for u-oto itself
     p2 = _flat(url="u-oto", price=500000, offers=[offers[0]])
     history.update([p2], records, "2026-06-08")
     assert p2["relisted"] is False
     assert p2["price_history"] == [{"date": "2026-06-01", "price": 480000},
                                    {"date": "2026-06-08", "price": 500000}]
-
-
-# ---- history: storage safety ---------------------------------------------------
 
 def test_history_load_missing_ok_corrupt_raises(tmp_path):
     assert history.load(tmp_path / "absent.json") == []
@@ -124,13 +102,11 @@ def test_history_load_missing_ok_corrupt_raises(tmp_path):
     else:
         raise AssertionError("corrupt history must fail loudly, not wipe the store")
 
-
 def test_history_save_is_atomic(tmp_path):
     path = tmp_path / "history.json"
     history.save(path, [{"a": 1}])
     assert json.loads(path.read_text(encoding="utf-8")) == [{"a": 1}]
     assert not path.with_name(path.name + ".tmp").exists()
-
 
 def test_history_gzip_roundtrip_and_legacy_fallback(tmp_path):
     gz = tmp_path / "history.json.gz"
@@ -138,14 +114,10 @@ def test_history_gzip_roundtrip_and_legacy_fallback(tmp_path):
     with gzip.open(gz, "rt", encoding="utf-8") as f:
         assert json.load(f) == [{"a": "ł"}]
     assert history.load(gz) == [{"a": "ł"}]
-    # a pre-gzip plain history.json is picked up when the .gz doesn't exist yet
     legacy_dir = tmp_path / "legacy"
     legacy_dir.mkdir()
     (legacy_dir / "history.json").write_text('[{"b": 2}]', encoding="utf-8")
     assert history.load(legacy_dir / "history.json.gz") == [{"b": 2}]
-
-
-# ---- scrapers ------------------------------------------------------------------
 
 def test_olx_state_regex_survives_escaped_quotes():
     payload = json.dumps(json.dumps(
@@ -155,7 +127,6 @@ def test_olx_state_regex_survives_escaped_quotes():
     state = olx.extract_state(html)
     assert state["listing"]["listing"]["totalPages"] == 1
 
-
 def test_location_parts_strips_any_voivodeship():
     assert location_parts("Krowodrza, Kraków, małopolskie") == ["Krowodrza", "Kraków"]
     assert location_parts("Krowodrza, Kraków, woj. małopolskie") == ["Krowodrza", "Kraków"]
@@ -163,7 +134,6 @@ def test_location_parts_strips_any_voivodeship():
     assert gratka._locality("Krowodrza, Kraków, małopolskie") == "Kraków"
     assert gratka._district("Krowodrza, Kraków, małopolskie") == "Krowodrza"
     assert morizon._locality("Stare Miasto, Wrocław, dolnośląskie") == "Wrocław"
-
 
 def test_nol_town_slug_gets_proper_name():
     """A sub-domain slug must never be title-cased into a locality: "Dabrowa-
@@ -179,7 +149,6 @@ def test_nol_town_slug_gets_proper_name():
         == "Bielsko-Biała"
     assert nol.parse_offers([offer], "house", "unknown-town", towns)[0]["locality"] is None
 
-
 def test_morizon_has_photo_extractor():
     """Pinned to real pages, not to invented URLs — see tests/test_photomatch.py.
 
@@ -194,13 +163,9 @@ def test_morizon_has_photo_extractor():
     assert urls, "morizon must extract SOMETHING from a real detail page"
     assert all("staticmorizon.com.pl" in u for u in urls)
 
-
-# ---- rcn -----------------------------------------------------------------------
-
 def test_fold_collapses_whitespace():
     assert rcn._fold("Bielsko - Biała") == rcn._fold("Bielsko-Biała") == "bielsko biala"
     assert rcn._fold(" Katowice  ") == "katowice"
-
 
 def test_building_number_spacing_not_decisive_mismatch():
     rec = {"type": "flat", "area": 48.0}
@@ -209,17 +174,13 @@ def test_building_number_spacing_not_decisive_mismatch():
     conf, ok = rcn._score(rec, snap, deed, is_flat=True)
     assert (conf, ok) == (2, True)
 
-
 def test_street_declension_rejects_agent_nouns():
-    # case forms of the same name still match ...
     assert rcn.street_match("Gdańska", "Gdańskiej")
     assert rcn.street_match("Polna", "Polnej")
     assert rcn.street_match("Asnyka", "Adama Asnyka")
-    # ... but a different word with a shared prefix does not
     assert not rcn.street_match("Górna", "Górnika")
     assert not rcn.street_match("Leśna", "Leśnika")
     assert not rcn.street_match("Wodna", "Wodnika")
-
 
 def test_snapshot_roundtrip_atomic(tmp_path):
     path = tmp_path / "snap.json.gz"
@@ -228,19 +189,15 @@ def test_snapshot_roundtrip_atomic(tmp_path):
         assert json.load(f)["fetched"] == "2026-07-11"
     assert not path.with_name(path.name + ".tmp").exists()
 
-
-# ---- net: bounded retry sleeps ---------------------------------------------------
-
 def test_retry_after_is_capped():
     from types import SimpleNamespace
     from scraper import net
     r = net.CappedRetry(total=5, respect_retry_after_header=True)
-    resp = SimpleNamespace(headers={"Retry-After": "86400"})   # portal says: a day
+    resp = SimpleNamespace(headers={"Retry-After": "86400"})
     assert r.get_retry_after(resp) == net.RETRY_AFTER_CAP
     resp_small = SimpleNamespace(headers={"Retry-After": "3"})
     assert r.get_retry_after(resp_small) == 3.0
     assert r.get_retry_after(SimpleNamespace(headers={})) is None
-
 
 def test_a_transient_405_is_retried_not_fatal():
     """Otodom refuses with 405, not 429: band `300k-400k` died at page 5 and
@@ -252,9 +209,6 @@ def test_a_transient_405_is_retried_not_fatal():
     forced = s.adapters["https://"].max_retries.status_forcelist
     assert 405 in forced and 429 in forced
     assert 404 not in forced, "a missing page is an answer, not a refusal"
-
-
-# ---- olx: a refusal and a re-skin are different bugs -----------------------------
 
 def test_a_missing_state_blob_is_fingerprinted_not_guessed_at():
     """`__PRERENDERED_STATE__ not found (layout changed?)` was a guess, and on
@@ -268,7 +222,7 @@ def test_a_missing_state_blob_is_fingerprinted_not_guessed_at():
     fp = olx.fingerprint(_Resp())
     assert "HTTP 200" in fp and "Access denied | olx.pl" in fp
     assert "captcha" in fp and "datadome" in fp
-    assert "olx.pl" in fp.split("olx-markers=")[1]     # it IS an OLX page
+    assert "olx.pl" in fp.split("olx-markers=")[1]
 
     class _Reskin:
         status_code = 200
@@ -277,7 +231,6 @@ def test_a_missing_state_blob_is_fingerprinted_not_guessed_at():
     fp = olx.fingerprint(_Reskin())
     assert "challenge=none" in fp, "no bot wall here — this one really is a re-skin"
     assert "__NEXT_DATA__" in fp
-
 
 def test_the_walk_logs_what_the_page_was():
     class _Blocked:
@@ -299,7 +252,6 @@ def test_the_walk_logs_what_the_page_was():
     assert "Just a moment..." in line and "cf-chl" in line and "HTTP 200" in line
     assert olx.scrape.last_coverage[0]["stopped"] == "error"
 
-
 def test_photo_budget_skips_uncached(monkeypatch):
     from scraper import photomatch
     fetched = []
@@ -307,14 +259,11 @@ def test_photo_budget_skips_uncached(monkeypatch):
                         lambda l, s: (fetched.append(l["url"]) or ([1], ["u"])))
     listings = [{"source": "olx", "url": f"u{i}"} for i in range(4)]
     photomatch.attach_hashes(listings, session=object(), log=lambda *a: None,
-                             budget_s=-1)          # budget already exhausted
-    assert fetched == []                            # nothing fetched...
+                             budget_s=-1)
+    assert fetched == []
     assert all(l["phashes"] == [] for l in listings)
     photomatch.attach_hashes(listings, session=object(), log=lambda *a: None)
-    assert len(fetched) == 4                        # ...but unlimited still works
-
-
-# ---- marketstats ---------------------------------------------------------------
+    assert len(fetched) == 4
 
 def test_withdrawal_week_is_on_axis_without_live_obs():
     from scraper import marketstats
@@ -324,9 +273,8 @@ def test_withdrawal_week_is_on_axis_without_live_obs():
     out = marketstats.build(records, None, "2026-07-01")["weekly"]
     weeks = out["weeks"]
     gone = out["global"]["house"]["gone"]
-    assert "2026-06-22" in weeks           # the delisting's week exists on the axis
+    assert "2026-06-22" in weeks
     assert gone[weeks.index("2026-06-22")] == 1
-
 
 def test_nol_dedupes_cross_listed_towns_by_ad_id():
     """Every n-online town sub-domain serves its neighbours' offers under its
@@ -344,7 +292,6 @@ def test_nol_dedupes_cross_listed_towns_by_ad_id():
         def get(self, url, **kw):
             self.calls += 1
             town = url.split("//")[1].split(".")[0]
-            # every town serves the same three ads, under its own hostname
             offers = [{"url": f"https://{town}.nieruchomosci-online.pl/x/{i}.html",
                        "price": "500000", "itemOffered": {"floorSize": {"value": 50}}}
                       for i in ids]
@@ -369,13 +316,9 @@ def test_nol_dedupes_cross_listed_towns_by_ad_id():
     finally:
         nol.extract_offers = monkey
 
-    # one property per ad id, not one per (town, ad) pair
     assert len(out) == len(ids)
     assert {l["source_id"] for l in out} == {str(i) for i in ids}
-    # and the duplicate-page guard now fires, so towns 2 and 3 stop early
-    # instead of walking to the cap
     assert s.calls <= 3 * 3, f"walked {s.calls} pages for 3 towns of duplicates"
-
 
 def test_nol_refusal_is_blocked_not_a_clean_zero():
     class _Refused:
@@ -391,7 +334,6 @@ def test_nol_refusal_is_blocked_not_a_clean_zero():
     health = coverage.summarise([row])["by_source"]["nieruchomosci-online"]
     assert health["status"] == coverage.BLOCKED
 
-
 def test_nol_without_resolved_towns_is_unknown_not_a_clean_zero():
     nol.scrape(max_pages=5, delay=0, session=object(), log=lambda *a: None,
                types=("flat",), towns={})
@@ -399,7 +341,6 @@ def test_nol_without_resolved_towns_is_unknown_not_a_clean_zero():
     assert row["unknown"] is True
     health = coverage.summarise([row])["by_source"]["nieruchomosci-online"]
     assert health["status"] == coverage.UNKNOWN
-
 
 class _NolPages:
     def __init__(self, pages):
@@ -421,7 +362,6 @@ class _NolPages:
 
         return Response()
 
-
 def _nol_offer(source_id, archived=False):
     availability = "OutOfStock" if archived else "InStock"
     return {
@@ -430,7 +370,6 @@ def _nol_offer(source_id, archived=False):
         "price": "500000",
         "itemOffered": {"floorSize": {"value": 50}},
     }
-
 
 def test_nol_active_pass_stops_at_confirmed_archive_boundary(monkeypatch):
     """Current offers are sorted before the archive. Normal runs confirm that
@@ -474,7 +413,6 @@ def test_nol_active_pass_stops_at_confirmed_archive_boundary(monkeypatch):
     assert source["types"]["flat"]["partitions"]["details"]["katowice"][
         "stop"] == "archive_boundary"
 
-
 def test_nol_full_archive_harvest_names_the_capped_town(monkeypatch):
     monkeypatch.setattr(nol, "extract_offers", json.loads)
     session = _NolPages({
@@ -497,7 +435,6 @@ def test_nol_full_archive_harvest_names_the_capped_town(monkeypatch):
     assert parts["capped"] == ["katowice"] and parts["complete"] == 0
     assert nol.scrape.last_archive_state["records"] == 2
     assert nol.scrape.last_archive_state["complete"] is False
-
 
 def test_nol_archive_cadence_bootstraps_from_previous_meta(tmp_path):
     meta = tmp_path / "meta.json"

@@ -6,7 +6,6 @@ from scraper.normalize import region_slug
 
 FIX = pathlib.Path(__file__).parent / "fixtures"
 
-
 def test_otodom_parse_items():
     sa = json.loads((FIX / "otodom_search_ads.json").read_text(encoding="utf-8"))
     rows = otodom.parse_items(sa["items"], "house")
@@ -16,7 +15,6 @@ def test_otodom_parse_items():
         assert r["url"].startswith("https://www.otodom.pl/pl/oferta/")
         assert r["price"] is None or isinstance(r["price"], int)
     assert all(r["type"] in ("house", "flat") for r in rows)
-
 
 def test_otodom_discards_cross_category_promoted_cards():
     items = [
@@ -29,7 +27,6 @@ def test_otodom_discards_cross_category_promoted_cards():
 
     assert [row["source_id"] for row in rows] == ["1"]
     assert rows[0]["type"] == "house"
-
 
 def test_otodom_discards_cross_region_promoted_cards():
     def item(ident, province):
@@ -44,11 +41,9 @@ def test_otodom_discards_cross_region_promoted_cards():
 
     assert [row["source_id"] for row in rows] == ["1"]
 
-
 def test_region_slug_matches_catalog_style():
     assert region_slug("warmińsko-mazurskie") == "warminsko-mazurskie"
     assert region_slug("  Łódzkie ") == "lodzkie"
-
 
 def test_olx_skips_syndicated_partner_ads():
     state = json.loads((FIX / "olx_state.json").read_text(encoding="utf-8"))
@@ -61,7 +56,6 @@ def test_olx_skips_syndicated_partner_ads():
         assert r["url"].startswith("https://www.olx.pl/")
         assert isinstance(r["is_private"], bool)
 
-
 def test_gratka_parse_cards():
     html = (FIX / "gratka_cards.html").read_text(encoding="utf-8")
     rows = gratka.parse_cards(html, "house")
@@ -72,7 +66,6 @@ def test_gratka_parse_cards():
         assert r["area"] is None or isinstance(r["area"], float)
         assert r["price"] is None or isinstance(r["price"], int)
 
-
 def test_nieruchomosci_online_parse_offers():
     html = (FIX / "nol_collection.html").read_text(encoding="utf-8")
     rows = nol.parse_offers(nol.extract_offers(html), "house")
@@ -81,7 +74,6 @@ def test_nieruchomosci_online_parse_offers():
         assert r["source"] == "nieruchomosci-online"
         assert r["url"].startswith("https://")
         assert r["price"] is None or isinstance(r["price"], int)
-
 
 def test_nieruchomosci_online_discards_cross_region_offers():
     html = (FIX / "nol_collection.html").read_text(encoding="utf-8")
@@ -95,15 +87,11 @@ def test_nieruchomosci_online_discards_cross_region_offers():
     assert len(rows) == 1
     assert rows[0]["url"] == offers[0]["url"]
 
-
-# --- n-online town resolution (no region-wide search, no portal index) -------
-
 def test_nol_slugify_matches_every_seeded_subdomain():
     """The derived slug has to spell sub-domains exactly as the portal does —
     the hand-curated śląskie list is the ground truth for that."""
     for slug, name in nol.SEED_TOWNS["slaskie"].items():
         assert nol.slugify(name) == slug, f"{name} -> {nol.slugify(name)} != {slug}"
-
 
 def test_nol_resolve_towns_derives_from_other_portals(tmp_path):
     """A region with no seed list still gets a town list, built from the
@@ -114,22 +102,16 @@ def test_nol_resolve_towns_derives_from_other_portals(tmp_path):
     towns = nol.resolve_towns("malopolskie", listings, cache_path=cache)
     assert towns == {"krakow": "Kraków", "nowy-sacz": "Nowy Sącz",
                      "zakopane": "Zakopane"}
-    # busiest first, and the empty locality contributed nothing
     assert list(towns) == ["krakow", "nowy-sacz", "zakopane"]
-    # cached for the next run, per region
     assert json.loads(cache.read_text(encoding="utf-8"))["malopolskie"] == towns
-
 
 def test_nol_resolve_towns_seed_wins_and_survives_a_dead_portal(tmp_path):
     cache = tmp_path / "nol_towns.json"
-    # śląskie keeps its curated spelling even when a portal reports nothing
     towns = nol.resolve_towns("slaskie", [], cache_path=cache)
     assert towns["dabrowa-gornicza"] == "Dąbrowa Górnicza"
     assert len(towns) == len(nol.SEED_TOWNS["slaskie"])
-    # a later run with no listings at all still has the cached list
     again = nol.resolve_towns("slaskie", None, cache_path=cache)
     assert again == towns
-
 
 def test_nol_resolve_towns_skips_powiat_names(tmp_path):
     """Portals leak powiat names into the locality field, always in the
@@ -138,7 +120,6 @@ def test_nol_resolve_towns_skips_powiat_names(tmp_path):
     towns = nol.resolve_towns("malopolskie", listings, cache_path=tmp_path / "c.json")
     assert towns == {"cieszyn": "Cieszyn"}
 
-
 def test_nol_resolve_towns_caps_the_list(tmp_path):
     """Each town costs at least one request per type, so the tail is dropped —
     seeded towns rank above discovered ones."""
@@ -146,9 +127,8 @@ def test_nol_resolve_towns_caps_the_list(tmp_path):
     towns = nol.resolve_towns("slaskie", listings,
                               cache_path=tmp_path / "c.json", max_towns=50)
     assert len(towns) == 50
-    assert "katowice" in towns          # seeded, kept
-    assert "wioska-199" not in towns    # discovered tail, dropped
-
+    assert "katowice" in towns
+    assert "wioska-199" not in towns
 
 def test_nieruchomosci_online_filters_rentals():
     offers = [
@@ -159,10 +139,7 @@ def test_nieruchomosci_online_filters_rentals():
     assert len(rows) == 1
     assert "na-sprzedaz" in rows[0]["url"]
 
-
 def test_nieruchomosci_online_flags_archived():
-    # archived ads are returned (flagged) so history can record the ad ending;
-    # main.py keeps them out of the dashboard.
     offers = [
         {"url": "https://x/dom,na-sprzedaz/1.html", "price": "500000",
          "availability": "https://schema.org/InStock", "itemOffered": {}},
@@ -172,7 +149,6 @@ def test_nieruchomosci_online_flags_archived():
     rows = nol.parse_offers(offers, "house")
     assert [r["archived"] for r in rows] == [False, True]
 
-
 def test_gratka_image_is_real_photo_not_icon():
     html = (FIX / "gratka_cards.html").read_text(encoding="utf-8")
     rows = gratka.parse_cards(html, "house")
@@ -180,4 +156,4 @@ def test_gratka_image_is_real_photo_not_icon():
     assert imgs, "expected at least one gratka photo"
     for src in imgs:
         assert src.startswith("http") and not src.endswith(".svg")
-        assert "nuxt-assets" not in src        # not a UI icon
+        assert "nuxt-assets" not in src

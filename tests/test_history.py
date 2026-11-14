@@ -6,10 +6,8 @@ import pytest
 
 from scraper import delist, history, net
 
-
-H1, H2 = 3, 5           # hamming(3,5)=1 -> same photos (threshold 40)
-FAR = (1 << 64) - 1     # 64 bits differ from H1 -> different photos (>40)
-
+H1, H2 = 3, 5
+FAR = (1 << 64) - 1
 
 def _prop(**kw):
     base = dict(type="flat", area=50.0, url="https://otodom.pl/a1", price=300000,
@@ -18,7 +16,6 @@ def _prop(**kw):
                 rooms=2, floor=1, offers=[])
     base.update(kw)
     return base
-
 
 @pytest.mark.parametrize("price", [350000, 450000])
 def test_second_daily_scrape_replaces_price_and_is_idempotent(price):
@@ -32,7 +29,6 @@ def test_second_daily_scrape_replaces_price_and_is_idempotent(price):
     assert current["price_history"][-1] == {"date": "2026-09-05", "price": price}
     assert current["timeline"][-1]["kind"] == "price"
     assert current["timeline"][-1]["price"] == current["price"]
-
 
 def test_daily_replacement_keeps_other_portal_and_archive_observations():
     records = []
@@ -49,7 +45,6 @@ def test_daily_replacement_keeps_other_portal_and_archive_observations():
     assert next(o for o in rec["observations"] if o["url"] == "b")["price"] == 390000
     assert next(o for o in rec["observations"] if o.get("status"))["price"] == 400000
 
-
 @pytest.mark.parametrize("conflict", [
     {"locality": "Częstochowa"}, {"street": "Lipowa"}, {"rooms": 4}, {"floor": 8},
 ])
@@ -65,7 +60,6 @@ def test_reused_photo_does_not_transfer_conflicting_history_or_archive(conflict)
     assert not other["relisted"]
     assert records[0]["last_seen"] == "2026-06-01"
 
-
 def test_developer_photo_record_is_not_a_resale_identity():
     records = []
     history.update([_prop(development=True)], records, "2026-06-01")
@@ -73,7 +67,6 @@ def test_developer_photo_record_is_not_a_resale_identity():
     history.update([other], records, "2026-06-11")
     assert len(records) == 2
     assert not other["relisted"]
-
 
 def test_reenrich_removes_retracted_sales_from_card_and_timeline():
     from scraper import rcn
@@ -90,7 +83,6 @@ def test_reenrich_removes_retracted_sales_from_card_and_timeline():
     records[0]["delisted"] = "2026-06-03"
     assert history.build_archive(records)[0]["sold"] is None
 
-
 def test_photo_match_appends_observation_and_snapshot():
     records = []
     history.update([_prop()], records, "2026-06-01")
@@ -103,22 +95,18 @@ def test_photo_match_appends_observation_and_snapshot():
     assert rec["snapshot"]["street"] == "Asnyka"
     assert rec["photo_urls"] == ["img1.jpg"]
 
-
 def test_url_fallback_prevents_record_bloat_for_photoless_listings():
     records = []
     p = _prop(phashes=[], photo_urls=[])
     history.update([dict(p)], records, "2026-06-01")
     history.update([dict(p)], records, "2026-06-02")
-    assert len(records) == 1          # was: one fresh record per run
-
+    assert len(records) == 1
 
 def test_different_photos_same_url_do_not_merge():
     records = []
     history.update([_prop()], records, "2026-06-01")
-    # same URL recycled for a different flat (different photos) -> new record
     history.update([_prop(phashes=[FAR], area=50.0)], records, "2026-06-02")
     assert len(records) == 2
-
 
 def test_observe_archived_marks_delisted():
     records = []
@@ -134,7 +122,6 @@ def test_observe_archived_marks_delisted():
     statuses = [o.get("status") for o in records[0]["observations"]]
     assert "archived" in statuses
 
-
 def test_relist_clears_delisted():
     records = []
     history.update([_prop()], records, "2026-06-01")
@@ -143,7 +130,6 @@ def test_relist_clears_delisted():
                    records, "2026-06-20")
     assert "delisted" not in records[0]
     assert len(records) == 1
-
 
 def test_timeline_orders_and_labels_events():
     rec = {
@@ -162,7 +148,6 @@ def test_timeline_orders_and_labels_events():
     kinds = [e["kind"] for e in history.timeline(rec)]
     assert kinds == ["sale_past", "listed", "price", "relist", "delisted", "sale"]
 
-
 def test_build_archive_only_delisted():
     records = [
         {"type": "flat", "area": 50.0, "first_seen": "2026-06-01",
@@ -179,11 +164,9 @@ def test_build_archive_only_delisted():
     assert arch[0]["sold"]["price"] == 395000
     assert arch[0]["price"] == 400000
 
-
 class _FakeResp:
     def __init__(self, status=200, text="", url="", history=()):
         self.status_code, self.text, self.url, self.history = status, text, url, list(history)
-
 
 class _FakeSession:
     def __init__(self, resp):
@@ -191,7 +174,6 @@ class _FakeSession:
 
     def get(self, url, **kw):
         return self.resp
-
 
 def test_delist_sweep_confirms_404():
     records = []
@@ -201,17 +183,13 @@ def test_delist_sweep_confirms_404():
     assert n == 1
     assert records[0]["delisted"] == "2026-06-01"
 
-
 def test_delist_sweep_respects_grace_and_live_pages():
     records = []
     history.update([_prop()], records, "2026-06-01")
     live = _FakeSession(_FakeResp(status=200, text="<h1>Mieszkanie na sprzedaż</h1>"))
-    # within grace period -> not even checked
     assert delist.sweep(records, "2026-06-03", live, log=lambda *a: None) == 0
-    # stale but page still live -> not delisted
     assert delist.sweep(records, "2026-06-20", live, log=lambda *a: None) == 0
     assert "delisted" not in records[0]
-
 
 def test_the_delist_sweep_asks_concurrently():
     """300 sequential liveness GETs cost 27-44 min of three separate runs
@@ -239,7 +217,6 @@ def test_the_delist_sweep_asks_concurrently():
                  probe=slow_probe, max_workers=8)
     assert peak[0] > 1, "the sweep asked one URL at a time"
 
-
 def test_the_delist_sweep_stops_at_its_budget():
     """Unasked is not concluded: they keep their place at the front of the
     oldest-first queue and come round again next run."""
@@ -253,18 +230,15 @@ def test_the_delist_sweep_stops_at_its_budget():
 
     def probe(url, session, **kw):
         asked.append(url)
-        return True                      # everything it manages to ask is gone
+        return True
 
-    # budget already spent before the first candidate
     n = delist.sweep(records, "2026-06-20", None, log=said.append,
                      probe=probe, budget_s=-1)
     assert asked == [] and n == 0
     assert not any(r.get("delisted") for r in records)
     assert "budget exhausted" in said[0]
-    # ...and with a budget they are all asked and all concluded
     assert delist.sweep(records, "2026-06-20", None, log=lambda *a: None,
                         probe=probe) == 10
-
 
 def test_a_liveness_probe_does_not_wait_like_a_scraper():
     """A yes/no question inherits no retry ladder and no 20 s patience."""
@@ -280,13 +254,11 @@ def test_a_liveness_probe_does_not_wait_like_a_scraper():
     probe = net.probe_session()
     assert probe.get_adapter("https://otodom.pl").max_retries.total == 0
 
-
 def test_delist_gone_markers():
     sess = _FakeSession(_FakeResp(status=200, text="To ogłoszenie jest nieaktualne"))
     assert delist.is_gone("https://otodom.pl/x", sess) is True
     sess2 = _FakeSession(_FakeResp(status=200, text='"availability":"https://schema.org/OutOfStock"'))
     assert delist.is_gone("https://x.nieruchomosci-online.pl/1.html", sess2) is True
-
 
 def test_compact_merges_photoless_duplicates():
     records = [
@@ -301,11 +273,10 @@ def test_compact_merges_photoless_duplicates():
     out = history.compact(records)
     assert len(out) == 1
     keep = out[0]
-    assert keep["hashes"] == [H1]                       # merged into the hashed one
+    assert keep["hashes"] == [H1]
     assert [o["date"] for o in keep["observations"]] == ["2026-06-01", "2026-06-02", "2026-06-03"]
     assert keep["first_seen"] == "2026-06-01"
     assert keep["last_seen"] == "2026-06-03"
-
 
 def test_compact_keeps_conflicting_photo_records_apart():
     records = [
@@ -316,7 +287,6 @@ def test_compact_keeps_conflicting_photo_records_apart():
     ]
     assert len(history.compact(records)) == 2
 
-
 def test_development_records_skip_relist_delist_rcn_archive():
     from scraper import rcn
     records = []
@@ -324,23 +294,18 @@ def test_development_records_skip_relist_delist_rcn_archive():
     history.update([dict(dev)], records, "2026-06-01")
     rec = records[0]
     assert rec["development"] is True
-    # same photos under a new URL would normally flag a relist — not for devs
     p2 = dict(dev, url="https://otodom.pl/other-unit")
     history.update([p2], records, "2026-06-10")
     assert p2["relisted"] is False
-    # delist sweep ignores dev records entirely
     n = delist.sweep(records, "2026-06-30", _FakeSession(_FakeResp(status=404)),
                      active_urls=set(), log=lambda *a: None)
     assert n == 0
-    # rcn.match skips dev records
     snap = {"lokale": [{"d": "2021-01-01", "c": 300000, "a": 50.0, "izb": 2,
                         "kond": 2, "rynek": "w", "msc": "Gliwice",
                         "ul": "Asnyka", "nr": "1"}], "budynki": []}
     assert rcn.match(records, snap, log=lambda *a: None) == 0
-    # and archive excludes them even if delisted
     rec["delisted"] = "2026-06-30"
     assert history.build_archive(records) == []
-
 
 def test_overrides_pin_and_apply(tmp_path):
     from scraper import overrides
@@ -355,6 +320,5 @@ def test_overrides_pin_and_apply(tmp_path):
     assert snap["street"] == "Adama Asnyka" and snap["nr"] == "11" and snap["floor"] == 3
     assert "bogus" not in snap
     assert records[0]["manual"] is True
-    # unknown URL -> ignored quietly
     assert overrides.apply(records, {"https://x/unknown": {"nr": "5"}},
                            log=lambda *a: None) == 0

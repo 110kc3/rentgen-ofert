@@ -11,7 +11,6 @@ import unicodedata
 from functools import lru_cache
 from math import isfinite
 
-
 @lru_cache(maxsize=32768)
 def fold(s):
     """lowercase, strip diacritics (incl. ł) and punctuation, collapse spaces —
@@ -23,15 +22,12 @@ def fold(s):
     s = "".join(c for c in s if not unicodedata.combining(c))
     return " ".join(re.sub(r"[^a-z0-9 ]", " ", s.lower()).split())
 
-
 _STREET_NOISE = {"ul", "ulica", "al", "aleja", "pl", "plac", "os", "osiedle", "gen",
                  "sw", "ks", "dr", "prof", "mjr", "kpt", "im"}
-
 
 def building_number(value):
     """Ignore case/spacing but preserve separators: 13/2 is not 132."""
     return re.sub(r"\s+", "", str(value or "").casefold())
-
 
 @lru_cache(maxsize=32768)
 def street_parts(value):
@@ -47,15 +43,11 @@ def street_parts(value):
         return value, None
     return match[1].strip(), building_number(match[2])
 
-
 @lru_cache(maxsize=32768)
 def _street_tokens(s):
     name, _ = street_parts(s)
     return tuple(t for t in fold(name).split() if t not in _STREET_NOISE)
 
-
-# County labels in the two enabled regions; never infer a town from a county.
-# Source: https://zpe.gov.pl/a/mapa-administracyjna-polski/D14B88qSv
 _COUNTIES = frozenset(fold(s) for s in (
     "będziński", "bielski", "bieruńsko-lędziński", "cieszyński", "częstochowski",
     "gliwicki", "kłobucki", "lubliniecki", "mikołowski", "myszkowski", "pszczyński",
@@ -64,17 +56,12 @@ _COUNTIES = frozenset(fold(s) for s in (
     "namysłowski", "nyski", "oleski", "opolski", "prudnicki", "strzelecki",
 ))
 
-
 def is_county(value):
     name = fold(value)
     return name in _COUNTIES or name.startswith(("powiat ", "pow "))
 
-
-# folded (ASCII) declension endings a street-name token may gain/swap; a suffix
-# outside this set means a DIFFERENT word ('gorna' vs 'gornika'), not a case form
 _DECL_SUFFIX = {"", "a", "e", "i", "y", "ej", "iej", "ego", "iego",
                 "emu", "iemu", "ym", "im", "ymi", "imi", "ach", "iach"}
-
 
 def _tok_eq(a, b):
     """Token equality tolerant of Polish declension: 'gdanska' == 'gdanskiej',
@@ -90,7 +77,6 @@ def _tok_eq(a, b):
         common += 1
     return (common >= 4 and common >= len(short) - 1
             and long_[common:] in _DECL_SUFFIX)
-
 
 def street_match(a, b):
     """True when two street names plausibly refer to the same street.
@@ -108,22 +94,18 @@ def street_match(a, b):
     small, big = (ta, tb) if len(ta) <= len(tb) else (tb, ta)
     return all(any(_tok_eq(t, u) for u in big) for t in small[:-1])
 
-
 def _known_int(value):
     if isinstance(value, (int, float)) and not isinstance(value, bool):
         return int(value) if isfinite(value) and int(value) == value else None
     text = str(value).strip() if value is not None else ""
     return int(text) if re.fullmatch(r"-?\d+", text) else None
 
-
 _FLOOR_ENUMS = {name: i for i, name in enumerate((
     "first", "second", "third", "fourth", "fifth", "sixth", "seventh",
     "eighth", "ninth", "tenth"), start=1)}
 
-
 def known_floor(value):
     word = fold(value) if isinstance(value, str) else ""
-    # OLX stores exact floors as floor_0, floor_1, ...; keep these known too.
     if isinstance(value, str) and re.fullmatch(r"floor_-?\d+", value.strip(), re.I):
         return int(value.strip().split("_", 1)[1])
     if word in ("parter", "ground floor", "ground"):
@@ -132,9 +114,7 @@ def known_floor(value):
         return -1
     if word in _FLOOR_ENUMS:
         return _FLOOR_ENUMS[word]
-    # Ranges such as "> 10" and attic labels do not identify an exact floor.
     return _known_int(value)
-
 
 def compatible(a, b):
     for field in ("type", "locality"):

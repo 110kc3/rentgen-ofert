@@ -76,12 +76,7 @@ PARTIAL = "partial"
 BLOCKED = "blocked"
 UNKNOWN = "unknown"
 
-# How far below the portal's own count a search may land before we call it
-# truncated. Slack absorbs ads that vanish mid-crawl and the portals' own
-# counter drift; it is nowhere near the gaps real truncation produces
-# (gratka: 7 000 of 9 856 = 71%).
 COMPLETE_ENOUGH = 0.95
-
 
 def listing_key(typ: str, value) -> str | None:
     """Stable, type-scoped identity kept only while coverage is summarised."""
@@ -89,7 +84,6 @@ def listing_key(typ: str, value) -> str | None:
         return None
     text = str(value).strip()
     return f"{typ}:{text}" if text else None
-
 
 def error_details(exc) -> tuple[str | None, int | None]:
     """Short public error text + HTTP status, if requests exposed one."""
@@ -99,13 +93,10 @@ def error_details(exc) -> tuple[str | None, int | None]:
     status = getattr(response, "status_code", None)
     text = " ".join(str(exc).split())[:240] or exc.__class__.__name__
     if status is None:
-        # Fake sessions and a few wrappers preserve the useful status only in
-        # their message. Do not mistake arbitrary three-digit numbers for HTTP.
         import re
         match = re.search(r"(?:HTTP\s*)?([45]\d\d)(?:\s|\b)", text, re.I)
         status = int(match.group(1)) if match else None
     return text, status
-
 
 def row(source, typ, tag, pages, listings, stopped,
         portal_pages=None, portal_total=None, total_is_min=False,
@@ -117,9 +108,6 @@ def row(source, typ, tag, pages, listings, stopped,
     if role != DIRECT:
         out["role"] = role
     if skipped:
-        # A synthetic row can explain why an expected type was not requested
-        # after one portal-wide reachability probe failed.  It must affect
-        # health, but it is not another search, page, issue or warning.
         out["skipped"] = True
         if skip_reason:
             out["skip_reason"] = str(skip_reason)[:240]
@@ -141,20 +129,16 @@ def row(source, typ, tag, pages, listings, stopped,
         out["error"] = str(error)[:240]
     if http_status is not None:
         out["http_status"] = int(http_status)
-    # Sets are intentionally private: main.py needs them to union overlapping
-    # parent/band/town searches, but public_row() strips them before JSON output.
     if served_keys is not None:
         out["_served_keys"] = frozenset(k for k in served_keys if k is not None)
     if kept_keys is not None:
         out["_kept_keys"] = frozenset(k for k in kept_keys if k is not None)
     return out
 
-
 def public_row(r: dict) -> dict:
     """JSON-safe coverage row (private identities/bulky detail removed)."""
     return {k: v for k, v in r.items()
             if not k.startswith("_") and k != "towns"}
-
 
 def seen_by(r) -> int:
     """Ads the portal actually handed over for a search, before OUR filters.
@@ -169,20 +153,17 @@ def seen_by(r) -> int:
     served = r.get("served")
     return r.get("listings") if served is None else served
 
-
 def unique_seen_by(r) -> int:
     """Unique identities served by one search, falling back for v1 rows."""
     if "_served_keys" in r:
         return len(r.get("_served_keys") or ())
     return seen_by(r)
 
-
 def unique_kept_by(r) -> int:
     """Unique parsed identities in one search, before cross-search dedupe."""
     if "_kept_keys" in r:
         return len(r.get("_kept_keys") or ())
     return r.get("listings") or 0
-
 
 def short_of_total(collected, portal_total, tolerance=COMPLETE_ENOUGH) -> bool:
     """Did this search return materially less than the portal says it holds?
@@ -195,7 +176,6 @@ def short_of_total(collected, portal_total, tolerance=COMPLETE_ENOUGH) -> bool:
         return False
     return collected < portal_total * tolerance
 
-
 def covered(collected, portal_total):
     """Collected as a bounded percentage of the portal's stated total.
 
@@ -206,7 +186,6 @@ def covered(collected, portal_total):
     if not portal_total or collected is None:
         return None
     return round(min(100.0, max(0.0, 100.0 * collected / portal_total)), 1)
-
 
 def stop_reason(page, max_pages, total_pages=None, hit_end=False) -> str:
     """Why a paginating loop ended.
@@ -223,16 +202,13 @@ def stop_reason(page, max_pages, total_pages=None, hit_end=False) -> str:
         return OUR_CAP
     return OK
 
-
 def _role(r):
     return r.get("role") or DIRECT
-
 
 def _replaced(r) -> bool:
     """A non-terminal diagnostic row whose narrower children own coverage."""
     return bool((_role(r) == PARENT and r.get("partitioned"))
                 or (_role(r) == PARTITION and r.get("replaced")))
-
 
 def _issue(r) -> str | None:
     """Actionable leaf defect, or None for intentional/overlapping rows."""
@@ -249,7 +225,6 @@ def _issue(r) -> str | None:
         return "short_total"
     return None
 
-
 def _fallback_accounting_rows(rows):
     """Non-overlapping rows used only by old/manual callers without identities."""
     leaves = [r for r in rows if _role(r) == PARTITION and not r.get("replaced")]
@@ -257,7 +232,6 @@ def _fallback_accounting_rows(rows):
         return leaves
     roots = [r for r in rows if _role(r) in (PARENT, DIRECT)]
     return roots or [r for r in rows if _role(r) != SUPPLEMENT]
-
 
 def _unique_count(rows, private_key, count_fn) -> int:
     with_ids = [r for r in rows if private_key in r]
@@ -267,7 +241,6 @@ def _unique_count(rows, private_key, count_fn) -> int:
             keys.update(r.get(private_key) or ())
         return len(keys)
     return sum(count_fn(r) or 0 for r in _fallback_accounting_rows(rows))
-
 
 def _listing_counts(listings, source, typ):
     selected = [l for l in (listings or ())
@@ -281,7 +254,6 @@ def _listing_counts(listings, source, typ):
     archived = len(selected) - current
     return len(keys) if keys else len(selected), current, archived
 
-
 def _inventory_total(rows):
     """The portal total once: parent/direct rows, never their partitions."""
     parents = [r for r in rows if _role(r) == PARENT and r.get("portal_total")]
@@ -291,7 +263,6 @@ def _inventory_total(rows):
         return None, False
     return (sum(r["portal_total"] for r in owners),
             any(r.get("total_is_min") for r in owners))
-
 
 def _partition_summary(rows, parents):
     parts = [r for r in rows if _role(r) == PARTITION]
@@ -317,9 +288,6 @@ def _partition_summary(rows, parents):
             out["unaccounted"] = unaccounted
         return out
 
-    # Some portals aggregate many overlapping partitions into one coverage row
-    # so their identity sets can be unioned once. Preserve their compact town
-    # diagnostics instead of making the operator mine thousands of log lines.
     aggregates = [r for r in rows if r.get("partition_axis")]
     if not aggregates:
         return None
@@ -342,7 +310,6 @@ def _partition_summary(rows, parents):
     if details:
         out["details"] = details
     return out
-
 
 def _type_summary(source, typ, rows, listings=None):
     parents = [r for r in rows if _role(r) == PARENT]
@@ -420,7 +387,6 @@ def _type_summary(source, typ, rows, listings=None):
         out["http_statuses"] = statuses
     return out, issue_rows
 
-
 def _combined_status(statuses):
     statuses = list(statuses)
     if not statuses:
@@ -433,7 +399,6 @@ def _combined_status(statuses):
         return UNKNOWN
     return HEALTHY
 
-
 def _unknown_type_summary(source, typ, listings=None):
     listed = _listing_counts(listings, source, typ)
     kept, current, archived = listed or (0, 0, 0)
@@ -443,7 +408,6 @@ def _unknown_type_summary(source, typ, listings=None):
         "current": current, "archived": archived, "issues": 0,
         "reasons": ["no_coverage_rows"],
     }
-
 
 def summarise(rows, listings=None, expected_sources=None, expected_types=None) -> dict:
     """Schema-v2 source/region health with non-overlapping completeness.
@@ -509,7 +473,7 @@ def summarise(rows, listings=None, expected_sources=None, expected_types=None) -
         if reasons:
             src["reasons"] = reasons
         if served_unique != current:
-            src["seen"] = served_unique       # v1 compatibility for consumers
+            src["seen"] = served_unique
         if portal_total:
             src["portal_total"] = portal_total
             src["pct"] = covered(served_declared, portal_total)
@@ -566,8 +530,6 @@ def summarise(rows, listings=None, expected_sources=None, expected_types=None) -
             public_issues.append(item)
 
     region_status = _combined_status(s["status"] for s in by_source.values())
-    # `truncated` remains as a compatibility alias, but now contains only
-    # actionable terminal defects—not parents already replaced by bands.
     return {
         "schema": 2,
         "status": region_status,
@@ -576,10 +538,8 @@ def summarise(rows, listings=None, expected_sources=None, expected_types=None) -
         "truncated": public_issues,
     }
 
-
 def _where(r) -> str:
     return f"{r['source']} {r['type']}" + (f"/{r['tag']}" if r.get("tag") else "")
-
 
 def _of_total(r) -> str:
     """' — 7000 of 9856 (71.0%)' when the portal states its own count."""
@@ -593,7 +553,6 @@ def _of_total(r) -> str:
     return (f" — collected {seen} of {approx}{total}"
             f" ({covered(seen, total)}%){kept}")
 
-
 def _partition_suffix(r, key) -> str:
     names = list(r.get(key) or ())
     if not names:
@@ -601,24 +560,16 @@ def _partition_suffix(r, key) -> str:
     label = "capped" if key == "capped_partitions" else "failed"
     return f"; {label} partition(s): {', '.join(names)}"
 
-
 def warnings(rows) -> list:
     """Human lines for the run log — one per search that did not finish."""
     out = []
     for r in rows or ():
         if r.get("skipped"):
             continue
-        # A partitioned parent or overflowing intermediate partition is
-        # supposed to stop early: its children implement the remedy. Only
-        # terminal leaves can still require operator action.
         if _replaced(r):
             continue
         st = r.get("stopped")
         if st not in TRUNCATED:
-            # A search can stop for an innocent-looking reason and still be
-            # truncated — gratka 404s past page 200 exactly like it 404s past
-            # its last page. The stated total is the only thing that tells
-            # those two apart, so it gets the last word.
             if short_of_total(unique_seen_by(r), r.get("portal_total")):
                 out.append(f"  !! {_where(r)}: search ended cleanly but short of "
                            f"the portal's own count{_of_total(r)} — subdivide it")

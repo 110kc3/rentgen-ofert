@@ -30,15 +30,13 @@ from collections import defaultdict
 from .normalize import same_photos
 from .identity import compatible
 
-MAX_HASHES = 10       # cap stored gallery hashes per property
-MAX_PHOTO_URLS = 8    # cap archived gallery URLs per property
+MAX_HASHES = 10
+MAX_PHOTO_URLS = 8
 SNAPSHOT_FIELDS = ("title", "image", "locality", "district", "street",
                    "rooms", "floor", "plot_area", "url", "source", "price")
 
-
 def _bucket(typ, area):
     return (typ, int(round(area))) if area is not None else (typ, None)
-
 
 def load(path) -> list:
     """Missing store = fresh start; a CORRUPT store must fail loudly.
@@ -57,12 +55,11 @@ def load(path) -> list:
                 with gzip.open(p, "rt", encoding="utf-8") as f:
                     return json.load(f)
             except FileNotFoundError:
-                legacy = p.with_name(p.name[:-3])       # history.json.gz -> history.json
+                legacy = p.with_name(p.name[:-3])
                 return json.loads(legacy.read_text(encoding="utf-8"))
         return json.loads(p.read_text(encoding="utf-8"))
     except FileNotFoundError:
         return []
-
 
 def save(path, records):
     """Atomic write (temp file + rename): the store is tens of MB and a run
@@ -78,7 +75,6 @@ def save(path, records):
         tmp.write_text(payload, encoding="utf-8")
     os.replace(tmp, p)
 
-
 def _find(rec_index, typ, area, hashes, listing):
     if not hashes:
         return None
@@ -92,7 +88,6 @@ def _find(rec_index, typ, area, hashes, listing):
                     return r
     return None
 
-
 def _url_index(records):
     idx = {}
     for r in records:
@@ -102,14 +97,12 @@ def _url_index(records):
                 idx[u] = r
     return idx
 
-
 def _update_snapshot(rec, p):
     snap = rec.setdefault("snapshot", {})
     for f in SNAPSHOT_FIELDS:
         v = p.get(f)
         if v not in (None, ""):
             snap[f] = v
-
 
 def _merge_photo_urls(rec, urls):
     if not urls:
@@ -118,7 +111,6 @@ def _merge_photo_urls(rec, urls):
     for u in urls:
         if u not in have and len(have) < MAX_PHOTO_URLS:
             have.append(u)
-
 
 def _observe(rec, p, today, status=None):
     """Keep the latest daily observation per URL and lifecycle status.
@@ -140,16 +132,12 @@ def _observe(rec, p, today, status=None):
         rec["observations"].append(obs)
     rec["last_seen"] = max(rec.get("last_seen") or "", today)
 
-
 def _match_or_create(records, index, url_idx, p, today):
     hashes = p.get("phashes") or []
     typ, area = p.get("type"), p.get("area")
-    # developer ads share marketing photos across many units, so photo identity
-    # is meaningless for them — match by URL only
     rec = None if p.get("development") else _find(index, typ, area, hashes, p)
     if rec is None and p.get("url"):
         cand = url_idx.get(p["url"])
-        # URL fallback: only trust it when photos don't contradict it
         if cand is not None and (not hashes or not cand.get("hashes")
                                  or same_photos(hashes, cand["hashes"])):
             rec = cand
@@ -166,7 +154,6 @@ def _match_or_create(records, index, url_idx, p, today):
     if p.get("url"):
         url_idx[p["url"]] = rec
     return rec
-
 
 def compact(records) -> list:
     """Merge duplicate records that share a listing URL.
@@ -194,7 +181,7 @@ def compact(records) -> list:
             continue
         hashed = [r for r in group if r.get("hashes")]
         if len(hashed) > 1:
-            continue                     # photos disagree -> not safe to merge
+            continue
         keep = hashed[0] if hashed else min(group, key=lambda r: r.get("first_seen") or "9999")
         for r in group:
             if r is keep or id(r) in merged:
@@ -218,7 +205,6 @@ def compact(records) -> list:
                                 default=keep.get("first_seen") or "")
     return [r for r in records if id(r) not in merged]
 
-
 def update(properties, records, today: str):
     """Match `properties` to `records`, append today's observations, and enrich
     each property in place with first_seen / relisted / prev_price /
@@ -235,14 +221,9 @@ def update(properties, records, today: str):
         if p.get("development"):
             rec["development"] = True
 
-        # the flat is visibly back on the market -> a past "delisted" is stale
         if rec.get("delisted"):
             del rec["delisted"]
 
-        # observe EVERY portal offer of the merged card, not just the primary
-        # one — observing only (primary url, min price) made the primary
-        # flipping portals look like a relist and the cheapest offer vanishing
-        # look like a price change on an ad whose price never moved
         offer_obs = [o for o in (p.get("offers") or []) if o.get("url")]
         if not offer_obs:
             offer_obs = [{"url": url, "price": p.get("price"), "source": p.get("source")}]
@@ -253,14 +234,8 @@ def update(properties, records, today: str):
         _merge_photo_urls(rec, p.get("photo_urls"))
 
         obs = rec["observations"]
-        # "na rynku od" = earliest portal publish date we've seen (else first record day)
         pub = sorted((o.get("created") or "")[:10] for o in p.get("offers", []) if o.get("created"))
         p["first_seen"] = min([rec["first_seen"], *pub]) if pub else rec["first_seen"]
-        # genuine relist: an old URL went quiet BEFORE a currently-live URL first
-        # appeared (agent killed the ad and re-posted). An ad merely expiring on
-        # one portal while the flat stays live on another is NOT a relist.
-        # (developments excluded — "the same ad again" is just the developer's
-        # rolling marketing, not a flat coming back to the market)
         current_urls = {o["url"] for o in offer_obs}
         relisted, earlier = False, []
         if not rec.get("development"):
@@ -282,7 +257,6 @@ def update(properties, records, today: str):
                            and (o.get("date") or "") < newest_cur]
         p["relisted"] = relisted
         p["prev_price"] = next((o["price"] for o in reversed(earlier) if o.get("price")), None)
-        # price trail: points where the card price (min across live offers) changed
         by_date = {}
         for o in obs:
             d, pr = o.get("date"), o.get("price")
@@ -302,9 +276,8 @@ def update(properties, records, today: str):
             p["sales"] = rec["sales"]
         else:
             p.pop("sales", None)
-        p["_rec"] = rec               # transient link for reenrich(); not published
+        p["_rec"] = rec
     return records
-
 
 def reenrich(properties):
     """Refresh timeline/sales on today's listings after a late pass (e.g. RCN
@@ -319,7 +292,6 @@ def reenrich(properties):
         else:
             p.pop("sales", None)
 
-
 def observe_archived(archived_listings, records, today: str):
     """Feed portal-archived ads (e.g. n-online 'Ogłoszenie archiwalne') into
     history. An archived ad is direct evidence the listing ended — if the
@@ -332,7 +304,6 @@ def observe_archived(archived_listings, records, today: str):
 
     n = 0
     for p in archived_listings:
-        # only track archived ads we can identify (by URL we've seen, or photos)
         rec = None
         if p.get("url") and p["url"] in url_idx:
             rec = url_idx[p["url"]]
@@ -349,9 +320,6 @@ def observe_archived(archived_listings, records, today: str):
                 rec["delisted"] = today
         n += 1
     return n
-
-
-# ---- timeline (what the dashboard renders) ----------------------------------
 
 def timeline(rec, max_events: int = 24) -> list:
     """Condensed chronological life of a property.
@@ -370,7 +338,7 @@ def timeline(rec, max_events: int = 24) -> list:
     live_obs = sorted((o for o in rec.get("observations") or []
                        if o.get("status") != "archived"),
                       key=lambda o: o.get("date") or "")
-    live_dates = {}                      # url -> set of dates seen live
+    live_dates = {}
     for o in live_obs:
         live_dates.setdefault(o.get("url"), set()).add(o.get("date"))
     seen_urls = set()
@@ -386,8 +354,6 @@ def timeline(rec, max_events: int = 24) -> list:
             if len(seen_urls) == 1:
                 kind = "listed"
             else:
-                # another ad of the same property live the same day -> a
-                # cross-portal posting, not the flat coming back to the market
                 cross = any(date in live_dates.get(u, ()) for u in seen_urls if u != url)
                 kind = "listed" if cross else "relist"
             events.append({"date": date, "kind": kind, "price": price,
@@ -401,12 +367,9 @@ def timeline(rec, max_events: int = 24) -> list:
     if rec.get("delisted"):
         events.append({"date": rec["delisted"], "kind": "delisted"})
     events.sort(key=lambda e: (e.get("date") or "", e.get("kind") != "sale_past"))
-    if len(events) > max_events:            # keep first + most recent
+    if len(events) > max_events:
         events = events[:2] + events[-(max_events - 2):]
     return events
-
-
-# ---- archive (delisted properties for the dashboard) ------------------------
 
 def build_archive(records) -> list:
     """Cards for properties that left the market: snapshot + timeline + sales."""

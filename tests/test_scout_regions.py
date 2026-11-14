@@ -8,9 +8,7 @@ import requests
 from scraper import regions
 from scripts import scout_regions
 
-
 ROOT = pathlib.Path(__file__).parents[1]
-
 
 def _otodom_html(total=101, items=1):
     payload = {
@@ -21,7 +19,6 @@ def _otodom_html(total=101, items=1):
     }
     return '<script id="__NEXT_DATA__">' + json.dumps(payload) + "</script>"
 
-
 def _olx_html(visible=202, servable=100, items=1):
     state = {"listing": {"listing": {
         "ads": [{"id": number} for number in range(items)],
@@ -29,10 +26,8 @@ def _olx_html(visible=202, servable=100, items=1):
         "totalElements": servable,
         "totalPages": 3,
     }}}
-    # OLX JSON-encodes the state and then embeds that JSON string in JS.
     encoded = json.dumps(json.dumps(state, separators=(",", ":")))
     return f"<script>window.__PRERENDERED_STATE__ = {encoded};</script>"
-
 
 def _cards_html(total=303, minimum=False):
     qualifier = "ponad " if minimum else ""
@@ -41,13 +36,11 @@ def _cards_html(total=303, minimum=False):
       <article data-cy="card"><a data-cy="propertyUrl" href="/offer/123"></a></article>
     """
 
-
 class Response:
     def __init__(self, status_code, text, url):
         self.status_code = status_code
         self.text = text
         self.url = url
-
 
 class Session:
     def __init__(self, olx_status=200):
@@ -66,7 +59,6 @@ class Session:
             return Response(200, _cards_html(404, minimum=True), url)
         raise AssertionError(f"unexpected scout URL: {url}")
 
-
 def test_search_urls_use_explicit_slug_and_only_page_one():
     slug = "portal-specific-slug"
     urls = {
@@ -81,7 +73,6 @@ def test_search_urls_use_explicit_slug_and_only_page_one():
     assert "/sprzedaz/mieszkanie/" in urls["otodom", "flat"]
     assert urls["olx", "flat"].endswith(f"/{slug}/?page=1")
     assert "page=2" not in " ".join(urls.values())
-
 
 def test_each_portal_parser_keeps_only_aggregate_evidence():
     assert scout_regions.parse_page("otodom", "house", _otodom_html()) == {
@@ -105,7 +96,6 @@ def test_each_portal_parser_keeps_only_aggregate_evidence():
     assert scout_regions.parse_page(
         "morizon", "flat", _cards_html(404, minimum=True)
     )["declared_is_minimum"] is True
-
 
 def test_successful_scout_has_all_128_targets_and_exact_request_budget():
     session = Session()
@@ -138,15 +128,12 @@ def test_successful_scout_has_all_128_targets_and_exact_request_budget():
     assert all(call["timeout"] == 20 for call in session.calls)
     assert all(row["page_items"] == 1 for row in report["probes"])
 
-
 def test_one_refusal_stops_that_source_without_dropping_target_rows():
     session = Session(olx_status=403)
     report = scout_regions.scout(
         regions.load_catalog(), session=session, delay=0, sleep=lambda _: None,
         log=lambda _: None)
 
-    # Otodom, Gratka and Morizon each use 32 requests. OLX uses one, then its
-    # remaining 31 targets become explicit skips rather than repeated blocks.
     assert len(session.calls) == report["scope"]["requests_made"] == 97
     assert len(report["probes"]) == 128
     assert report["summary"]["status_counts"] == {
@@ -157,7 +144,6 @@ def test_one_refusal_stops_that_source_without_dropping_target_rows():
     assert all(check["result"] == "blocked"
                for check in report["summary"]["slug_checks"]
                if check["source"] == "olx")
-
 
 def test_incomplete_measurement_shape_does_not_receive_a_rank():
     selected = regions.load_catalog()["regions"][:3]
@@ -172,8 +158,6 @@ def test_incomplete_measurement_shape_does_not_receive_a_rank():
                     "source": source,
                     "type": typ,
                     "status": "ok" if complete_target else "not_found",
-                    # Make the partial region's sum much larger to prove that
-                    # magnitude cannot move it into the comparable ranking.
                     "declared_inventory": (
                         10_000 if complete_target and number == 2
                         else 10 if complete_target else None),
@@ -217,7 +201,6 @@ def test_incomplete_measurement_shape_does_not_receive_a_rank():
     markdown = scout_regions.markdown_summary(report)
     assert f"| — | {partial['label']} (`{partial['region']}`)" in markdown
 
-
 def test_runtime_budget_returns_partial_evidence_instead_of_timing_out():
     class Clock:
         value = 0
@@ -241,7 +224,6 @@ def test_runtime_budget_returns_partial_evidence_instead_of_timing_out():
         "ok": 1, "skipped_after_budget": 127}
     assert report["summary"]["ranking_declared_targets"] == []
     assert all(row["rank"] is None for row in report["summary"]["regions"])
-
 
 def test_404_and_off_slug_redirect_are_bad_slug_evidence():
     region = regions.load_catalog()["regions"][0]
@@ -268,7 +250,6 @@ def test_404_and_off_slug_redirect_are_bad_slug_evidence():
     assert redirected["status"] == "off_slug_redirect"
     assert redirected["declared_inventory"] is None
 
-
 def test_network_error_is_recorded_without_retry():
     region = regions.load_catalog()["regions"][0]
 
@@ -286,7 +267,6 @@ def test_network_error_is_recorded_without_retry():
     assert row["http_status"] is None
     assert "Timeout" in row["error"]
 
-
 def test_report_writer_creates_json_and_readable_summary(tmp_path):
     report = scout_regions.scout(
         regions.load_catalog(), session=Session(), delay=0, sleep=lambda _: None,
@@ -301,7 +281,6 @@ def test_report_writer_creates_json_and_readable_summary(tmp_path):
     assert "P3 nationwide one-page scout" in markdown
     assert "Nieruchomości-online was not probed" in markdown
     assert "| Rank | Region |" in markdown
-
 
 def test_scout_workflow_is_manual_read_only_and_non_publishing():
     workflow = (ROOT / ".github/workflows/scout.yml").read_text(encoding="utf-8")

@@ -8,7 +8,6 @@ import pytest
 from scraper import payload
 from scripts import validate_data
 
-
 def _dataset(tmp_path):
     listings = [
         {
@@ -65,10 +64,8 @@ def _dataset(tmp_path):
         json.dump([], handle)
     return tmp_path
 
-
 def _meta(root):
     return json.loads((root / "meta.json").read_text(encoding="utf-8"))
-
 
 def _compact_dataset(root):
     _dataset(root)
@@ -85,18 +82,15 @@ def _compact_dataset(root):
     (root / "meta.json").write_text(json.dumps(meta))
     return root
 
-
 def test_validator_accepts_compact_current_and_lazy_archives(tmp_path):
     result = validate_data.validate_data_dir(_compact_dataset(tmp_path))
     assert result["count"] == 2 and result["detail_records"] == 2
-
 
 def test_validator_rejects_partial_archive_publication(tmp_path):
     root = _compact_dataset(tmp_path)
     (root / "a/00.json").unlink()
     with pytest.raises(validate_data.DataValidationError, match="archive detail shard"):
         validate_data.validate_data_dir(root)
-
 
 def test_archive_detail_only_change_invalidates_manifest(tmp_path):
     root = _compact_dataset(tmp_path)
@@ -109,7 +103,6 @@ def test_archive_detail_only_change_invalidates_manifest(tmp_path):
     with pytest.raises(validate_data.DataValidationError, match="payload hash"):
         validate_data.validate_data_dir(root)
 
-
 def test_archive_duplicate_detail_key_is_rejected(tmp_path):
     root = _compact_dataset(tmp_path)
     path = root / "archive.json"
@@ -118,7 +111,6 @@ def test_archive_duplicate_detail_key_is_rejected(tmp_path):
     path.write_text(json.dumps(payload.pack_rows(rows)))
     with pytest.raises(validate_data.DataValidationError, match="duplicate archive detail key"):
         validate_data.validate_data_dir(root)
-
 
 def test_archive_missing_record_is_rejected(tmp_path):
     root = _compact_dataset(tmp_path)
@@ -130,7 +122,6 @@ def test_archive_missing_record_is_rejected(tmp_path):
             break
     with pytest.raises(validate_data.DataValidationError, match="missing archive detail record"):
         validate_data.validate_data_dir(root)
-
 
 @pytest.mark.parametrize("field", ["timeline", "photo_urls"])
 def test_malformed_archive_detail_fields_are_rejected(tmp_path, field):
@@ -144,12 +135,11 @@ def test_malformed_archive_detail_fields_are_rejected(tmp_path, field):
     with pytest.raises(validate_data.DataValidationError, match="must be an array"):
         validate_data.validate_data_dir(root)
 
-
 def test_generated_dataset_validator_checks_every_payload_part(tmp_path):
     root = _dataset(tmp_path)
     summary = validate_data.validate_data_dir(root)
     assert summary["count"] == 2 and summary["shards"] == 4
-    assert summary["json_files"] == 10  # 5 top-level JSON + 4 shards + gzip
+    assert summary["json_files"] == 10
     assert summary["detail_records"] == 2
     assert summary["generated_bytes"] > summary["published_bytes"]
     markdown = validate_data.github_summary(summary)
@@ -160,7 +150,6 @@ def test_generated_dataset_validator_checks_every_payload_part(tmp_path):
     assert "0 critical without photos" in markdown
     assert "0 unresolved size groups" in markdown
 
-
 def test_validator_accepts_legacy_manifest_during_regional_migration(tmp_path):
     root = _dataset(tmp_path)
     path = root / "manifest.json"
@@ -169,7 +158,6 @@ def test_validator_accepts_legacy_manifest_during_regional_migration(tmp_path):
     manifest["v"] = hashlib.sha1((root / "index.json").read_bytes()).hexdigest()[:10]
     path.write_text(json.dumps(manifest))
     assert validate_data.validate_data_dir(root)["count"] == 2
-
 
 def test_validator_rejects_detail_changes_without_new_version(tmp_path):
     root = _dataset(tmp_path)
@@ -181,7 +169,6 @@ def test_validator_rejects_detail_changes_without_new_version(tmp_path):
     with pytest.raises(validate_data.DataValidationError, match="payload hash"):
         validate_data.validate_data_dir(root)
 
-
 def test_generated_dataset_validator_rejects_count_mismatch(tmp_path):
     root = _dataset(tmp_path)
     manifest_path = root / "manifest.json"
@@ -190,7 +177,6 @@ def test_generated_dataset_validator_rejects_count_mismatch(tmp_path):
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
     with pytest.raises(validate_data.DataValidationError, match="manifest count"):
         validate_data.validate_data_dir(root)
-
 
 def test_generated_dataset_validator_rejects_a_missharded_detail(tmp_path):
     root = _dataset(tmp_path)
@@ -208,7 +194,6 @@ def test_generated_dataset_validator_rejects_a_missharded_detail(tmp_path):
     with pytest.raises(validate_data.DataValidationError, match="wrong shard"):
         validate_data.validate_data_dir(root)
 
-
 def test_generated_dataset_validator_requires_pipeline_outputs(tmp_path):
     root = _dataset(tmp_path)
     (root / "history.json.gz").unlink()
@@ -216,7 +201,6 @@ def test_generated_dataset_validator_requires_pipeline_outputs(tmp_path):
     with pytest.raises(validate_data.DataValidationError,
                        match="missing generated file.*history.json.gz"):
         validate_data.validate_data_dir(root)
-
 
 def test_generated_dataset_validator_rejects_inconsistent_photo_metrics(tmp_path):
     root = _dataset(tmp_path)
@@ -229,7 +213,6 @@ def test_generated_dataset_validator_rejects_inconsistent_photo_metrics(tmp_path
                        match="critical_deferred exceeds critical"):
         validate_data.validate_data_dir(root)
 
-
 def test_generated_dataset_validator_rejects_inconsistent_photo_scopes(tmp_path):
     root = _dataset(tmp_path)
     meta_path = root / "meta.json"
@@ -240,7 +223,6 @@ def test_generated_dataset_validator_rejects_inconsistent_photo_scopes(tmp_path)
     with pytest.raises(validate_data.DataValidationError,
                        match="cache scopes do not add up"):
         validate_data.validate_data_dir(root)
-
 
 def test_generated_dataset_validator_rejects_photo_mode_with_heuristic_fallback(
         tmp_path):
@@ -253,7 +235,6 @@ def test_generated_dataset_validator_rejects_photo_mode_with_heuristic_fallback(
     with pytest.raises(validate_data.DataValidationError,
                        match="heuristic fallback must be disabled"):
         validate_data.validate_data_dir(root)
-
 
 def test_generated_dataset_validator_rejects_impossible_unresolved_group_counts(
         tmp_path):
@@ -270,7 +251,6 @@ def test_generated_dataset_validator_rejects_impossible_unresolved_group_counts(
                        match="unresolved size-group counts are inconsistent"):
         validate_data.validate_data_dir(root)
 
-
 def test_source_continuity_allows_a_first_publication(tmp_path):
     summary = validate_data.validate_data_dir(_dataset(tmp_path))
 
@@ -280,7 +260,6 @@ def test_source_continuity_allows_a_first_publication(tmp_path):
         "override": False,
         "regressions": [],
     }
-
 
 def test_source_continuity_allows_a_persistently_blocked_source(tmp_path):
     root = _dataset(tmp_path)
@@ -296,7 +275,6 @@ def test_source_continuity_allows_a_persistently_blocked_source(tmp_path):
 
     assert summary["continuity"]["checked"] == 2
     assert summary["continuity"]["regressions"] == []
-
 
 def test_source_continuity_rejects_a_contributing_source_outage(tmp_path):
     root = _dataset(tmp_path)
@@ -315,7 +293,6 @@ def test_source_continuity_rejects_a_contributing_source_outage(tmp_path):
             match=r"source continuity regression: otodom partial/15,949 -> blocked/0"):
         validate_data.validate_data_dir(root, previous_meta=previous)
 
-
 def test_source_continuity_treats_a_removed_source_as_unknown_zero(tmp_path):
     root = _dataset(tmp_path)
     previous = _meta(root)
@@ -327,7 +304,6 @@ def test_source_continuity_treats_a_removed_source_as_unknown_zero(tmp_path):
     with pytest.raises(validate_data.DataValidationError,
                        match=r"otodom partial/1 -> unknown/0"):
         validate_data.validate_data_dir(root, previous_meta=previous)
-
 
 @pytest.mark.parametrize(("status", "current_count"), [
     ("unknown", 1),
@@ -349,7 +325,6 @@ def test_source_continuity_rejects_each_unavailable_condition(
                        match="source continuity regression: otodom"):
         validate_data.validate_data_dir(root, previous_meta=previous)
 
-
 def test_source_continuity_allows_positive_drift_and_blocked_recovery(tmp_path):
     root = _dataset(tmp_path)
     previous = _meta(root)
@@ -362,7 +337,6 @@ def test_source_continuity_allows_positive_drift_and_blocked_recovery(tmp_path):
 
     assert summary["continuity"]["checked"] == 1
     assert summary["continuity"]["regressions"] == []
-
 
 @pytest.mark.parametrize("status", ["healthy", "partial"])
 def test_source_continuity_rejects_false_healthy_incident_counts(status):
@@ -380,7 +354,6 @@ def test_source_continuity_rejects_false_healthy_incident_counts(status):
     assert {r["source"] for r in report["regressions"]} == {"gratka", "morizon"}
     assert all(r["reason"] == "volume" for r in report["regressions"])
 
-
 @pytest.mark.parametrize("old,new,allowed", [
     (1000, 980, True), (1000, 500, True), (1000, 499, False),
     (100, 50, True), (100, 49, False), (99, 1, True), (0, 200, True),
@@ -394,7 +367,6 @@ def test_source_continuity_volume_boundaries(old, new, allowed):
         with pytest.raises(validate_data.DataValidationError, match="50% fewer"):
             validate_data.validate_source_continuity(current, previous)
 
-
 def test_source_continuity_type_collapse_cannot_hide_behind_stable_total():
     previous = {"coverage": {"by_source": {"gratka": {
         "status": "healthy", "current": 12000,
@@ -406,7 +378,6 @@ def test_source_continuity_type_collapse_cannot_hide_behind_stable_total():
                   "house": {"status": "healthy", "current": 4}}}}
     with pytest.raises(validate_data.DataValidationError, match="gratka/house.*3,000 -> healthy/4"):
         validate_data.validate_source_continuity(current, previous)
-
 
 def test_volume_override_is_logged_in_cli_and_summary(tmp_path, monkeypatch, capsys):
     root = _dataset(tmp_path / "current")
@@ -423,7 +394,6 @@ def test_volume_override_is_logged_in_cli_and_summary(tmp_path, monkeypatch, cap
     assert "50% fewer" in capsys.readouterr().err
     assert "operator override accepted" in summary_path.read_text()
     assert "50% fewer" in summary_path.read_text()
-
 
 def test_source_continuity_override_is_explicit_and_reported(tmp_path, capsys):
     root = _dataset(tmp_path / "current")
@@ -445,14 +415,12 @@ def test_source_continuity_override_is_explicit_and_reported(tmp_path, capsys):
     assert result == 0
     assert "override enabled" in capsys.readouterr().err
 
-
 def test_source_continuity_rejects_malformed_previous_metadata(tmp_path):
     root = _dataset(tmp_path)
 
     with pytest.raises(validate_data.DataValidationError,
                        match="previous meta.coverage must be an object"):
         validate_data.validate_data_dir(root, previous_meta={})
-
 
 def _rcn_meta():
     return {
@@ -462,7 +430,6 @@ def _rcn_meta():
         "rcn": {"matched": 15}, "rcn_stats": {"towns": 1, "gap_pairs": 5},
         "sold_confirmed": 5,
     }
-
 
 @pytest.mark.parametrize("group,key", [
     ("rcn", "matched"), ("rcn_stats", "towns"),
@@ -476,7 +443,6 @@ def test_rcn_evidence_cannot_disappear(group, key):
     with pytest.raises(validate_data.DataValidationError, match="RCN"):
         validate_data.validate_rcn(current, {"towns": {"gliwice": {}}}, previous)
 
-
 def test_rcn_guard_catches_incident_with_legacy_metadata_and_ignores_source_override(tmp_path):
     root = _dataset(tmp_path)
     previous = _meta(root)
@@ -489,7 +455,6 @@ def test_rcn_guard_catches_incident_with_legacy_metadata_and_ignores_source_over
     with pytest.raises(validate_data.DataValidationError, match="RCN continuity"):
         validate_data.validate_data_dir(root, previous_meta=previous,
                                         allow_source_regression=True)
-
 
 @pytest.mark.parametrize("change,reason", [
     ({"status": "unavailable"}, "unavailable"),
@@ -505,7 +470,6 @@ def test_rcn_health_must_reflect_usable_evidence(change, reason):
     with pytest.raises(validate_data.DataValidationError, match=reason):
         validate_data.validate_rcn(meta, {"towns": {"gliwice": {}}})
 
-
 def test_degraded_rcn_is_reported_without_losing_previous_evidence(tmp_path):
     root = _dataset(tmp_path)
     current = _meta(root)
@@ -515,7 +479,6 @@ def test_degraded_rcn_is_reported_without_losing_previous_evidence(tmp_path):
     (root / "rcnstats.json").write_text(json.dumps({"towns": {"gliwice": {}}}))
     summary = validate_data.validate_data_dir(root)
     assert "**RCN:** degraded; snapshot 2026-09-17" in validate_data.github_summary(summary)
-
 
 def test_rcn_count_collapse_and_empty_benchmarks_fail():
     previous = _rcn_meta()
@@ -528,7 +491,6 @@ def test_rcn_count_collapse_and_empty_benchmarks_fail():
     current.pop("rcn_health")
     with pytest.raises(validate_data.DataValidationError, match="disappeared"):
         validate_data.validate_rcn(current, {}, previous)
-
 
 @pytest.mark.parametrize('reason,text', [
     ('rate_limited', 'paused after HTTP 429; cursor retained for next run'),
@@ -558,7 +520,6 @@ def test_run_summary_explains_archive_progress_separately_from_current_health(
     assert '529.5s / 900.0s budget' in markdown
     assert 'recorded refresh 2026-09-24' in markdown
     assert '1 failed request(s)' in markdown
-
 
 def test_run_summary_accepts_legacy_archive_metadata(tmp_path):
     summary = validate_data.validate_data_dir(_dataset(tmp_path))

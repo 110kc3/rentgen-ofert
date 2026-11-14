@@ -15,27 +15,22 @@ import subprocess
 
 from scraper import regions
 
-
 class RegionStorageError(RuntimeError):
     pass
-
 
 SHARED_CACHES = (
     pathlib.PurePosixPath("cache/geo_cache.json"),
     pathlib.PurePosixPath("cache/nol_towns.json"),
 )
 
-
 def _git(root, *args, check=True):
     return subprocess.run(
         ["git", *args], cwd=root, check=check,
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
-
 def _entry(root, region):
     document = regions.load_catalog(pathlib.Path(root) / "site" / "regions.json")
     return regions.get_region(region, document)
-
 
 def allowed_index_paths(region):
     """Exact files/prefix allowed in a ``data-<region>`` orphan commit."""
@@ -46,13 +41,11 @@ def allowed_index_paths(region):
         pathlib.PurePosixPath(f"cache/rcn_{region}.json.gz"),
     }
 
-
 def _allowed(path, region):
     candidate = pathlib.PurePosixPath(path)
     data_root = pathlib.PurePosixPath("site/data") / region
     return candidate == data_root or data_root in candidate.parents \
         or candidate in allowed_index_paths(region)
-
 
 def stage_region(root, region):
     """Stage only ``region`` data/caches in the current (normally orphan) index.
@@ -87,7 +80,6 @@ def stage_region(root, region):
         raise RegionStorageError(f"no site/data/{region} files were staged")
     return staged
 
-
 def overlay_region(root, ref, region):
     """Replace one deployed region from ``ref`` without touching siblings.
 
@@ -108,7 +100,6 @@ def overlay_region(root, ref, region):
     _git(root, "checkout", ref, "--", relative)
     return True
 
-
 def restore_region(root, region):
     """Restore a published tree; only verified absence permits a cold start.
 
@@ -123,7 +114,7 @@ def restore_region(root, region):
     for branch in (f"data-{region}", "data"):
         remote = _git(root, "ls-remote", "--exit-code", "--heads", "origin",
                       f"refs/heads/{branch}", check=False)
-        if remote.returncode == 2:  # Git explicitly reports no matching ref
+        if remote.returncode == 2:
             continue
         if remote.returncode:
             raise RegionStorageError(
@@ -139,13 +130,10 @@ def restore_region(root, region):
                 f"{branch} has incomplete {relative}: metadata and history are required")
         caches = sorted(path.as_posix() for path in allowed_index_paths(region)
                         if path.as_posix() in files)
-        # Worktree-only restoration keeps main and its index unchanged. Any
-        # extraction failure aborts the job before metadata preservation/scrape.
         _git(root, "restore", "--source=FETCH_HEAD", "--worktree", "--",
              relative, *caches)
         return branch
     return None
-
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="isolate regional data branches")
@@ -178,7 +166,6 @@ def main(argv=None) -> int:
             subprocess.CalledProcessError) as exc:
         parser.error(str(exc))
     return 0
-
 
 if __name__ == "__main__":
     raise SystemExit(main())

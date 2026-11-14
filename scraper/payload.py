@@ -19,28 +19,22 @@ from itertools import chain
 
 SHARDS = 64
 
-# everything the grid filters/sorts on or paints on a card face / map popup
 INDEX_FIELDS = (
     "title", "type", "area", "rooms", "plot_area", "locality", "district",
     "image", "is_private", "price", "price_max", "price_per_m2", "created",
     "url", "source", "sources", "ll", "llp", "first_seen", "relisted",
     "prev_price", "development", "price_history",
 )
-# visible only after expanding a card (or unused by the dashboard entirely)
 DETAIL_FIELDS = ("offers", "cheapest", "timeline", "photo_urls",
                  "also_listed", "sales", "street", "floor", "agency", "market")
 
-# sales/also_listed keep a compact face summary in the index (banners + the
-# "także wystawione" trail); the full objects live in the shard
 _SALE_KEYS = ("kind", "date", "price", "price_m2", "confidence")
-
 
 def shard_of(url: str, n: int = SHARDS) -> int:
     h = 0x811C9DC5
     for b in url.encode("utf-8"):
         h = ((h ^ b) * 0x01000193) & 0xFFFFFFFF
     return h % n
-
 
 def _slim(l: dict) -> dict:
     out = {k: l[k] for k in INDEX_FIELDS if l.get(k) not in (None, "", [])}
@@ -49,7 +43,6 @@ def _slim(l: dict) -> dict:
                         for s in l["sales"]]
     if l.get("also_listed"):
         out["also_listed"] = [{"price": o.get("price")} for o in l["also_listed"]]
-    # counts let the face render the expandable sections' summaries
     if len(l.get("offers") or []) >= 2:
         out["offers_n"] = len(l["offers"])
     if l.get("timeline"):
@@ -58,12 +51,10 @@ def _slim(l: dict) -> dict:
         out["ph_n"] = len(l["photo_urls"])
     return out
 
-
 def _write(path: pathlib.Path, text: str):
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_text(text, encoding="utf-8")
     os.replace(tmp, path)
-
 
 def pack_rows(records):
     """Column names once, trimmed rows; null cells mean an absent field."""
@@ -79,7 +70,6 @@ def pack_rows(records):
             row.pop()
         rows.append(row)
     return {"schema": 1, "fields": fields, "rows": rows}
-
 
 def unpack_rows(value):
     """Read both legacy object arrays and schema-1 column tables."""
@@ -102,7 +92,6 @@ def unpack_rows(value):
         result.append({fields[i]: cell for i, cell in enumerate(row) if cell is not None})
     return result
 
-
 def content_version(index_bytes, shard_bytes, *, schema=2):
     """Length-prefixed bytes in the schema's documented payload order."""
     digest = hashlib.sha256(f"rentgen-payload-v{schema}\0".encode())
@@ -110,7 +99,6 @@ def content_version(index_bytes, shard_bytes, *, schema=2):
         digest.update(len(part).to_bytes(8, "big"))
         digest.update(part)
     return digest.hexdigest()[:20]
-
 
 def build(listings, data_dir, shards: int = SHARDS, log=print, archive=None) -> str:
     """Write manifest.json + index.json + d/NN.json under ``data_dir``.
@@ -146,7 +134,6 @@ def build(listings, data_dir, shards: int = SHARDS, log=print, archive=None) -> 
         f"{total/1e6:.1f} MB (v={v})")
     return v
 
-
 def _build_compact(listings, archive, data_dir, shards, log):
     """Schema 3 includes both compact indexes and both lazy detail namespaces."""
     root = pathlib.Path(data_dir)
@@ -160,8 +147,6 @@ def _build_compact(listings, archive, data_dir, shards, log):
         maps["d"][shard_of(key, shards)][key] = {
             k: listing[k] for k in DETAIL_FIELDS if k in listing}
     for listing in archive:
-        # Old histories can share a portal URL. Never overwrite their different
-        # timelines, and also preserve byte-identical historical rows separately.
         encoded = json.dumps(listing, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
         digest = hashlib.sha256(encoded.encode()).hexdigest()[:20]
         occurrence = identities.get(digest, 0)

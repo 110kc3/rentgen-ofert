@@ -9,14 +9,9 @@ const HIST_LABEL = { relisted: "Wystawione ponownie", dropped: "Z obniżką", rc
 const MARKET_LABEL = { secondary: "Rynek wtórny", primary: "Inwestycje (rynek pierwotny)" };
 const inArchive = () => state.history === "sold" || state.history === "sold_rcn";
 
-// Stable pages use /region/<slug>/. The query fallback keeps pre-P1 bookmarks
-// working while every data fetch remains scoped to one sibling directory.
 const REGION = RentgenRegion.fromLocation(location, "listings");
 let DATA = `data/${REGION}`;
 
-// ---- per-region dashboard config -------------------------------------------
-// Loaded from the deployed derivative of site/regions.json before any regional
-// data. An anchor is optional; without one the distance control stays hidden.
 let CFG = {};
 let ANCHOR = null;
 let DISTRICTS = {};
@@ -29,10 +24,6 @@ const anchorLabel = () => (ANCHOR
   ? (ANCHOR.genitive || ANCHOR.name) : "");
 const normLoc = (loc) => (!loc ? null : (DISTRICTS[loc] || loc));
 
-// town -> [lat, lon]: the FALLBACK for the radius filter. Listings now carry
-// their own UUG-geocoded `ll` (86% of them), which distOf prefers — this table
-// only still earns its place because archive entries have no `ll` yet. It is
-// śląskie-only; other regions rely on `ll` alone.
 const TOWN_COORDS = {
   "Gliwice": [50.2945, 18.6714], "Knurów": [50.2197, 18.6741], "Pyskowice": [50.3958, 18.6286],
   "Gierałtowice": [50.2069, 18.7333], "Pilchowice": [50.1814, 18.6047], "Sośnicowice": [50.2206, 18.5378],
@@ -63,7 +54,6 @@ const TOWN_COORDS = {
   "Myszków": [50.5750, 19.3225], "Goczałkowice-Zdrój": [49.9447, 18.9500], "Skoczów": [49.8000, 18.7900],
   "Bielsko-Biała": [49.8224, 19.0469], "Cieszyn": [49.7497, 18.6300], "Żywiec": [49.6875, 19.1922],
   "Ustroń": [49.7236, 18.8100], "Wisła": [49.6561, 18.8600], "Brenna": [49.7270, 18.9050],
-  // added so the radius filter covers more of the voivodeship's larger towns
   "Częstochowa": [50.8118, 19.1203], "Zawiercie": [50.4875, 19.4318], "Jaworzno": [50.2050, 19.2742],
   "Kłobuck": [50.9097, 18.9319], "Łazy": [50.4272, 19.3958], "Poręba": [50.4644, 19.3856],
   "Blachownia": [50.7758, 19.0289], "Koniecpol": [50.7833, 19.6833], "Lubomia": [50.0386, 18.3300],
@@ -74,9 +64,6 @@ function haversine(a, b) {
   const h = Math.sin(dLa / 2) ** 2 + Math.cos(a[0] * p) * Math.cos(b[0] * p) * Math.sin(dLo / 2) ** 2;
   return Math.round(2 * R * Math.asin(Math.sqrt(h)));
 }
-/** km from the region's anchor city. Prefers the listing's own geocoded point
- *  (street- or town-precise, and it exists for every region) and falls back to
- *  TOWN_COORDS for records without one — chiefly archive entries. */
 function distOf(l) {
   if (!ANCHOR || !l) return null;
   if (Array.isArray(l.ll) && l.ll.length === 2) return haversine(ANCHOR.ll, l.ll);
@@ -89,7 +76,7 @@ const kwLinks = RentgenKWLinks.create();
 let kwCatalogueAvailable = false;
 const kwListing = l => ({ url: l.url, type: l.type, locality: normLoc(l.locality) });
 const kwOf = l => kwLinks.get(kwListing(l));
-let locOptions = [];                         // [ [name, count], ... ] sorted by count
+let locOptions = [];
 const FILTER_KEY = RentgenRegion.storageKey("rentgen.filters.v2", REGION);
 
 const $ = (sel) => document.querySelector(sel);
@@ -151,9 +138,6 @@ async function boot() {
   }
 
   try {
-    // Optional external storage pins a complete immutable regional version.
-    // The default Pages manifest carries a query cache-buster for its shards.
-    // Heavy fields (offers/timeline/photos) live in shards loaded on demand.
     const storage = await RentgenStorage.resolve(regional, document.baseURI);
     DATA = storage.data;
     const mf = storage.pinned ? storage.manifest
@@ -171,7 +155,7 @@ async function boot() {
     ]);
     state.all = RentgenPayload.decode(listings);
     if (mf && state.all.length !== mf.count) throw new Error("Listing count mismatch");
-    if (!mf) for (const l of state.all) l._full = true;   // pre-split monolith
+    if (!mf) for (const l of state.all) l._full = true;
     state.byUrl = new Map(state.all.filter((l) => l.url).map((l) => [l.url, l]));
     state.rcnstats = rcnstats && rcnstats.towns ? rcnstats : null;
     if (state.rcnstats) {
@@ -179,8 +163,6 @@ async function boot() {
         const b = benchOf(l);
         if (b) { l._bench = b; l._gap = b.gapPct; }
       }
-      // towns whose powiat has stopped reporting deeds (scraper/rcnstats.py
-      // _freshness) — keyed by the same folded name benchOf() looks up
       state.stale = new Map((state.rcnstats.stale || []).map((s) => [s.town, s]));
     }
     state.meta = meta;
@@ -202,12 +184,9 @@ async function boot() {
   wireLazyDetails();
   restoreFilters();
   render();
-  wireMap();   // after render so the first marker pass sees the filtered view
+  wireMap();
 }
 
-/** The radius filter only means something with an anchor city configured for
- *  the region — otherwise hide it rather than offer a control that filters
- *  everything out. */
 function applyAnchorUi() {
   const group = $("#distance-group");
   if (!ANCHOR) {
@@ -286,7 +265,6 @@ function buildSourceFilter() {
     }).join("");
 }
 
-// ---- locality (town) multi-select -----------------------------------------
 
 function buildLocalityOptions() {
   const counts = new Map();
@@ -349,7 +327,6 @@ function wireLocality() {
   });
 }
 
-// ---- standard controls -----------------------------------------------------
 
 function wireControls() {
   document.querySelectorAll(".seg").forEach((seg) => {
@@ -362,7 +339,7 @@ function wireControls() {
       apply();
     });
   });
-  let debounce;   // typing a price shouldn't re-render 20k rows per keystroke
+  let debounce;
   const debouncedApply = () => { clearTimeout(debounce); debounce = setTimeout(apply, 200); };
   ["min-price", "max-price", "min-area", "max-area", "min-rooms", "q"].forEach((id) => {
     const el = $("#" + id);
@@ -372,9 +349,6 @@ function wireControls() {
   const dist = $("#distance"); if (dist) dist.addEventListener("change", (e) => { state.distance = e.target.value; apply(); });
 }
 
-// ---- private KW evidence and explicit per-offer associations ---------------
-// Associations never enter filter snapshots, storage or shared URLs. Explicit
-// address searches use only the same-origin private catalogue on loopback.
 function syncKWButton() {
   const button = $("#kw-only");
   if (button) {
@@ -424,7 +398,7 @@ function wireKW() {
       if (file.size > RentgenKW.MAX_BYTES) throw Error("Plik przekracza 4 MiB.");
       const body = await file.text(); if (current !== generation) return;
       kwLinks.load(JSON.parse(body));
-      state.kwOnly = false; // Show cards so their exact address can be checked before linking.
+      state.kwOnly = false;
       refresh();
     } catch (error) {
       if (current !== generation) return;
@@ -634,15 +608,7 @@ function activeFilters() {
 }
 
 // ---- empty state that names the culprit ------------------------------------
-// "Brak ofert dla wybranych filtrów" is useless when the filter at fault is one
-// you set three visits ago and the view remembers. So when the grid comes back
-// empty we re-run the filter with each dimension relaxed in turn and offer the
-// ones that would actually bring results back. Only ever computed on an empty
-// grid, over the pool already in memory.
 
-/** The active filter dimensions, as {k, label} using the chip key vocabulary.
- *  Localities collapse to one key — clearing them one at a time rarely helps.
- *  owner/market are skipped in archive mode because passes() ignores them there. */
 function filterDims() {
   const out = [];
   if (state.kwOnly) out.push({ k: "kw", label: "Tylko z KW" });
@@ -661,8 +627,6 @@ function filterDims() {
   return out;
 }
 
-/** How many rows would pass if dimension `k` were cleared. Mutates state for
- *  the duration of the count and restores it — passes() reads state directly. */
 function countWithout(pool, f, k) {
   const saved = { type: state.type, source: state.source, owner: state.owner,
                   market: state.market, distance: state.distance, kwOnly: state.kwOnly };
@@ -700,9 +664,6 @@ function emptyMessage(pool, f) {
     : 'Użyj „Wczytaj KW”, a następnie powiąż rekord z konkretną ofertą po sprawdzeniu adresu.'}
     Brak powiązania nie oznacza braku księgi.</p>`);
 
-  // "Sprzedane wg RCN" is the view most likely to look broken: it is a thin
-  // slice to begin with, and in a town whose register has stopped it can never
-  // fill up at all — say both things outright rather than showing a blank grid.
   if (state.history === "sold_rcn") {
     const all = pool.filter((l) => l.sold);
     if (all.length) {
@@ -736,10 +697,6 @@ function emptyMessage(pool, f) {
   return `<div class="empty">${parts.join("")}</div>`;
 }
 
-// ---- counts on the archive segment buttons ---------------------------------
-// Both archive views are small slices of a big dataset, so an empty grid reads
-// as a broken button. The totals come from meta.json (known before the archive
-// is even fetched); the active view shows what survives the other filters.
 
 function setSegCount(sel, n, total) {
   const el = $(sel);
@@ -768,8 +725,6 @@ function renderChips() {
     `<button class="chip reset" data-k="__all__">Wyczyść wszystko</button>`;
 }
 
-/** Clear one filter by its chip key. Shared by the chip row and the
- *  empty-state buttons, which speak the same vocabulary (plus "loc:*"). */
 function clearFilter(k) {
   if (k === "__all__") { resetAll(); return; }
   if (k.startsWith("seg:")) setSeg(k.slice(4), "all");
@@ -788,14 +743,12 @@ function wireChips() {
     if (b) clearFilter(b.dataset.k);
   });
   // the empty state offers the same buttons; it lives inside #grid, whose card
-  // handlers all key off .card and so ignore these
   $("#grid").addEventListener("click", (e) => {
     const b = e.target.closest(".empty button[data-k]");
     if (b) { e.stopPropagation(); clearFilter(b.dataset.k); }
   });
 }
 
-// ---- filtering + rendering -------------------------------------------------
 
 function currentFilters() {
   const num = (id) => { const v = parseFloat($("#" + id).value); return Number.isFinite(v) ? v : null; };
@@ -811,8 +764,6 @@ function passes(l, f) {
   if (state.kwOnly && !kwOf(l)) return false;
   const archiveMode = inArchive();
   if (state.history === "sold_rcn" && !l.sold) return false;
-  // archive entries carry no development/is_private fields — the market and
-  // owner filters would silently pass/blank everything there, so skip them
   if (!archiveMode && state.market === "primary" && !l.development) return false;
   if (!archiveMode && state.market === "secondary" && l.development) return false;
   if (state.type !== "all" && l.type !== state.type) return false;
@@ -847,12 +798,10 @@ function passes(l, f) {
 
 // ---- "cena vs transakcje RCN" (benchmarks from data/rcnstats.json) ----------
 
-// must fold town names exactly like scraper/rcn.py _fold()
 const foldTown = (s) => !s ? "" :
   s.replace(/ł/g, "l").replace(/Ł/g, "L").normalize("NFKD")
    .replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9 ]/g, " ").trim();
 
-// must mirror scraper/rcnstats.py bucket_of()
 function bucketOf(type, area) {
   if (area == null) return null;
   if (type === "flat") return area < 40 ? "<40" : area < 60 ? "40-59" : area < 80 ? "60-79" : area < 120 ? "80-119" : "120+";
@@ -869,9 +818,6 @@ function ppmOf(l) {
   return l.price != null && l.area ? l.price / l.area : null;
 }
 
-// deed zł/m² benchmark for this listing's town + size bucket (+ market);
-// ppm bounds mirror scraper/rcnstats.py PPM_MIN/MAX — a listing outside them
-// is a typo/udział price and a "gap vs market" would be nonsense
 function benchOf(l) {
   const stats = state.rcnstats;
   const ppm = ppmOf(l);
@@ -884,15 +830,11 @@ function benchOf(l) {
   return { ...b, bucket, townName: town.name, gapPct: (ppm - b.med) / b.med * 100 };
 }
 
-// Is this town's slice of the RCN register stale? A powiat that stopped
-// reporting can confirm no recent sale at all and its deed benchmarks quietly
-// age, so every RCN surface has to be able to admit it.
 function staleOf(locality) {
   if (!state.stale || !locality) return null;
   return state.stale.get(foldTown(normLoc(locality))) || null;
 }
 
-// how sales end around here: town gap stat, else voivodeship-wide per type
 function gapStatOf(l) {
   const stats = state.rcnstats;
   if (!stats) return null;
@@ -902,9 +844,7 @@ function gapStatOf(l) {
   return g ? { ...g, where: null } : null;
 }
 
-// discount: highest price ever recorded for this property vs today's price
 function discountOf(l) {
-  // sub-10k "prices" are seller typos/udział sales — not real discounts
   if (l.price == null || l.price < 10000) return { pct: 0, abs: 0 };
   const seen = (l.price_history || []).map((x) => x.price).filter((x) => x != null);
   if (l.prev_price != null) seen.push(l.prev_price);
@@ -914,9 +854,6 @@ function discountOf(l) {
   return { pct: (base - l.price) / base * 100, abs: base - l.price };
 }
 
-// `created` arrives in three formats (OLX ISO+offset, Otodom "YYYY-MM-DD HH:MM:SS",
-// gratka/morizon date-only) and is null for ~half the listings — comparing raw
-// strings mis-sorts within a day and sinks null-created listings; parse once.
 function createdTs(l) {
   if (l._ts === undefined) {
     const c = l.created || l.first_seen || l.delisted || "";
@@ -963,9 +900,6 @@ async function loadArchive() {
   return archiveRequest;
 }
 
-// ---- lazy detail shards ------------------------------------------------------
-// heavy fields (offers, timeline, photo_urls, street…) live in d/NN.json,
-// where NN = FNV-1a(url) % shards — the SAME hash as scraper/payload.py
 
 function shardOf(url, n) {
   let h = 0x811c9dc5 | 0;
@@ -1003,7 +937,6 @@ async function loadDetails(l) {
   return l;
 }
 
-// Populate every expanded section from one successful detail load.
 async function fillCardDetails(cardEl) {
   const l = cardEl.dataset.detail
     ? state.archiveByKey && state.archiveByKey.get(cardEl.dataset.detail)
@@ -1032,11 +965,10 @@ async function fillCardDetails(cardEl) {
     .forEach((el) => { el.innerHTML = offersRows(l); });
   cardEl.querySelectorAll("details.tl .tl-body")
     .forEach((el) => { el.innerHTML = tlBody(l); });
-  const ul = cardEl.querySelector(".pin-ul");   // street arrives with the shard
+  const ul = cardEl.querySelector(".pin-ul");
   if (ul && !ul.value && l.street) ul.value = l.street;
 }
 
-// `toggle` does not bubble; capture it for all cards, including later chunks.
 function wireLazyDetails() {
   $("#grid").addEventListener("toggle", (e) => {
     if (!e.target.open) return;
@@ -1046,11 +978,9 @@ function wireLazyDetails() {
 }
 
 // Chunked rendering: with ~20k listings, building the whole grid at once
-// freezes the page for seconds on every filter click. Render the first CHUNK,
-// then let an IntersectionObserver append more as the user scrolls near the end.
 const CHUNK = 60;
-let view = [];          // current filtered+sorted rows
-let rendered = 0;       // how many of them are in the DOM
+let view = [];
+let rendered = 0;
 let moreObserver = null;
 
 function appendChunk() {
@@ -1154,10 +1084,7 @@ function historyBlock(l) {
   return bits.length ? `<div class="hist">${bits.join(" · ")}</div>` : "";
 }
 
-// ---- property lifetime timeline ("rentgen" view) ---------------------------
 
-// every timeline row names its source; when the source is linkable, it links:
-//   portal events -> the exact ad; RCN deeds -> the parcel on geoportal
 const tlA = (url, text) =>
   `<a href="${escapeHtml(url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${text}</a>`;
 
@@ -1253,8 +1180,6 @@ function negoBlock(l) {
       (g.med_days ? `, po ~${g.med_days} dniach od wystawienia` : "") +
       ` (${g.n} obserwowanych sprzedaży wg RCN)`);
   }
-  // a benchmark built on a register that stopped months ago is still useful,
-  // but you should know its age before quoting it at a seller
   const st = staleOf(l.locality);
   if (st && (b || g)) {
     rows.push(`⚠ rejestr RCN dla: ${escapeHtml(st.name)} kończy się na <b>${escapeHtml(st.last)}</b> ` +
@@ -1292,7 +1217,6 @@ function pastSaleLine(l) {
   return `<div class="pastsale">🔑 poprzednio sprzedane ${s.date} za <b>${PLN.format(s.price)} zł</b> (akt not., pewność: ${s.confidence})</div>`;
 }
 
-// ---- "uzupelnij adres" -> ready-to-paste rcncheck --pin command -------------
 
 function pinBlock(l) {
   if (!l.url) return "";
@@ -1317,7 +1241,6 @@ function pinBlock(l) {
   </details>`;
 }
 
-// ---- in-browser RCN check (UUG geocoder -> ULDK parcel -> WFS deeds) --------
 
 async function fetchGugik(url) {
   const response = await fetch(url, { signal: AbortSignal.timeout(15000) });
@@ -1347,9 +1270,6 @@ async function uldkParcel(x, y) {
 const _MS_NS = "http://mapserver.gis.umn.edu/mapserver";
 
 async function rcnDeedsNear(x, y, layer, radius = 60) {
-  // WFS bbox in the layer's native EPSG:2180 axis order: northing first.
-  // 60 m around the UUG address point covers the building; a bigger radius in
-  // a dense city block overflows the feature cap and silently drops deeds.
   const bbox = `${y - radius},${x - radius},${y + radius},${x + radius}`;
   const url = "https://mapy.geoportal.gov.pl/wss/service/rcn?service=WFS&version=2.0.0" +
               `&request=GetFeature&typeNames=ms:${layer}&count=500&bbox=${bbox}`;
@@ -1373,7 +1293,7 @@ async function rcnDeedsNear(x, y, layer, radius = 60) {
   for (const f of features) {
     const pfx = layer === "lokale" ? "lok" : "bud";
     const trans = g(f, "tran_rodzaj_trans");
-    if (trans && trans !== "wolnyRynek") continue;      // skip auctions etc.
+    if (trans && trans !== "wolnyRynek") continue;
     out.push({
       layer,
       date: g(f, "dok_data").slice(0, 10),
@@ -1404,7 +1324,7 @@ async function runRcnCheck(box, btn) {
   try {
     const geo = await uugResolve(loc, ulEl.value.trim(), nr);
     if (!geo) { results.innerHTML = "GUGiK nie zna takiego adresu — sprawdź pisownię"; return; }
-    if (geo.street) ulEl.value = geo.street;   // autofill the canonical name
+    if (geo.street) ulEl.value = geo.street;
     const wantNr = nr.toLowerCase().replace(/[^0-9a-z/]/g, "");
     const nrOk = geo.number && geo.number.toLowerCase().replace(/[^0-9a-z/]/g, "") === wantNr;
     let head = `<b>ul. ${escapeHtml(geo.street || ulEl.value)} ${escapeHtml(nr)}, ${escapeHtml(loc)}</b>`;
@@ -1415,8 +1335,6 @@ async function runRcnCheck(box, btn) {
     } else {
       head += ` · <i>geokoder nie potwierdził numeru ${escapeHtml(nr)} — wyniki mogą być przybliżone</i>`;
     }
-    // "view it" links: parcel highlighted on the official map (with the RCN
-    // layer, where each deed's full record is browsable) + Street View
     const links = [];
     if (parcel) {
       links.push(`<a href="https://mapy.geoportal.gov.pl/imap/Imgp_2.html?identifyParcel=${encodeURIComponent(parcel.id)}"
@@ -1431,7 +1349,6 @@ async function runRcnCheck(box, btn) {
     if (nrOk) deeds = deeds.filter((d) => addrNr(d.addr) === wantNr);
     deeds.sort((a, b) => (a.date || "").localeCompare(b.date || ""));
     const rows = deeds.map((d) => {
-      // d.* is raw text from the external WFS response — escape like the head
       const bits = [escapeHtml(d.date || ""),
         d.price != null ? `<b>${PLN.format(d.price)} zł</b>` : "cena ?",
         d.area != null ? `${escapeHtml(d.area)} m²` : null,
@@ -1452,8 +1369,6 @@ async function runRcnCheck(box, btn) {
 }
 
 function buildPinCommand(box) {
-  // single-quote for the shell: scraped street names / URLs may carry `$`,
-  // backticks or quotes, and the user pastes this into their terminal
   const q = (v) => `'${String(v).replace(/'/g, "'\\''")}'`;
   const val = (sel) => { const el = box.querySelector(sel); return el ? el.value.trim() : ""; };
   const parts = ["python -m scraper.rcncheck", q(box.dataset.loc || "?")];
@@ -1469,8 +1384,6 @@ function buildPinCommand(box) {
   return parts.join(" ");
 }
 
-// one delegated listener instead of a per-card inline onclick — scraped URLs
-// must never be interpolated into JS code (a quote in a URL = script injection)
 function wireCardOpen() {
   $("#grid").addEventListener("click", (e) => {
     if (e.target.closest("a, button, input, select, textarea, label, details, summary")) return;
@@ -1501,20 +1414,16 @@ function wirePinButtons() {
   });
 }
 
-// ---- map view (Leaflet + markercluster, lazy-loaded from CDN) ---------------
 
 const MAP_KEY = RentgenRegion.storageKey("rentgen.map.v1", REGION);
 let lmap = null, lcluster = null, legendCtl = null, leafletLoading = null, mapFitted = false;
 
-// marker color = the card's "vs transakcje RCN" verdict
 function gapColor(l) {
   const g = l._gap;
   if (g == null) return "#1f6feb";
   return g > 5 ? "#b91c1c" : g < -5 ? "#1a7f37" : "#6b7280";
 }
 
-// town-precision points all sit on the UUG centroid — scatter them
-// deterministically (~≤400 m, seeded by URL) so clusters expand sanely
 function jitterLL(l) {
   if (l.llp === "s") return l.ll;
   let h = 2166136261;

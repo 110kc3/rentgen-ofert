@@ -19,8 +19,6 @@ from .regions import portal_slug
 from .identity import known_floor
 
 BASE = "https://www.otodom.pl"
-# Whole-voivodeship search by default. RENTGEN_REGION is the canonical catalog
-# slug; Otodom's independently configured path slug is resolved below.
 REGION = os.environ.get("RENTGEN_REGION", "slaskie")
 PORTAL_REGION = portal_slug(REGION, "otodom")
 SEARCH = {
@@ -35,25 +33,15 @@ HEADERS = {
     "Accept-Language": "pl-PL,pl;q=0.9,en;q=0.8",
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
 }
-# Otodom honours &limit: 72 is the largest it serves and halves the request
-# count on the biggest portal (515 pages -> 258 for śląskie flats, verified).
 PAGE_SIZE = 72
 
-# Production disproved the old "~320 successful pages per run" theory.  With a
-# 12-page unbanded scout, Otodom began returning 405 after only 5–6 minutes and
-# seven upper flat bands failed on page one; the stable ~16.6k source baseline
-# fell to ~8.5k for every run from 2026-08-12 through 2026-08-22.  The default
-# is therefore the full unbanded walk.  Price bands are an explicit experiment
-# only, and even then run *after* that full baseline so they can only add data.
 _NEXT = re.compile(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', re.S)
 _REFUSAL_STATUSES = (403, 405, 429)
 _ESTATE_FOR_TYPE = {"house": "HOUSE", "flat": "FLAT"}
 
-
 def _new_request_stats():
     return {"started": time.monotonic(), "attempted": 0, "successful": 0,
             "first_refusal": None}
-
 
 def _note_refusal(stats, typ, tag, page, status):
     if stats is None or status not in _REFUSAL_STATUSES \
@@ -67,7 +55,6 @@ def _note_refusal(stats, typ, tag, page, status):
         "successful_before": stats["successful"],
         "elapsed_s": round(time.monotonic() - stats["started"], 1),
     }
-
 
 def _finish_request_stats(stats, log):
     elapsed = round(time.monotonic() - stats["started"], 1)
@@ -87,7 +74,6 @@ def _finish_request_stats(stats, log):
         f"successful in {elapsed:.1f}s; {refusal}")
     return public
 
-
 def extract_search_ads(html: str) -> dict:
     """Pull the searchAds object out of a result page's __NEXT_DATA__."""
     m = _NEXT.search(html)
@@ -95,7 +81,6 @@ def extract_search_ads(html: str) -> dict:
         raise ValueError("Otodom: __NEXT_DATA__ not found (layout changed?)")
     data = json.loads(m.group(1))
     return data["props"]["pageProps"]["data"]["searchAds"]
-
 
 def parse_items(items, typ: str, region: str = REGION):
     """Turn raw Otodom ad dicts into normalized listing dicts."""
@@ -105,18 +90,10 @@ def parse_items(items, typ: str, region: str = REGION):
     out = []
     for it in items:
         estate = it.get("estate")
-        # Search result pages can contain promoted cards from another estate
-        # category. Trust the card's explicit estate and keep only the category
-        # this walk requested; otherwise the same URL can become both a house
-        # and a flat and survive size-based dedupe as two dashboard cards.
-        if estate != expected_estate:  # also skips INVESTMENT bundles etc.
+        if estate != expected_estate:
             continue
         loc = (it.get("location") or {}).get("address") or {}
         province = ((loc.get("province") or {}).get("name") or "")
-        # Promoted result cards are not guaranteed to belong to the search's
-        # voivodeship. Besides polluting the dashboard, one such locality is
-        # enough to make n-online crawl an entirely different region because
-        # its town list is derived from the other portals' current results.
         if province and region_slug(province) != region:
             continue
         price = it.get("totalPrice") or {}
@@ -140,7 +117,6 @@ def parse_items(items, typ: str, region: str = REGION):
             "district": (loc.get("district") or {}).get("name") if loc.get("district") else None,
             "street": (loc.get("street") or {}).get("name") if loc.get("street") else None,
             "is_private": it.get("isPrivateOwner"),
-            # PRIMARY = new-build/developer, SECONDARY = resale
             "market": (it.get("market") or "").lower() or None,
             "agency": (it.get("agency") or {}).get("name") if it.get("agency") else None,
             "image": images[0].get("medium") or images[0].get("large") if images else None,
@@ -149,13 +125,12 @@ def parse_items(items, typ: str, region: str = REGION):
         })
     return out
 
-
 def _walk(path, typ, tag, max_pages, delay, session, log, seen, out, extra="",
           request_stats=None):
     """Page through one search (optionally price-banded). Returns its cov row."""
     page = 1
     got = 0
-    served = 0        # ads Otodom handed over, before the INVESTMENT filter
+    served = 0
     served_keys = set()
     kept_keys = set()
     total_pages = None
@@ -171,7 +146,7 @@ def _walk(path, typ, tag, max_pages, delay, session, log, seen, out, extra="",
             r = session.get(url, headers=HEADERS, timeout=30)
             r.raise_for_status()
             sa = extract_search_ads(r.text)
-        except Exception as exc:  # keep what we have, stop this category
+        except Exception as exc:
             stopped = coverage.ERROR
             error, http_status = coverage.error_details(exc)
             _note_refusal(request_stats, typ, tag, page, http_status)
@@ -181,10 +156,6 @@ def _walk(path, typ, tag, max_pages, delay, session, log, seen, out, extra="",
             request_stats["successful"] += 1
         items = sa.get("items") or []
         served += len(items)
-        # Otodom sometimes emits the same slug twice on one page under a real
-        # ad id and a synthetic ``9<id>00067`` id. The URL/slug is the stable
-        # advert identity; counting ids would inflate coverage as well as the
-        # raw output.
         served_keys.update(coverage.listing_key(
             typ, it.get("slug") or it.get("id")) for it in items)
         parsed = parse_items(items, typ)
@@ -195,19 +166,11 @@ def _walk(path, typ, tag, max_pages, delay, session, log, seen, out, extra="",
         got += len(batch)
         pg = sa.get("pagination") or {}
         total_pages = pg.get("totalPages", 1) or 1
-        # `pagination.totalItems` is where Otodom states its count (18 505
-        # śląskie flats on 2026-08-08). The old code read `totalResults` /
-        # `count` off searchAds — neither key exists, so portal_total was
-        # silently null on every coverage row it ever wrote.
         total_ads = pg.get("totalItems") or total_ads
         log(f"  otodom {typ}/{tag} page {page}/{min(total_pages, max_pages)}: +{len(batch)}")
-        # stop on an empty RESULT page, not an empty parsed batch — a page of
-        # nothing but INVESTMENT bundles filters to [] while more pages exist
         if not items:
             break
         if page >= min(total_pages, max_pages):
-            # Otodom states its own totalPages, so we know exactly which
-            # limit bit: ours (more pages exist) or the portal's end.
             stopped = (coverage.OUR_CAP if total_pages > max_pages
                        else coverage.OK)
             break
@@ -219,15 +182,12 @@ def _walk(path, typ, tag, max_pages, delay, session, log, seen, out, extra="",
                         served_keys=served_keys, kept_keys=kept_keys,
                         error=error, http_status=http_status)
 
-
 def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
            types=("house", "flat"), banded=False):
     session = session or requests.Session()
     out = []
     cov = []
     request_stats = _new_request_stats()
-    # One pacer for the whole portal: the unbanded searches and every band
-    # share its retry budget, so a refusing Otodom costs minutes, not an hour.
     pacer = bands.Pacer("otodom", delay=delay, log=log)
     try:
         for typ, path in SEARCH.items():
@@ -235,9 +195,6 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
                 continue
             seen = set()
             pacer.pause()
-            # Retry only an outright root refusal. Restarting a partially
-            # successful 200-page baseline from page one wastes the very
-            # request budget this mode is meant to protect.
             row = pacer.attempt(
                 typ,
                 lambda: _walk(path, typ, REGION, max_pages, delay, session,
@@ -247,8 +204,6 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
             cov.append(row)
             if not banded or not bands.overflows(row, "otodom"):
                 continue
-            # Experimental and strictly additive: the full unbanded baseline
-            # above is already held before a single filtered request is made.
             log(f"  otodom {typ}: {row.get('portal_total')} ads stated after "
                 f"the full baseline — experimentally subdividing by price")
             rows, seeds = bands.subdivide(

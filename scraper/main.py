@@ -56,12 +56,6 @@ from . import (
 )
 from .normalize import dedupe, link_same_size, link_twins, require_unique_urls
 
-# Region = the unit of everything (data dir, caches, RCN snapshot). Output goes
-# to site/data/<region>/ and per-region cache files so more voivodeships can be
-# added side by side; the geocode cache file is shared but every key carries a
-# TERYT prefix, so same-named places remain region-safe. All of it lives on the
-# region's orphan `data-<region>` branch, NOT in main's history (see TODO.md
-# "storage switch").
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 REGION = os.environ.get("RENTGEN_REGION", "slaskie")
 REGION_CONFIG = regions.get_region(REGION)
@@ -70,7 +64,7 @@ CACHE_DIR = ROOT / "cache"
 CACHE_PATH = CACHE_DIR / f"phash_{REGION}.json.gz"
 RCN_CACHE = CACHE_DIR / f"rcn_{REGION}.json.gz"
 GEO_CACHE = CACHE_DIR / "geo_cache.json"
-NOL_TOWNS = CACHE_DIR / "nol_towns.json"   # per-region town lists for n-online
+NOL_TOWNS = CACHE_DIR / "nol_towns.json"
 NOL_ARCHIVE_STATE = CACHE_DIR / f"nol_archive_{REGION}.json"
 
 SOURCES = (
@@ -84,11 +78,6 @@ SOURCES = (
 def run() -> int:
     run_started = time.monotonic()
     phase_seconds = {}
-    # 200, not the old 50: with 50 EVERY paginated portal stopped on our cap
-    # inside śląskie alone (gratka's domy search alone runs to page 72 and only
-    # then 404s, so ~700 houses were being dropped silently). The scrapers all
-    # terminate on the portal's own end, so a generous cap costs nothing where
-    # it isn't needed and `coverage` reports it when it still binds.
     max_pages = int(os.environ.get("RENTGEN_MAX_PAGES", "200"))
     delay = float(os.environ.get("RENTGEN_DELAY", "0.7"))
     types = tuple(t.strip() for t in os.environ.get("RENTGEN_TYPES", "house,flat").split(",") if t.strip())
@@ -101,10 +90,6 @@ def run() -> int:
     http = net.session()
     cov_rows = []
     banded = os.environ.get("RENTGEN_BANDS", "1") != "0"
-    # Otodom is deliberately different from the other banded portals.  Its
-    # 12-page scout + bands halved production coverage for ten days straight;
-    # keep the restored full parent crawl unless an operator explicitly runs
-    # an additive experiment. RENTGEN_BANDS=0 remains the global kill switch.
     otodom_banded = (banded
                       and os.environ.get("RENTGEN_OTODOM_BANDS", "0") == "1")
     nol_archive_state = nieruchomosci_online.load_archive_state(
@@ -112,31 +97,18 @@ def run() -> int:
     nol_archive_mode = os.environ.get("RENTGEN_NOL_ARCHIVE", "auto")
     pending_archive_state = None
     nol_archive_days = int(os.environ.get("RENTGEN_NOL_ARCHIVE_DAYS", "7"))
-    # Resolve invalid operator input before the first portal request.
     nol_harvest_archive = nieruchomosci_online.archive_due(
         nol_archive_state, today, nol_archive_mode, nol_archive_days)
     for name, mod in SOURCES:
         source_started = time.monotonic()
-        # Do not inherit a previous in-process invocation's diagnostics when a
-        # scraper raises before publishing its new rows.
         mod.scrape.last_coverage = []
         kwargs = dict(max_pages=max_pages, delay=delay, types=types, session=http)
         if mod is not nieruchomosci_online:
-            # n-online is subdivided by town already and has no price filter
             kwargs["banded"] = otodom_banded if mod is otodom else banded
         if mod is olx:
-            # OLX caps its own pagination; a capped search is re-run per town.
-            # Towns come from the same resolver n-online uses, but OLX runs
-            # BEFORE the others have filled `raw`, so this leans on the cached
-            # list from previous runs (empty on a region's very first run —
-            # subdivision then starts one run later, which is harmless).
             kwargs["towns"] = nieruchomosci_online.resolve_towns(
                 REGION, raw, cache_path=NOL_TOWNS)
         if mod is nieruchomosci_online:
-            # This portal has no region-wide search — it needs a town list, and
-            # the portal publishes no index to build one from. Derive it from the
-            # localities the other four just returned (they run first in SOURCES
-            # precisely for this) so a brand-new region works on its first run.
             kwargs["towns"] = nieruchomosci_online.resolve_towns(
                 REGION, raw, cache_path=NOL_TOWNS)
             kwargs["region"] = REGION
@@ -158,7 +130,7 @@ def run() -> int:
             raw.extend(mod.scrape(**kwargs))
             if mod is nieruchomosci_online and mod.scrape.last_archive_state:
                 pending_archive_state = mod.scrape.last_archive_state
-        except Exception as exc:  # one portal failing must not lose the others
+        except Exception as exc:
             errors.append(f"{name}: {exc}")
             print(f"  !! {name} failed: {exc}", file=sys.stderr)
             error, http_status = coverage.error_details(exc)
@@ -170,17 +142,10 @@ def run() -> int:
             time.monotonic() - source_started, 1)
         cov_rows.extend(getattr(mod.scrape, "last_coverage", None) or [])
 
-    # Truncation is silent by nature — a capped search returns a plausible pile
-    # of listings and no hint that more exist. Say so, loudly, every run.
     for line in coverage.warnings(cov_rows):
         print(line, file=sys.stderr)
         errors.append(line.strip().lstrip("! "))
 
-    # Coverage as a number, so two runs are comparable without diffing stop
-    # reasons. `pct` counts what the portal SERVED, so it answers "how much of
-    # the portal did we get to see"; `kept` is what survived our own filtering
-    # (otodom drops INVESTMENT bundles, olx drops Otodom-syndicated ads), and
-    # the gap between them is deliberate, not missing coverage.
     cov_summary = coverage.summarise(
         cov_rows, listings=raw, expected_sources=[name for name, _ in SOURCES],
         expected_types=types)
@@ -205,30 +170,8 @@ def run() -> int:
         print("No listings collected - aborting (keeping previous data).", file=sys.stderr)
         return 1
 
-    # URL is portal-level identity. Catch cross-category/promoted-card leaks
-    # before the expensive photo, history and RCN phases; the publication
-    # validator repeats the invariant at the consumer boundary.
     require_unique_urls(raw, "raw scrape")
 
-    # Fingerprint listings by their photos. Powers photo-based de-duplication,
-    # the relist/price history and the photo archive. Correctness-critical cold
-    # entries start with the already-scraped card cover; history-only entries
-    # retain the fuller gallery path. A
-    # committed cache (cache/phash_<region>.json.gz) lets repeat runs reuse hashes
-    # (and source image URLs) by listing URL and skip the slow detail fetches.
-    # Archived ads are hashed too (BEFORE the split below) so observe_archived
-    # can still photo-match them when their URL was never seen live.
-    # Before hashing, not inside dedupe afterwards: a morizon ad that carries
-    # gratka's ad id in its thumbnail is already identified, and hashing it
-    # answers a question nobody is asking. ~8 700 fetches a run, out of a phase
-    # that was starving 9 177-18 296 listings of a budget it cannot stretch.
-    # Safe to run over the whole of `raw`, before the archived split below:
-    # only n-online flags `archived`, so a gratka/morizon pair is never left
-    # with one half on each side of it. (`dedupe` links again, idempotently —
-    # the pairing must also hold when RENTGEN_PHOTOS=0 skips this entirely.)
-    # The fetch queue itself is NOT portal order: current dedupe collisions are
-    # correctness-critical and go first; age-persisted history work uses the
-    # remaining fixed budget (see photomatch.prioritize).
     photo_started = time.monotonic()
     linked = link_twins(raw)
     if linked:
@@ -239,9 +182,6 @@ def run() -> int:
         "schema": 3,
         "enabled": photos_enabled,
         "listings": len(raw),
-        # The size/price heuristic is an explicit escape hatch for runs that
-        # disable photo matching. A requested photo run must never downgrade a
-        # failed/deferred photo decision into weaker merge evidence.
         "heuristic_fallback_enabled": not photos_enabled,
     }
     if photos_enabled:
@@ -283,7 +223,6 @@ def run() -> int:
             )
     phase_seconds["photos"] = round(time.monotonic() - photo_started, 1)
 
-    # Portal-archived ads (n-online flags them) are history evidence, not offers.
     dedupe_started = time.monotonic()
     archived_raw = [x for x in raw if x.get("archived")]
     raw = [x for x in raw if not x.get("archived")]
@@ -296,11 +235,6 @@ def run() -> int:
     phase_seconds["dedupe"] = round(time.monotonic() - dedupe_started, 1)
     history_started = time.monotonic()
 
-    # Lifecycle bookkeeping, in dependency order:
-    #   1. ingest portal-archived ads (direct "this ad ended" evidence)
-    #   2. delist sweep — URL-verify records that vanished from scrapes
-    #   3. history.update — matches today's listings, builds snapshots
-    #   4. RCN match — needs snapshots + `delisted` dates; cards re-enriched after
     hist_path = DATA_DIR / "history.json.gz"
     records = history.compact(history.load(hist_path))
     active_urls = {o.get("url") for l in listings for o in l.get("offers", [])}
@@ -313,9 +247,6 @@ def run() -> int:
     phase_seconds["history_prepare"] = round(
         time.monotonic() - history_started, 1)
     if verify_max > 0:
-        # Its OWN session: a liveness probe wants no retry ladder (see
-        # net.probe_session), and inheriting the scraper's turned 300 questions
-        # into 27-44 min of three separate runs.
         sweep_min = float(os.environ.get("RENTGEN_DELIST_BUDGET_MIN", "10"))
         delist_started = time.monotonic()
         delist.sweep(records, today, net.probe_session(),
@@ -325,13 +256,10 @@ def run() -> int:
 
     history_update_started = time.monotonic()
     history.update(listings, records, today)
-    overrides.apply(records, overrides.load())   # hand-pinned addresses win
+    overrides.apply(records, overrides.load())
     phase_seconds["history_update"] = round(
         time.monotonic() - history_update_started, 1)
 
-    # Real sale prices from notarial deeds (RCN) matched onto our records.
-    # Runs after update so brand-new records already carry a snapshot
-    # (locality/street/rooms) to match on; the affected cards are re-enriched.
     rcn_stats = None
     snap = None
     rcn_health = {"status": "disabled", "fetched": None, "counts": {}, "error": None}
@@ -346,14 +274,11 @@ def run() -> int:
             raise RuntimeError("No usable RCN snapshot; refusing to publish without transaction evidence")
         if snap:
             rcn.match(records, snap)
-            # town/size-bucket deed benchmarks + ask-vs-sold gap for the
-            # dashboard's "cena vs transakcje RCN" comparison
             rcn_stats = rcnstats.build(snap, records, today)
             rcn_stats["source"] = rcn_health
-    history.reenrich(listings)   # always: also drops the transient _rec links
+    history.reenrich(listings)
     phase_seconds["rcn"] = round(time.monotonic() - rcn_started, 1)
 
-    # Coordinates for the map view (UUG geocoder, cached; towns first).
     geo_started = time.monotonic()
     geocoded = 0
     if os.environ.get("RENTGEN_GEO", "1") != "0":
@@ -370,26 +295,21 @@ def run() -> int:
     history.save(hist_path, records)
     if pending_archive_state is not None:
         nieruchomosci_online.save_archive_state(NOL_ARCHIVE_STATE, pending_archive_state)
-    link_same_size(listings)   # flag same-area duplicates/relists visible right now
+    link_same_size(listings)
     relisted = sum(1 for l in listings if l.get("relisted"))
 
-    # newest first when a timestamp is available
     listings.sort(key=lambda l: (l.get("created") or ""), reverse=True)
-    for p in listings:                 # drop bulky hashes before publishing
+    for p in listings:
         p.pop("phashes", None)
 
-    # dashboard payload: slim index + lazy detail shards (replaces the old
-    # monolithic listings.json — see scraper/payload.py)
     archive = history.build_archive(records)
     payload.build(listings, DATA_DIR, archive=archive)
-    (DATA_DIR / "listings.json").unlink(missing_ok=True)   # pre-split leftover
+    (DATA_DIR / "listings.json").unlink(missing_ok=True)
 
     if rcn_stats:
         (DATA_DIR / "rcnstats.json").write_text(
             json.dumps(rcn_stats, ensure_ascii=False, indent=0), encoding="utf-8")
 
-    # Market time series for the "Statystyki" page (works without RCN too —
-    # the deed lines just stay empty then).
     mstats = marketstats.build(records, snap, today)
     mstats["rcn_health"] = rcn_health
     (DATA_DIR / "stats.json").write_text(
@@ -433,7 +353,6 @@ def run() -> int:
     print(f"Done: {len(listings)} unique properties from {len(raw)} raw ({summary}); "
           f"{relisted} flagged as relisted; {len(archive)} in archive.")
     return 0
-
 
 if __name__ == "__main__":
     raise SystemExit(run())

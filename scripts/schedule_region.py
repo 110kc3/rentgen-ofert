@@ -19,7 +19,6 @@ SLASKIE_CRON = "0 6,18 * * *"
 OPOLSKIE_CRON = "17 * * * *"
 INTERVAL = dt.timedelta(hours=72)
 
-
 def read_api(repository, path, accept="application/vnd.github+json"):
     if not re.fullmatch(r"[\w.-]+/[\w.-]+", repository):
         raise ValueError("invalid GitHub repository")
@@ -33,11 +32,9 @@ def read_api(repository, path, accept="application/vnd.github+json"):
     with urllib.request.urlopen(request, timeout=30) as response:
         return json.load(response)
 
-
 def read_previous(repository, region):
     return read_api(repository, f"contents/site/data/{region}/meta.json?ref=data-{region}",
                     "application/vnd.github.raw+json")
-
 
 def timestamp(value, now):
     if not isinstance(value, str):
@@ -49,16 +46,12 @@ def timestamp(value, now):
         raise ValueError("cadence timestamp is in the future")
     return parsed
 
-
 def read_last_attempt(repository, region):
-    # Seven-day retention means at most a few automatic attempts. Fail closed
-    # if manual activity exceeds a page; never silently ignore a recent attempt.
     data = read_api(repository, f"actions/artifacts?name=cadence-attempt-{region}&per_page=100")
     artifacts = data["artifacts"]
     if data["total_count"] != len(artifacts):
         raise ValueError("incomplete cadence attempt history")
     return [a["created_at"] for a in artifacts]
-
 
 def decide(event, schedule, requested, document, now, previous, attempts=lambda _: []):
     """Return (region, run, reason). ``previous`` reads only publication metadata."""
@@ -93,7 +86,6 @@ def decide(event, schedule, requested, document, now, previous, attempts=lambda 
         raise RegionCatalogError(f"region {slug!r} is disabled")
     return slug, True, "manual dispatch" if event == "workflow_dispatch" else "code update"
 
-
 def main():
     slug, run, reason = decide(
         os.environ["GITHUB_EVENT_NAME"], os.environ.get("SCHEDULE", ""),
@@ -109,7 +101,6 @@ def main():
         env.write(f"REGION={slug}\nDATA_BRANCH=data-{slug}\n")
     with pathlib.Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as summary:
         summary.write(f"### Schedule decision\n\n{message}\n")
-
 
 if __name__ == "__main__":
     main()

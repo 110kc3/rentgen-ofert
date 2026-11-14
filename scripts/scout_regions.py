@@ -30,7 +30,6 @@ from scraper.net import probe_session
 from scraper.normalize import stated_total
 from scraper.regions import PORTALS, load_catalog
 
-
 SCHEMA = 1
 TYPES = ("house", "flat")
 REFUSAL_STATUSES = {403, 405, 429}
@@ -55,7 +54,6 @@ EXCLUDED_SOURCES = [{
     ),
 }]
 
-
 def search_url(source: str, typ: str, slug: str) -> str:
     """Build a first-page URL without relying on import-time region state."""
     if typ not in TYPES:
@@ -74,7 +72,6 @@ def search_url(source: str, typ: str, slug: str) -> str:
         return f"{morizon.BASE}/{estate}/{slug}/"
     raise ValueError(f"unknown regional source: {source!r}")
 
-
 def _integer(value, field: str) -> int | None:
     if value is None:
         return None
@@ -87,7 +84,6 @@ def _integer(value, field: str) -> int | None:
     if number < 0:
         raise ValueError(f"{field} is negative: {number}")
     return number
-
 
 def parse_page(source: str, typ: str, html: str) -> dict:
     """Extract aggregate first-page evidence; never retain listing content."""
@@ -109,8 +105,6 @@ def parse_page(source: str, typ: str, html: str) -> dict:
         parser = gratka.parse_cards if source == "gratka" else morizon.parse_cards
         cards = parser(html, typ)
         total, is_minimum = stated_total(html)
-        # An empty, count-free document could be a consent wall or a new
-        # layout.  Do not call it a valid zero-inventory search.
         if total is None and not cards:
             raise ValueError(f"{SOURCE_LABELS[source]} page has no cards or stated total")
         return {
@@ -137,22 +131,18 @@ def parse_page(source: str, typ: str, html: str) -> dict:
 
     raise ValueError(f"unknown regional source: {source!r}")
 
-
 def _short_error(exc: Exception) -> str:
     text = " ".join(str(exc).split())
     return f"{type(exc).__name__}: {text}"[:300]
-
 
 def _challenge_page(html: str) -> bool:
     low = (html or "").lower()
     return any(marker in low for marker in olx.CHALLENGE_MARKERS)
 
-
 def _final_url_keeps_slug(url: str, slug: str) -> bool:
     """A wrong slug often redirects to a national page that still parses."""
     path_parts = [part for part in unquote(urlsplit(url).path).split("/") if part]
     return slug in path_parts
-
 
 def _target_row(source: str, typ: str, region: dict) -> dict:
     slug = region["portals"][source]
@@ -175,7 +165,6 @@ def _target_row(source: str, typ: str, region: dict) -> dict:
         "elapsed_ms": None,
         "error": None,
     }
-
 
 def probe(source: str, typ: str, region: dict, session, timeout: float,
           clock=time.monotonic) -> dict:
@@ -222,7 +211,6 @@ def probe(source: str, typ: str, region: dict, session, timeout: float,
     finally:
         row["elapsed_ms"] = max(0, round((clock() - started) * 1000))
 
-
 def skipped_probe(source: str, typ: str, region: dict, blocked_by: dict) -> dict:
     """Record a target suppressed after a source-wide refusal."""
     row = _target_row(source, typ, region)
@@ -237,7 +225,6 @@ def skipped_probe(source: str, typ: str, region: dict, blocked_by: dict) -> dict
     })
     return row
 
-
 def budget_skipped_probe(source: str, typ: str, region: dict) -> dict:
     """Retain the target shape after the scout's wall-clock budget expires."""
     row = _target_row(source, typ, region)
@@ -247,7 +234,6 @@ def budget_skipped_probe(source: str, typ: str, region: dict) -> dict:
         "error": "not requested after the scout runtime budget expired",
     })
     return row
-
 
 def _region_summary(
         regions: list[dict], probes: list[dict]) -> tuple[list[dict], list[str]]:
@@ -280,8 +266,6 @@ def _region_summary(
             "label": region["label"],
             "teryt": region["teryt"],
             "enabled": region["enabled"],
-            # This is a cross-source ranking signal, not a unique-listing
-            # estimate: sources overlap, and Gratka/Morizon share inventory.
             "declared_sum": sum(known) if known else None,
             "declared_probes": len(known),
             "target_probes": len(PORTALS) * len(TYPES),
@@ -290,11 +274,6 @@ def _region_summary(
             "_declared_targets": declared_targets,
         })
 
-    # A source-wide refusal can make six declared targets the fair comparison
-    # shape for every region. A one-region 404 must not be ranked beside that
-    # shape merely because its partial sum happens to be large. Use the most
-    # common exact set of successful source/type targets, and only rank rows
-    # that match it. If no target produced a count, there is no ranking.
     signatures = Counter(row["_declared_targets"] for row in summaries)
     ranking_targets = min(
         signatures,
@@ -321,7 +300,6 @@ def _region_summary(
     for rank, row in enumerate(comparable, 1):
         row["rank"] = rank
     return comparable + incomplete, list(ranking_targets)
-
 
 def _slug_checks(regions: list[dict], probes: list[dict]) -> list[dict]:
     checks = []
@@ -351,7 +329,6 @@ def _slug_checks(regions: list[dict], probes: list[dict]) -> list[dict]:
                 "statuses": statuses,
             })
     return checks
-
 
 def scout(document: dict, session=None, timeout: float = 20.0,
           delay: float = 0.7, runtime_budget: float = 40 * 60,
@@ -428,7 +405,6 @@ def scout(document: dict, session=None, timeout: float = 20.0,
         "probes": probes,
     }
 
-
 def _source_cell(row: dict, source: str) -> str:
     summary = row["by_source"][source]
     total = summary["declared_sum"]
@@ -439,7 +415,6 @@ def _source_cell(row: dict, source: str) -> str:
             value += f" ({summary['declared_probes']}/{len(TYPES)})"
         return value
     return "/".join(summary["statuses"])
-
 
 def markdown_summary(report: dict) -> str:
     """Compact Actions summary; the JSON artifact remains the evidence."""
@@ -500,7 +475,6 @@ def markdown_summary(report: dict) -> str:
     ])
     return "\n".join(lines)
 
-
 def write_report(report: dict, output, summary=None) -> None:
     output_path = pathlib.Path(output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -511,7 +485,6 @@ def write_report(report: dict, output, summary=None) -> None:
         summary_path = pathlib.Path(summary)
         summary_path.parent.mkdir(parents=True, exist_ok=True)
         summary_path.write_text(markdown_summary(report), encoding="utf-8")
-
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
@@ -540,7 +513,6 @@ def main(argv=None) -> int:
     print(f"scout report: {report['scope']['requests_made']}/"
           f"{report['scope']['request_budget']} requests -> {args.output}")
     return 0
-
 
 if __name__ == "__main__":
     raise SystemExit(main())

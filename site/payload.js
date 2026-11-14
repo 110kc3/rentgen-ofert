@@ -1,4 +1,3 @@
-/* Shared decoder for column tables; old regional object arrays remain readable. */
 (function (root) {
   "use strict";
   function decode(value) {

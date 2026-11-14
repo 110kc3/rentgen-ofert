@@ -41,22 +41,12 @@ from . import coverage
 from .normalize import region_slug, take_unseen, to_float, to_int
 from .rcn import _fold
 
-# Cap the town list: each town costs at least one request per type, and the tail
-# of villages is already covered by the other portals' region-wide searches.
 MAX_TOWNS = int(os.environ.get("RENTGEN_NOL_TOWNS", "60"))
 
-# The live/current results precede the archive. Two consecutive archive-only
-# pages make the boundary robust to one malformed availability page while still
-# avoiding the ~1,400 archive pages the old twice-daily walk consumed.
 ACTIVE_ARCHIVE_ONLY_PAGES = max(1, int(
     os.environ.get("RENTGEN_NOL_ARCHIVE_BOUNDARY_PAGES", "2")))
 ARCHIVE_STATE_SCHEMA = 2
 
-# Hand-curated seed for śląskie: the cities with powiat rights plus major towns.
-# slug -> proper display name. The slug loses Polish diacritics, so a derived
-# `slug.title()` would leak fake localities like "Dabrowa-Gornicza" into the
-# data and break locality-keyed dedupe/geocoding for offers without an address —
-# hence display names are always carried alongside, never reconstructed.
 SEED_TOWNS = {
     "slaskie": {
         "katowice": "Katowice", "gliwice": "Gliwice", "zabrze": "Zabrze",
@@ -82,13 +72,11 @@ SEED_TOWNS = {
     },
 }
 
-
 def slugify(name: str) -> str:
     """Display name -> sub-domain slug, the way the portal spells it:
     'Dąbrowa Górnicza' -> 'dabrowa-gornicza', 'Bielsko-Biała' -> 'bielsko-biala'.
     Verified against every entry of the śląskie seed list (see tests)."""
     return "-".join(_fold(name).split())
-
 
 def load_towns(cache_path) -> dict:
     """Cached {region: {slug: display}} — survives a run where a portal failed."""
@@ -97,7 +85,6 @@ def load_towns(cache_path) -> dict:
     except (FileNotFoundError, ValueError):
         return {}
 
-
 def save_towns(cache_path, cache: dict):
     p = pathlib.Path(cache_path)
     p.parent.mkdir(parents=True, exist_ok=True)
@@ -105,7 +92,6 @@ def save_towns(cache_path, cache: dict):
     tmp.write_text(json.dumps(cache, ensure_ascii=False, indent=0, sort_keys=True),
                    encoding="utf-8")
     os.replace(tmp, p)
-
 
 def _state_from_meta(meta_path) -> dict:
     """Bootstrap archive cadence from the last pre-split production output.
@@ -149,7 +135,6 @@ def _state_from_meta(meta_path) -> dict:
         "bootstrapped_from_meta": True,
     }
 
-
 def load_archive_state(path, meta_path=None) -> dict:
     try:
         state = json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
@@ -159,7 +144,6 @@ def load_archive_state(path, meta_path=None) -> dict:
         raise ValueError("invalid archive checkpoint schema")
     return state
 
-
 def save_archive_state(path, state: dict):
     p = pathlib.Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
@@ -167,7 +151,6 @@ def save_archive_state(path, state: dict):
     tmp.write_text(json.dumps(state, ensure_ascii=False, indent=1,
                               sort_keys=True), encoding="utf-8")
     os.replace(tmp, p)
-
 
 def archive_due(state: dict, today, mode="auto", interval_days=7) -> bool:
     """Whether this run should walk past the current/archive boundary.
@@ -192,7 +175,6 @@ def archive_due(state: dict, today, mode="auto", interval_days=7) -> bool:
                else dt.date.fromisoformat(str(today)))
     return (current - refreshed).days >= max(0, int(interval_days))
 
-
 def archive_state_from_rows(rows, today) -> dict:
     by_type = {}
     for row in rows:
@@ -213,7 +195,6 @@ def archive_state_from_rows(rows, today) -> dict:
         "by_type": by_type,
     }
 
-
 def resolve_towns(region, listings, cache_path=None, max_towns=None) -> dict:
     """{slug: display} for `region`: the hand-curated seed, plus the towns the
     other portals just found (busiest first), plus whatever a previous run
@@ -226,16 +207,12 @@ def resolve_towns(region, listings, cache_path=None, max_towns=None) -> dict:
     max_towns = MAX_TOWNS if max_towns is None else max_towns
     cache = load_towns(cache_path) if cache_path else {}
     towns = dict(cache.get(region) or {})
-    towns.update(SEED_TOWNS.get(region) or {})       # seed always wins on spelling
+    towns.update(SEED_TOWNS.get(region) or {})
 
     counts = Counter()
     names = {}
     for l in listings or ():
         loc = (l.get("locality") or "").strip()
-        # Portals sometimes put a POWIAT in the locality field — always the
-        # lowercase adjectival form ('cieszyński', 'tarnogórski': 17 of them,
-        # 2 586 listings in śląskie). They are not towns, have no sub-domain,
-        # and every real town name is capitalised, so the case is the filter.
         if not loc or not loc[:1].isupper():
             continue
         slug = slugify(loc)
@@ -246,10 +223,6 @@ def resolve_towns(region, listings, cache_path=None, max_towns=None) -> dict:
     for slug, _ in counts.most_common():
         towns.setdefault(slug, names[slug])
 
-    # Stable priority: the curated seed's declared order, then towns observed in
-    # this region's current source results (inventory desc, slug tie-break), then
-    # cached fallbacks. This keeps cold-region bootstrap deterministic without
-    # letting small count fluctuations reorder the known seed on every run.
     seed = SEED_TOWNS.get(region) or {}
     ranked = list(seed)
     ranked.extend(s for s, _ in sorted(counts.items(),
@@ -264,7 +237,6 @@ def resolve_towns(region, listings, cache_path=None, max_towns=None) -> dict:
         save_towns(cache_path, cache)
     return out
 
-
 PATHS = {"house": "domy", "flat": "mieszkania"}
 HEADERS = {
     "User-Agent": (
@@ -275,7 +247,6 @@ HEADERS = {
 }
 _LD = re.compile(r'<script[^>]*type="application/ld\+json"[^>]*>(.*?)</script>', re.S)
 ARCHIVED = {"OutOfStock", "SoldOut", "Discontinued"}
-
 
 def extract_offers(html: str):
     for m in _LD.finditer(html):
@@ -288,7 +259,6 @@ def extract_offers(html: str):
             if agg and isinstance(agg, list):
                 return agg[0].get("offers", []) or []
     return []
-
 
 def parse_offers(offers, typ: str, town: str = "", towns: dict = None,
                  region: str | None = None):
@@ -305,9 +275,6 @@ def parse_offers(offers, typ: str, town: str = "", towns: dict = None,
         item = o.get("itemOffered") or {}
         addr = item.get("address") or {}
         province = addr.get("addressRegion") or ""
-        # Cached/derived town lists can contain a stale foreign locality. The
-        # offer itself carries the authoritative province, so never let that
-        # cache escape the selected region even if we still probe its page.
         if region and province and region_slug(province) != region:
             continue
         floor = item.get("floorSize") or {}
@@ -332,12 +299,9 @@ def parse_offers(offers, typ: str, town: str = "", towns: dict = None,
             "image": o.get("image"),
             "created": None,
             "also_on": [],
-            # kept (not skipped) so history can record "the portal archived this
-            # ad" — main.py routes archived listings to history, not the dashboard
             "archived": archived,
         })
     return out
-
 
 def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
            types=("house", "flat"), towns=None, harvest_archive=True,
@@ -402,12 +366,9 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
                     r.raise_for_status()
                     all_batch = parse_offers(
                         extract_offers(r.text), typ, town, towns, region=region)
-                except Exception as exc:  # missing sub-domain etc. -> skip town
+                except Exception as exc:
                     log(f"  nieruchomosci-online {typ}/{town} page {page} error: {exc}")
                     error, http_status = coverage.error_details(exc)
-                    # A derived town without a portal sub-domain is a clean
-                    # empty partition. Refusals and parser/server failures are
-                    # coverage defects and must not masquerade as zero stock.
                     if http_status == 404:
                         if not town_succeeded:
                             succeeded_towns += 1
@@ -435,15 +396,6 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
                     typ, b.get("source_id") or b.get("url")) for b in batch)
                 kept_keys.update(coverage.listing_key(
                     typ, b.get("source_id") or b.get("url")) for b in batch)
-                # Key on the AD ID, not the URL. Every town subdomain serves its
-                # neighbours' offers under its own hostname, so the same ad
-                # arrives as gliwice.…/26859971.html and katowice.…/26859971.html
-                # — distinct URLs, one property. Keying on the URL made every
-                # page look fresh, which (a) inflated the count 5x (58 613 rows
-                # collapsing to 11 172 properties in the 2026-08-08 run) and
-                # (b) meant the `dup_pages` exit below could never fire, so
-                # every town was walked to the cap. That was 75 of the run's
-                # 123 scrape minutes, spent to gain 83 listings.
                 fresh = take_unseen(batch, seen, key="source_id")
                 out.extend(fresh)
                 got += len(fresh)
@@ -457,7 +409,7 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
                     log(f"  nieruchomosci-online {typ}/{town} page {page}: +{len(fresh)}")
                 if not all_batch:
                     town_stop = "end"
-                    break              # empty result page = past the end
+                    break
                 if not harvest_archive and not current_batch:
                     archive_pages += 1
                     if archive_pages >= archive_only_pages:
@@ -475,10 +427,6 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
                     continue
                 archive_pages = 0
                 if not fresh:
-                    # towns cross-list each other's offers, so a page can be all
-                    # already-seen URLs while later pages still hold new ones —
-                    # only stop after two such pages in a row (also bounds the
-                    # portals that echo the last page forever when paged past it)
                     dup_pages += 1
                     if dup_pages >= 2:
                         town_stop = "duplicate_boundary"
@@ -494,8 +442,6 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
             town_stats["stop"] = town_stop
             pages_total += town_stats["pages"]
             town_coverage[town] = town_stats
-        # one row per type, not per town: 60 towns x 2 types would bury the
-        # other portals in meta.json, and the towns share one budget anyway
         stopped = (coverage.ERROR if failed_towns else
                    coverage.OUR_CAP if capped_towns else coverage.OK)
         cov_row = coverage.row(
@@ -532,7 +478,6 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
     scrape.last_archive_state = archive_state
     scrape.last_coverage = cov
     return out
-
 
 def _bounded_archive(*, max_pages, delay, session, log, types, towns,
                      archive_state, today, archive_only_pages, region,
@@ -581,7 +526,6 @@ def _bounded_archive(*, max_pages, delay, session, log, types, towns,
     errors = []
     requests_count = 0
     stop_reason = None
-    # Rotate failures to the end but never retry a failed partition this run.
     failed = set()
     while pending and time.monotonic() < deadline:
         task = pending[0]
@@ -608,9 +552,6 @@ def _bounded_archive(*, max_pages, delay, session, log, types, towns,
                 errors.append({"type": typ, "town": town, "page": page,
                                "http_status": status})
                 if status == 429:
-                    # Throttling is not evidence of a missing town. Stop the
-                    # whole maintenance slice without moving this cursor or
-                    # probing the remaining towns/types into the same refusal.
                     stop_reason = "rate_limited"
                     break
                 failed.add(key)

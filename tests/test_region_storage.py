@@ -7,18 +7,15 @@ import pytest
 from scraper import regions
 from scripts import region_storage
 
-
 def _git(root, *args):
     return subprocess.run(["git", *args], cwd=root, check=True,
                           stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                           text=True).stdout
 
-
 def _put(root, relative, text="fixture"):
     path = pathlib.Path(root) / relative
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
-
 
 def _repo(tmp_path):
     _git(tmp_path, "init", "-q", "-b", "main")
@@ -27,7 +24,6 @@ def _repo(tmp_path):
     _put(tmp_path, "site/regions.json",
          regions.CATALOG_PATH.read_text(encoding="utf-8"))
     return tmp_path
-
 
 def test_stage_carries_only_target_region_and_intentional_shared_caches(tmp_path):
     root = _repo(tmp_path)
@@ -53,7 +49,6 @@ def test_stage_carries_only_target_region_and_intentional_shared_caches(tmp_path
     }
     assert not any("malopolskie" in path for path in staged)
 
-
 def test_stage_refuses_an_index_already_containing_another_region(tmp_path):
     root = _repo(tmp_path)
     _put(root, "site/data/slaskie/index.json", "slaskie")
@@ -61,7 +56,6 @@ def test_stage_refuses_an_index_already_containing_another_region(tmp_path):
     _git(root, "add", "site/data/malopolskie/index.json")
     with pytest.raises(region_storage.RegionStorageError, match="out-of-scope"):
         region_storage.stage_region(root, "slaskie")
-
 
 def test_overlay_replaces_one_region_and_preserves_its_sibling(tmp_path):
     root = _repo(tmp_path)
@@ -84,12 +78,9 @@ def test_overlay_replaces_one_region_and_preserves_its_sibling(tmp_path):
     sibling = root / "site/data/malopolskie/value.txt"
     assert sibling.read_text() == "keep malopolskie"
 
-    # This branch has no Małopolskie tree. The existing deployed copy must not
-    # be removed just because a matching overlay was absent.
     assert not region_storage.overlay_region(
         root, "data-slaskie", "malopolskie")
     assert sibling.read_text() == "keep malopolskie"
-
 
 def _restore_repo(tmp_path, branch=None, paths=()):
     root = _repo(tmp_path)
@@ -105,7 +96,6 @@ def _restore_repo(tmp_path, branch=None, paths=()):
         _git(root, "commit", "--allow-empty", "-qm", "data fixture")
         _git(root, "checkout", "main")
     return root
-
 
 @pytest.mark.parametrize("branch", ["data-slaskie", "data"])
 def test_restore_recovers_history_without_changing_main_or_siblings(tmp_path, branch):
@@ -124,14 +114,12 @@ def test_restore_recovers_history_without_changing_main_or_siblings(tmp_path, br
     assert _git(root, "rev-parse", "HEAD") == head
     assert _git(root, "diff", "--cached", "--name-only") == ""
 
-
 @pytest.mark.parametrize("legacy_other_region", [False, True])
 def test_restore_allows_only_verified_cold_start(tmp_path, legacy_other_region):
     root = _restore_repo(tmp_path, "data" if legacy_other_region else None,
                          ["site/data/opolskie/meta.json"])
     assert region_storage.restore_region(root, "slaskie") is None
     assert not (root / "site/data/slaskie").exists()
-
 
 @pytest.mark.parametrize("branch,paths", [
     ("data-slaskie", []),
@@ -144,13 +132,11 @@ def test_restore_rejects_incomplete_existing_tree(tmp_path, branch, paths):
     with pytest.raises(region_storage.RegionStorageError, match="incomplete"):
         region_storage.restore_region(root, "slaskie")
 
-
 def test_restore_transport_failure_is_not_a_cold_start(tmp_path):
     root = _restore_repo(tmp_path)
     _git(root, "remote", "set-url", "origin", str(root / "unreachable.git"))
     with pytest.raises(region_storage.RegionStorageError, match="cannot determine"):
         region_storage.restore_region(root, "slaskie")
-
 
 @pytest.mark.parametrize("operation", ["fetch", "restore"])
 def test_restore_propagates_fetch_and_extraction_failure(tmp_path, monkeypatch, operation):

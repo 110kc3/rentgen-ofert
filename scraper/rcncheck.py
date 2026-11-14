@@ -33,14 +33,12 @@ _REGION = os.environ.get("RENTGEN_REGION", "slaskie")
 RCN_CACHE = (pathlib.Path(__file__).resolve().parents[1] / "cache"
              / f"rcn_{_REGION}.json.gz")
 
-
 def _row_line(r, typ):
     addr = "; ".join(str(x) for x in (r.get("msc"), r.get("ul"), r.get("nr")) if x)
     area = f"{r['a']:>7} m²" if r.get("a") is not None else "   ?  m²"
     extra = (f"izb {r.get('izb')} kond {r.get('kond')}" if typ == "flat"
              else f"działka {r.get('grunt')}")
     return f"{r['d']}  {r['c']:>10,} zł  {area}  rynek {r.get('rynek') or '?'}  {extra}  | {addr}"
-
 
 def _search(rows, town, args):
     out = []
@@ -58,7 +56,6 @@ def _search(rows, town, args):
                 continue
         out.append(r)
     return sorted(out, key=lambda x: x["d"])
-
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
@@ -90,13 +87,12 @@ def main(argv=None) -> int:
               f"(python -m scraper.main) lub pobierz cache z repo.")
         return 1
 
-    # exact address given -> resolve canonical street + cadastral parcel (GUGiK)
     geo = None
     if args.ulica and args.nr and not args.no_uldk:
         geo = uldk.resolve(args.miejscowosc, args.ulica, args.nr)
         if geo:
             if geo.get("street"):
-                args.ulica = geo["street"]        # canonical name matches better
+                args.ulica = geo["street"]
             if geo.get("dzialka_id"):
                 print(f"Adres wg GUGiK: ul. {geo['street']} {args.nr}, "
                       f"{args.miejscowosc} — działka {geo['dzialka_id']}"
@@ -149,7 +145,6 @@ def main(argv=None) -> int:
               f"(zapisane w overrides.json — zacommituj plik; od następnego "
               f"przebiegu scraper dopasuje ten adres automatycznie)")
     return 0
-
 
 if __name__ == "__main__":
     raise SystemExit(main())

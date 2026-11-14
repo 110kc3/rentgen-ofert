@@ -1,7 +1,5 @@
 "use strict";
 
-// Small UMD helper so regional URL/state behavior is identical in app.js and
-// stats.js and can be exercised by Node without a browser DOM.
 (function expose(root, factory) {
   const api = factory();
   if (typeof module === "object" && module.exports) module.exports = api;

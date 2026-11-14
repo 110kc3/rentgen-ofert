@@ -44,15 +44,11 @@ OLX_ROOMS = {
 SOURCE_RANK = {"otodom": 0, "nieruchomosci-online": 1, "gratka": 2, "olx": 3,
                "morizon": 4}
 
-# Gratka/Morizon breadcrumbs end with the voivodeship. Derive every accepted
-# spelling from the canonical catalog so adding or correcting a Polish label
-# cannot leave parsing with a second handwritten 16-region list.
 VOIVODESHIPS = frozenset(
     value.lower()
     for entry in catalog()["regions"]
     for value in (entry["adjective"], entry["label"])
 )
-
 
 def region_slug(value):
     """Normalize a Polish voivodeship label to the repository's URL slug.
@@ -63,12 +59,10 @@ def region_slug(value):
     scrapers reject those cards before one leaked locality expands another
     portal's town crawl.
     """
-    # Unicode does not decompose Polish ł/Ł under NFKD.
     folded = unicodedata.normalize(
         "NFKD", str(value or "").translate(str.maketrans({"ł": "l", "Ł": "L"})))
     ascii_value = "".join(c for c in folded if not unicodedata.combining(c))
     return re.sub(r"[^a-z0-9]+", "-", ascii_value.lower()).strip("-")
-
 
 def location_parts(location):
     """'Żerniki, Gliwice, śląskie' -> ['Żerniki', 'Gliwice'] (voivodeship dropped)."""
@@ -79,15 +73,7 @@ def location_parts(location):
         parts.pop()
     return parts
 
-
-# gratka and morizon (same media group, same frontend) put the search's total
-# in the meta description: "Mieszkania na sprzedaż śląskie. 9856 ogłoszeń." on
-# gratka, "Mieszkania na sprzedaż - ponad 9000 ogłoszeń" on morizon. That total
-# is the only thing that distinguishes "the results ran out" from "the portal
-# 404s past page 200" — both of which the page loop sees as a 404.
-# `\s` covers the non-breaking and narrow spaces the portals group digits with
 _STATED_TOTAL = re.compile(r"(ponad\s+)?(\d[\d\s.]*)\s*ogłosze", re.I)
-
 
 def stated_total(html):
     """(total, is_min) from a gratka/morizon results page, or (None, False).
@@ -109,26 +95,20 @@ DISPLAY_FIELDS = ("title", "type", "area", "rooms", "plot_area", "floor",
 OFFER_FIELDS = ("source", "url", "price", "price_per_m2", "created",
                 "is_private", "agency")
 
-SPREAD_CAP = 1.15  # a merged size-group may span at most +15% in price (fallback)
-PHOTO_THRESHOLD = 40  # max dHash hamming to treat two galleries as the same property
+SPREAD_CAP = 1.15
+PHOTO_THRESHOLD = 40
 
-# --- developer new-builds ----------------------------------------------------
-# Developers post many units with the same marketing photos, which the
-# "same size + same gallery" rule would wrongly collapse into one property
-# (and pollute relist/sold history). Detect them and treat them separately.
 import re as _re
 
 _DEV_RE = _re.compile(
     r"deweloper|inwestycj|rynek\s+pierwotn|nowe\s+osiedle|stan\s+deweloperski"
     r"|etap\s+[ivx0-9]", _re.I)
 
-
 def is_development(l) -> bool:
     """Portal says rynek pierwotny, or the title reads like a developer ad."""
     if (l.get("market") or "").startswith(("primary", "pierwotn")):
         return True
     return bool(_DEV_RE.search(l.get("title") or ""))
-
 
 def _cluster_is_development(members) -> bool:
     """A photo-cluster is a development when any ad self-identifies as one, or
@@ -142,19 +122,16 @@ def _cluster_is_development(members) -> bool:
         per_source.setdefault(m.get("source"), set()).add(key)
     return any(len(ids) >= 3 for ids in per_source.values())
 
-
 def otodom_rooms(value):
     if value is None:
         return None
     return OTODOM_ROOMS.get(str(value).strip().upper())
-
 
 def olx_rooms(value):
     if value is None:
         return None
     v = str(value).strip().lower()
     return int(v) if v.isdigit() else OLX_ROOMS.get(v)
-
 
 def to_float(value):
     if value is None:
@@ -168,11 +145,9 @@ def to_float(value):
     except ValueError:
         return None
 
-
 def to_int(value):
     f = to_float(value)
     return int(round(f)) if f is not None else None
-
 
 def size_key(l):
     """Group key by size. Area must match EXACTLY (to 0.01 m2) - no rounding, so
@@ -183,7 +158,6 @@ def size_key(l):
         return None
     typ, area_m = l.get("type"), round(area, 2)
     return (typ, area_m) if typ == "house" else (typ, area_m, l.get("rooms"))
-
 
 def _split_by_price(members):
     """Split a size-group so each cluster spans at most SPREAD_CAP (cheapest x1.15).
@@ -211,12 +185,10 @@ def _split_by_price(members):
     clusters[0] = unpriced + clusters[0]
     return clusters
 
-
 def _rank(l):
     return (0 if l.get("image") else 1,
             SOURCE_RANK.get(l.get("source"), 9),
             l.get("price") if l.get("price") is not None else float("inf"))
-
 
 def _build(members):
     members = sorted(members, key=_rank)
@@ -243,9 +215,6 @@ def _build(members):
                 photo_urls.append(u)
     prop["phashes"] = phashes
     prop["photo_urls"] = photo_urls
-    # keep price and zł/m² consistent: both from the CHEAPEST offer's listing
-    # (card price is the min across portals; primary's ppm may belong to a
-    # pricier offer of the same flat)
     cheapest = offers[0] if offers and offers[0]["price"] is not None else None
     ppm = primary.get("price_per_m2")
     if cheapest:
@@ -266,7 +235,6 @@ def _build(members):
         "offers": offers,
     })
     return prop
-
 
 def require_unique_urls(listings, stage="listings"):
     """Fail with useful provenance when one URL represents multiple records.
@@ -298,7 +266,6 @@ def require_unique_urls(listings, stage="listings"):
         lines.append(f"{url}: {details}")
     raise ValueError("\n".join(lines))
 
-
 def take_unseen(items, seen, key="url"):
     """Return records whose identity is new, including within this batch.
 
@@ -316,10 +283,8 @@ def take_unseen(items, seen, key="url"):
         fresh.append(item)
     return fresh
 
-
 def _hamming(a, b):
     return (a ^ b).bit_count()
-
 
 def same_photos(a_hashes, b_hashes):
     """True if any pair of gallery hashes is within PHOTO_THRESHOLD.
@@ -329,7 +294,6 @@ def same_photos(a_hashes, b_hashes):
     if not a_hashes or not b_hashes:
         return False
     return any(_hamming(a, b) <= PHOTO_THRESHOLD for a in a_hashes for b in b_hashes)
-
 
 def _photo_clusters(members):
     """Photo clusters cannot contain contradictory known property attributes.
@@ -360,7 +324,6 @@ def _photo_clusters(members):
                 groups[rj].extend(left)
 
     return [group for i, group in enumerate(groups) if find(i) == i]
-
 
 def link_twins(listings):
     """Pair morizon ads with the gratka ad they ARE, by portal id.
@@ -401,10 +364,6 @@ def link_twins(listings):
         key = f"gratka:{l['gratka_id']}"
         l["_twin"] = twin["_twin"] = key
         l["_identified_by"] = twin.get("url")
-        # One of them donates the size to the other, so the pair shares a
-        # size_key — otherwise a disagreement over usable-vs-total m2 puts them
-        # in different groups. gratka is the origin portal so it goes first, but
-        # either will do; what matters is that they agree.
         donor = twin if twin.get("area") is not None else l
         for m in (l, twin):
             m["area"] = donor.get("area")
@@ -412,7 +371,6 @@ def link_twins(listings):
                 m["rooms"] = donor.get("rooms")
         linked += 1
     return linked
-
 
 def _union_twins(clusters):
     """Fold clusters that hold two halves of the same ``_twin`` into one."""
@@ -428,7 +386,6 @@ def _union_twins(clusters):
         for k in keys:
             home[k] = target
     return out
-
 
 def _cross_size_unify(listings):
     """Same town + same asking price + same gallery = same property, even when
@@ -450,15 +407,12 @@ def _cross_size_unify(listings):
             sizes = {round(m["area"], 2) for m in cluster if m.get("area") is not None}
             if len(cluster) < 2 or len(sizes) <= 1:
                 continue
-            # pick the size donor among members that HAVE an area — otherwise an
-            # area-less best-ranked ad would wipe every member's area
             best = sorted((m for m in cluster if m.get("area") is not None), key=_rank)[0]
             for m in cluster:
                 m["area"] = best.get("area")
                 if m.get("type") == "flat":
                     m["rooms"] = best.get("rooms")
     return listings
-
 
 def dedupe(listings, allow_heuristic_fallback=False):
     """Build properties, optionally allowing size/price merges without photos.
@@ -489,8 +443,6 @@ def dedupe(listings, allow_heuristic_fallback=False):
         return out
 
     properties = []
-    # Size-less ads normally can't be matched to anything — except a twin pair,
-    # whose portal id identifies it without an area at all.
     for cluster in _union_twins([[l] for l in loners]):
         prop = _build(cluster)
         if is_development(cluster[0]):
@@ -503,24 +455,18 @@ def dedupe(listings, allow_heuristic_fallback=False):
                 prop["development"] = True
             properties.append(prop)
         elif any(m.get("phashes") for m in members):
-            # photos available -> merge only ads whose hashes match
             for cluster in _union_twins(_photo_clusters(members)):
                 if _cluster_is_development(cluster):
                     properties.extend(_build_dev(cluster))
                 else:
                     properties.append(_build(cluster))
         elif not allow_heuristic_fallback:
-            # Photo mode was requested but this whole size group remains
-            # unresolved. Keep every ad separate rather than letting a CDN or
-            # cache failure authorize the loose size/price heuristic. Exact
-            # gratka↔morizon portal-ID twins remain safe to union.
             for cluster in _union_twins([[member] for member in members]):
                 prop = _build(cluster)
                 if any(is_development(member) for member in cluster):
                     prop["development"] = True
                 properties.append(prop)
         else:
-            # no photo data -> fall back to the size + price-spread heuristic
             dev = _cluster_is_development(members)
             for cluster in _union_twins(_split_by_price(members)):
                 if dev:
@@ -528,7 +474,6 @@ def dedupe(listings, allow_heuristic_fallback=False):
                 else:
                     properties.append(_build(cluster))
     return properties
-
 
 def link_same_size(properties):
     """Flag the same flat listed more than once via the one thing that can't
@@ -548,7 +493,7 @@ def link_same_size(properties):
 
     for members in groups.values():
         urls = {m.get("url") for m in members}
-        if not (2 <= len(urls) <= 3):          # 2-3 = likely relist; more = a development
+        if not (2 <= len(urls) <= 3):
             continue
         for p in members:
             others = [m for m in members if m.get("url") != p.get("url")
@@ -560,8 +505,6 @@ def link_same_size(properties):
                                  "source": o.get("source"), "first_seen": o.get("first_seen")}
                                 for o in others]
             cheaper = [o.get("price") for o in others if o.get("price") is not None]
-            # a genuine earlier price from history beats "what the concurrent
-            # duplicate asks right now" — don't clobber it
             if cheaper and p.get("prev_price") is None:
                 p["prev_price"] = min(cheaper)
     return properties

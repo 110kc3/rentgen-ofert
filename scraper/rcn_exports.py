@@ -22,10 +22,8 @@ EXPORT_BASE = ("https://opendata.geoportal.gov.pl/InneDane/latest_exports/"
 MAX_EXPORT_BYTES = 512 * 1024 * 1024
 DOWNLOAD_ATTEMPTS = 3
 
-
 class IncompleteExportError(ValueError):
     pass
-
 
 def _download(session, url, path, log):
     """Retry interrupted streams as whole files, never append to a partial file.
@@ -62,15 +60,10 @@ def _download(session, url, path, log):
                 f"failed ({exc}); restarting {url}")
             time.sleep(2 * attempt)
 
-
 def _read_export(path, region, layer, props, compact):
-    # Own the underlying stream even if the Parquet constructor itself fails.
-    # Otherwise an exception traceback can retain its handle on Windows and
-    # cleanup masks the original validation failure with a sharing violation.
     with path.open("rb") as stream:
         with pq.ParquetFile(stream) as parquet:
             return _read_export_file(parquet, region, layer, props, compact)
-
 
 def _read_export_file(parquet, region, layer, props, compact):
     names = {name.lower(): name for name in parquet.schema_arrow.names}
@@ -98,12 +91,10 @@ def _read_export_file(parquet, region, layer, props, compact):
                 continue
             record = compact(row)
             if record:
-                # Preserve distinct source IDs, even when compact deeds coincide.
                 records.append(record)
     if read != parquet.metadata.num_rows or not records:
         raise ValueError(f"RCN export {layer}: incomplete or unusable layer")
     return records, read
-
 
 def fetch_exports(session, region, log=print):
     if not re.fullmatch(r"\d{2}", region):

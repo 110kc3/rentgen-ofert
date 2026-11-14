@@ -43,10 +43,10 @@ WFS = "https://mapy.geoportal.gov.pl/wss/service/rcn"
 NS_WFS = "{http://www.opengis.net/wfs/2.0}"
 NS_MS = "{http://mapserver.gis.umn.edu/mapserver}"
 PAGE = 2000
-MAX_AGE_DAYS = 7          # re-pull the snapshot when older than this
-AREA_TOL = 0.6            # m² tolerance listing-vs-deed
-SALE_WINDOW_BEFORE = 60   # deed may precede the delisting we observed (days)
-SALE_WINDOW_AFTER = 400   # deed (+ registry lag) may trail delisting (days)
+MAX_AGE_DAYS = 7
+AREA_TOL = 0.6
+SALE_WINDOW_BEFORE = 60
+SALE_WINDOW_AFTER = 400
 
 LOK_PROPS = ("teryt,dok_data,tran_rodzaj_rynku,tran_rodzaj_trans,tran_cena_brutto,"
              "lok_cena_brutto,lok_pow_uzyt,lok_liczba_izb,lok_nr_kond,lok_adres,"
@@ -56,10 +56,8 @@ BUD_PROPS = ("teryt,dok_data,tran_rodzaj_rynku,tran_rodzaj_trans,tran_cena_brutt
              "bud_id_budynku")
 
 HEADERS = {"User-Agent": "rentgen-ofert (+https://github.com/) requests"}
-REQUEST_TIMEOUT = (10, 120)  # connect quickly or try the alternate official source
+REQUEST_TIMEOUT = (10, 120)
 
-# Immutable, last healthy evidence before the 2026-09-24 empty-cache incident.
-# Restore only this cache, never the old listing history or published payload.
 RECOVERY = {
     "24": {
         "ref": "027bcc45f7b92c5e58e3a194d644146d4c463d6e",
@@ -69,21 +67,16 @@ RECOVERY = {
     },
 }
 
-
-# ---- WFS fetch --------------------------------------------------------------
-
 def _like(field: str, literal: str) -> str:
     return (f'<PropertyIsLike wildCard="*" singleChar="." escapeChar="!">'
             f'<ValueReference>{field}</ValueReference><Literal>{literal}</Literal>'
             f'</PropertyIsLike>')
-
 
 def _filter(parts) -> str:
     inner = "".join(parts)
     if len(parts) > 1:
         inner = f"<And>{inner}</And>"
     return f'<Filter xmlns="http://www.opengis.net/fes/2.0">{inner}</Filter>'
-
 
 def _get_page(session, typename, flt, props, start):
     params = {
@@ -95,7 +88,6 @@ def _get_page(session, typename, flt, props, start):
     r = session.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
     r.raise_for_status()
     return r.content
-
 
 def _get_total(session, typename, flt):
     """A hits query supplies the total omitted from normal live responses."""
@@ -116,7 +108,6 @@ def _get_total(session, typename, flt):
     if total < 0:
         raise ValueError("RCN: negative WFS total")
     return total
-
 
 def _parse_page(xml_bytes, tag):
     """Validate the envelope/counts before exposing any rows to the compactor."""
@@ -141,7 +132,6 @@ def _parse_page(xml_bytes, tag):
             name = child.tag.rsplit("}", 1)[-1].lower()
             if name not in ("msgeometry", "boundedby"):
                 if name == "dok_data" and len(child):
-                    # GUGiK now encodes dates as GML temporal properties.
                     positions = child.findall("{http://www.opengis.net/gml/3.2}timePosition")
                     if len(child) != 1 or len(positions) != 1:
                         raise ValueError("RCN: unsupported deed date encoding")
@@ -152,10 +142,8 @@ def _parse_page(xml_bytes, tag):
         ids.append(feat.get("{http://www.opengis.net/gml/3.2}id"))
     return rows, total, bool(root.get("next")), ids
 
-
 def _parse_members(xml_bytes, tag):
     return iter(_parse_page(xml_bytes, tag)[0])
-
 
 def _market(value):
     value = _fold(value)
@@ -165,7 +153,6 @@ def _market(value):
         raise ValueError(f"RCN: unknown market value {value!r}")
     return markets[value]
 
-
 def _to_f(v):
     try:
         value = float(v)
@@ -173,13 +160,11 @@ def _to_f(v):
     except (TypeError, ValueError):
         return None
 
-
 def _to_i(v):
     try:
         return int(float(v))
     except (TypeError, ValueError):
         return None
-
 
 def _addr(raw):
     """'MSC:Gliwice;UL:Gdańska;NR_PORZ:13' -> (msc, ul, nr)."""
@@ -190,13 +175,11 @@ def _addr(raw):
             out[k] = v.strip()
     return out["MSC"], out["UL"], out["NR_PORZ"]
 
-
 def _parcel(egib_id):
     """'221104_4.0004.921_BUD.22_LOK' -> '221104_4.0004.921' (the parcel)."""
     if not egib_id:
         return None
     return egib_id.split("_BUD")[0].strip() or None
-
 
 def _compact_lok(row):
     date = (row.get("dok_data") or "")[:10]
@@ -211,20 +194,19 @@ def _compact_lok(row):
     msc, ul, nr = _addr(row.get("lok_adres"))
     out = {"d": date, "c": round(price), "a": area,
            "izb": _to_i(row.get("lok_liczba_izb")), "kond": _to_i(row.get("lok_nr_kond")),
-           "rynek": _market(row.get("tran_rodzaj_rynku")),  # p/w
+           "rynek": _market(row.get("tran_rodzaj_rynku")),
            "msc": msc, "ul": ul, "nr": nr}
     dz = _parcel(row.get("lok_id_lokalu"))
     if dz:
         out["dz"] = dz
     return out
 
-
 def _compact_bud(row):
     date = (row.get("dok_data") or "")[:10]
     price = _to_f(row.get("bud_cena_brutto")) or _to_f(row.get("tran_cena_brutto"))
     area = _to_f(row.get("bud_pow_uzyt"))
     if not date or price is None or round(price) <= 0:
-        return None            # area may be missing — still useful by address
+        return None
     if row.get("tran_rodzaj_trans") not in ("", None, "wolnyRynek"):
         return None
     msc, ul, nr = _addr(row.get("bud_adres"))
@@ -237,14 +219,10 @@ def _compact_bud(row):
         out["dz"] = dz
     return out
 
-
 def fetch(session, typename, flt, props, tag, compact, log=print):
     out, start = [], 0
     page_hashes = set()
     expected_total = _get_total(session, typename, flt)
-    # Never interpret a short page or missing next link as EOF: the live
-    # service can return both. Continue to a validated empty page when the
-    # total is unknown. A repeated page means startIndex is being ignored.
     for _ in range(10000):
         page = _get_page(session, typename, flt, props, start)
         rows, total, has_next, ids = _parse_page(page, tag)
@@ -271,8 +249,6 @@ def fetch(session, typename, flt, props, tag, compact, log=print):
                   "lok_cena_brutto" if tag == "lokale" else "bud_cena_brutto"}
         if not required <= fields or not prices & fields:
             raise ValueError(f"RCN {tag}: missing expected fields")
-        # Dedupe within each page only: distinct deeds in different pages can
-        # legitimately have identical compact values.
         seen = set()
         for row in rows:
             c = compact(row)
@@ -295,7 +271,6 @@ def fetch(session, typename, flt, props, tag, compact, log=print):
     if final_total is not None and final_total != start:
         raise ValueError(f"RCN {tag}: final total {final_total} != fetched {start}")
     return out
-
 
 def fetch_all(session, teryt_prefix="24", log=print, details=None):
     """Pull both layers; failed WFS traversals use GUGiK's complete exports.
@@ -320,9 +295,6 @@ def fetch_all(session, teryt_prefix="24", log=print, details=None):
             details.update(source, wfs_error=str(exc))
         return lok, bud
 
-
-# ---- snapshot cache ---------------------------------------------------------
-
 def load_snapshot(path):
     try:
         with gzip.open(path, "rt", encoding="utf-8") as f:
@@ -330,15 +302,13 @@ def load_snapshot(path):
     except Exception:
         return None
 
-
 def save_snapshot(path, data):
     p = pathlib.Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
-    tmp = p.with_name(p.name + ".tmp")   # atomic: never leave a truncated snapshot
+    tmp = p.with_name(p.name + ".tmp")
     with gzip.open(tmp, "wt", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
     os.replace(tmp, p)
-
 
 def validate_snapshot(snap, previous=None):
     """Both supported provincial layers must contain usable deed evidence.
@@ -367,7 +337,6 @@ def validate_snapshot(snap, previous=None):
             raise ValueError(f"RCN: {layer} count fell by more than 20% "
                              f"({len(previous[layer])} -> {len(rows)})")
 
-
 def recover_snapshot(session, teryt_prefix, log=print):
     recovery = RECOVERY.get(teryt_prefix)
     if not recovery:
@@ -384,7 +353,6 @@ def recover_snapshot(session, teryt_prefix, log=print):
         raise ValueError("RCN: recovery cache counts mismatch")
     log(f"RCN: recovered last-good evidence from {recovery['ref']}")
     return snap
-
 
 def refresh(cache_path, session, teryt_prefix="24", today=None, force=False, log=print):
     """Use a verified cache; failed refreshes retain evidence and report degradation.
@@ -424,8 +392,6 @@ def refresh(cache_path, session, teryt_prefix="24", today=None, force=False, log
         if details:
             candidate["source"] = details
         validate_snapshot(candidate, previous=snap)
-        # If the recovery download failed, its audited counts still prevent a
-        # tiny but non-empty pull from silently replacing the poisoned cache.
         if snap is None and teryt_prefix in RECOVERY:
             for layer, count in RECOVERY[teryt_prefix]["counts"].items():
                 if len(candidate[layer]) < count * 0.8:
@@ -446,15 +412,11 @@ def refresh(cache_path, session, teryt_prefix="24", today=None, force=False, log
             else f"RCN: refresh failed ({exc}); no snapshot available")
         return snap
 
-
-# ---- matching ---------------------------------------------------------------
-
 def _index_by_town(rows):
     idx = {}
     for r in rows:
         idx.setdefault(_fold(r.get("msc")), []).append(r)
     return idx
-
 
 def _candidates(rec, rows_by_town):
     snap = rec.get("snapshot") or {}
@@ -462,8 +424,6 @@ def _candidates(rec, rows_by_town):
     if area is None:
         return [], snap
     rows = ()
-    # portals sometimes put a district (Trynek, Srodmiescie) in `locality` and
-    # the real town in `district` (or vice versa) — try both
     for key in (snap.get("locality"), snap.get("district")):
         town = _fold(key)
         if town and town in rows_by_town:
@@ -475,23 +435,20 @@ def _candidates(rec, rows_by_town):
     for r in rows:
         if r.get("a") is None:
             if pinned_nr and r.get("ul"):
-                out.append(r)      # judged by street+number in _score
+                out.append(r)
             continue
         if abs(r["a"] - area) > AREA_TOL:
             continue
         out.append(r)
     return out, snap
 
-
 def _floor_int(v):
     """Shared exact-floor normalization; ranges/attics remain unknown."""
     return known_floor(v)
 
-
 def _decimal_area(area):
     """48.63 m2 is near-unique in a town; 50.0 m2 is not."""
     return area is not None and abs(area - round(area)) > 0.01
-
 
 def _score(rec, snap, r, is_flat, unique=False):
     """(confidence, ok). Confidence: 2 = street-anchored, 1 = attribute-anchored.
@@ -500,8 +457,6 @@ def _score(rec, snap, r, is_flat, unique=False):
     lets weaker attribute evidence through (still conservative: mismatching
     known attributes always reject).
     """
-    # A street/parcel locates a building, not a particular unit. Known flat
-    # attributes must agree BEFORE any address evidence can accept a deed.
     hits = 0
     if is_flat:
         rooms, floor = _to_i(snap.get("rooms")), _floor_int(snap.get("floor"))
@@ -510,44 +465,35 @@ def _score(rec, snap, r, is_flat, unique=False):
                 return 0, False
             hits += 1
         if floor is not None and r.get("kond") is not None:
-            # Keep the existing tolerance for portal/storey numbering.
             if r["kond"] not in (floor, floor + 1):
                 return 0, False
             hits += 1
     dz = snap.get("dzialka_id")
     if dz and r.get("dz") and _fold(dz) == _fold(r["dz"]):
-        return 2, True             # same cadastral parcel -> same building
-    # NOTE: a parcel MISmatch is not decisive on its own — parcels get
-    # renumbered over the years (real case: a 2008 deed on działka 974 whose
-    # address sits on today's działka 1506). Street+number agreement wins.
+        return 2, True
     street, embedded_nr = street_parts(snap.get("street"))
-    # building numbers compare space-free: '13 A' and '13A' are the same door
     nr = snap.get("nr") or embedded_nr
     nr = building_number(nr) if nr else None
     deed_street, deed_embedded_nr = street_parts(r.get("ul"))
     deed_nr = r.get("nr") or deed_embedded_nr
     if street and deed_street and street_match(street, deed_street):
         if nr and deed_nr:
-            # street AND building number known on both sides -> decisive
             return (2, True) if building_number(deed_nr) == nr else (0, False)
         if r.get("a") is None:
-            return 0, False    # area-less deed needs the number to be sure
+            return 0, False
         return 2, True
     if street and r.get("ul") and not street_match(street, r["ul"]):
-        return 0, False        # both known and different -> different property
+        return 0, False
     if dz and r.get("dz"):
-        return 0, False        # parcels differ and no street agreement -> not it
+        return 0, False
     if r.get("a") is None:
-        return 0, False        # area-less deed without street match -> never
+        return 0, False
     if is_flat:
         if hits >= 2:
             return 1, True
-        # a to-the-decimal area that exists exactly once in the town is itself
-        # strong evidence — accept (mismatching known attributes already rejected)
         if unique and _decimal_area(rec.get("area")):
             return 1, True
         return 0, False
-    # houses: no street -> corroborate with the plot area (deed carries it)
     plot = _to_f(snap.get("plot_area"))
     grunt = _to_f(r.get("grunt"))
     if plot and grunt and abs(plot - grunt) <= 0.1 * max(plot, grunt):
@@ -556,17 +502,14 @@ def _score(rec, snap, r, is_flat, unique=False):
         return 1, True
     return 0, False
 
-
 def _within(d, lo, hi):
     return (not lo or d >= lo) and (not hi or d <= hi)
-
 
 def _shift(date_str, days):
     try:
         return (dt.date.fromisoformat(date_str) + dt.timedelta(days=days)).isoformat()
     except ValueError:
         return None
-
 
 def match(records, snapshot, log=print):
     """Attach RCN sale events to history records (in place).
@@ -577,8 +520,6 @@ def match(records, snapshot, log=print):
     """
     if not snapshot:
         return 0
-    # Missing snapshot/layer is unavailable evidence; a present empty layer is
-    # evidence with no deeds. Validate before changing any persisted claims.
     by_town = {}
     for typ, layer in (("flat", "lokale"), ("house", "budynki")):
         rows = snapshot.get(layer)
@@ -594,11 +535,9 @@ def match(records, snapshot, log=print):
         typ = rec.get("type")
         if typ not in by_town:
             continue
-        # These are derived claims: rebuild even when candidates disappear,
-        # become ambiguous, contradict a corrected address or change lifecycle.
         rec.pop("sales", None)
         if rec.get("development"):
-            continue   # marketing photos != a specific flat; deeds can't be attributed
+            continue
         funnel["records"] += 1
         cands, snap = _candidates(rec, by_town[typ])
         if not cands:
@@ -628,11 +567,10 @@ def match(records, snapshot, log=print):
                 continue
             best_conf = max(c for c, _ in scored)
             best = [r for c, r in scored if c == best_conf]
-            # "sold" must be unambiguous; "past" may legitimately have several deeds
             if kind == "sold" and len(best) > 1:
                 continue
             if kind == "past" and len(best) > 3:
-                continue           # a whole new-build staircase — too ambiguous
+                continue
             for r in sorted(best, key=lambda x: x["d"]):
                 sales.append({
                     "date": r["d"], "price": r["c"],
@@ -640,7 +578,6 @@ def match(records, snapshot, log=print):
                     "market": {"p": "pierwotny", "w": "wtórny"}.get(r.get("rynek")),
                     "confidence": "wysoka" if best_conf == 2 else "średnia",
                     "kind": kind,
-                    # provenance: which deed this is (address + cadastral parcel)
                     "addr": " ".join(str(x) for x in (r.get("ul"), r.get("nr")) if x) or None,
                     "dz": r.get("dz"),
                 })

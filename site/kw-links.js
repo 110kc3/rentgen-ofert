@@ -1,4 +1,3 @@
-/* Explicit, tab-local listing associations. A street or an RCN match is insufficient. */
 (function (root, factory) {
   const api = factory(typeof module === 'object' && module.exports ? require('./kw.js') : root.RentgenKW,
     typeof module === 'object' && module.exports ? require('./kw-catalogue.js') : root.RentgenKWCatalogue);

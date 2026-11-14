@@ -20,10 +20,8 @@ from scripts.validate_data import validate_data_dir
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
-
 def _json(path, value):
     path.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-
 
 def _pointer_url(value):
     if not isinstance(value, str):
@@ -35,7 +33,6 @@ def _pointer_url(value):
             or not (url.scheme == "https" or (local and url.scheme == "http"))):
         raise ValueError("storage pointer_url must be an absolute HTTPS URL (or loopback HTTP)")
     return value
-
 
 def build(*, data_root, output, storage_map=None, store=None, root=ROOT):
     """Produce a new site/report directory atomically after all checks succeed.
@@ -95,7 +92,7 @@ def build(*, data_root, output, storage_map=None, store=None, root=ROOT):
             else:
                 source = data_root / slug
                 if not source.exists():
-                    continue  # canonical unpublished-region behavior
+                    continue
                 target = site / "data" / slug
                 target.mkdir(parents=True)
                 for path in storage.public_files(source):
@@ -112,8 +109,6 @@ def build(*, data_root, output, storage_map=None, store=None, root=ROOT):
                        env=os.environ | {"RENTGEN_ROOT": str(stage),
                                          "RENTGEN_PUBLICATION_PLAN": str(plan_path)},
                        check=True, capture_output=True, text=True)
-        # Recheck mirrors after rendering so a disappearing/corrupted version
-        # aborts the entire candidate instead of installing its catalog.
         for slug, entry in plan.items():
             storage.verify(entry["directory"], slug, entry["storage"]["version"])
             if (site / "data" / slug).exists():
@@ -138,7 +133,6 @@ def build(*, data_root, output, storage_map=None, store=None, root=ROOT):
         if stage.exists():
             shutil.rmtree(stage)
 
-
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=pathlib.Path, default=ROOT)
@@ -160,7 +154,6 @@ def main(argv=None):
     except (OSError, ValueError) as exc:
         parser.exit(1, f"deployment dry-run: {exc}\n")
     return 0
-
 
 if __name__ == "__main__":
     raise SystemExit(main())

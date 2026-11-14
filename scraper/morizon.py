@@ -17,7 +17,6 @@ from .normalize import location_parts, stated_total, take_unseen, to_float, to_i
 from .regions import portal_slug
 
 BASE = "https://www.morizon.pl"
-# Whole-voivodeship search by default; override with RENTGEN_REGION.
 REGION = os.environ.get("RENTGEN_REGION", "slaskie")
 PORTAL_REGION = portal_slug(REGION, "morizon")
 SEARCH = {
@@ -31,20 +30,16 @@ HEADERS = {
     ),
     "Accept-Language": "pl-PL,pl;q=0.9,en;q=0.8",
 }
-# Same 200-page 404 wall as gratka — same frontend, same database.
 PORTAL_PAGE_WALL = 200
-
 
 def _text(card, cy):
     el = card.select_one(f'[data-cy="{cy}"]')
     return el.get_text(" ", strip=True) if el else None
 
-
 def _first_price(text):
     if not text:
         return None
     return to_int(text.split("zł")[0])
-
 
 def _locality(location):
     """City = the broadest (last) breadcrumb part of 'street, district, city,
@@ -57,17 +52,14 @@ def _locality(location):
         return None
     return parts[-1] or None
 
-
 def _district(location):
     """The narrower part(s) before the city, e.g. 'Tarnogórska, Szobiszowice'."""
     inner = location_parts(location)[:-1]
     return ", ".join(inner) if inner else None
 
-
 def _date(text):
     m = re.search(r"(\d{4})\.(\d{2})\.(\d{2})", text or "")
     return f"{m.group(1)}-{m.group(2)}-{m.group(3)}" if m else None
-
 
 def _image(card):
     img = (card.select_one('[data-cy="gallerySliderImgThumbnail"]')
@@ -76,7 +68,6 @@ def _image(card):
         return None
     src = img.get("src") or ""
     return src if src.startswith("http") and not src.endswith(".svg") else None
-
 
 def parse_cards(html: str, typ: str):
     soup = BeautifulSoup(html, "html.parser")
@@ -93,12 +84,6 @@ def parse_cards(html: str, typ: str):
         out.append({
             "source": "morizon",
             "source_id": m_id.group(1) if m_id else url,
-            # morizon and gratka are one database: the card thumbnail is a
-            # base64-wrapped `d-gr.cdngr.pl` origin carrying GRATKA's ad id, so
-            # the duplicate is provable here, off the search page, with no
-            # detail fetch and no photo hashing (see photomatch.gratka_ad_id and
-            # normalize.link_twins). Absent on the `gr-col` id space, which
-            # still needs photos.
             "gratka_id": photomatch.gratka_ad_id(image),
             "url": url,
             "title": _text(card, "propertyCardTitle"),
@@ -121,12 +106,11 @@ def parse_cards(html: str, typ: str):
         })
     return out
 
-
 def _walk(base, typ, tag, max_pages, delay, session, log, seen, out, extra=""):
     """Page through one search (optionally price-banded). Returns its cov row."""
     page = 1
     got = 0
-    served = 0            # cards the portal handed over, before OUR dedupe
+    served = 0
     served_keys = set()
     kept_keys = set()
     total = None
@@ -136,7 +120,7 @@ def _walk(base, typ, tag, max_pages, delay, session, log, seen, out, extra=""):
     http_status = None
     while True:
         if page > max_pages:
-            stopped = coverage.OUR_CAP   # morizon 404s past its last page
+            stopped = coverage.OUR_CAP
             page -= 1
             break
         query = "&".join(q for q in (f"page={page}" if page > 1 else "", extra) if q)
@@ -151,7 +135,7 @@ def _walk(base, typ, tag, max_pages, delay, session, log, seen, out, extra=""):
                 total, total_min = stated_total(r.text)
             cards = parse_cards(r.text, typ)
             batch = take_unseen(cards, seen)
-        except Exception as exc:  # keep what we have, move on
+        except Exception as exc:
             log(f"  morizon {typ}/{tag} page {page} error: {exc}")
             stopped = coverage.ERROR
             error, http_status = coverage.error_details(exc)
@@ -164,20 +148,10 @@ def _walk(base, typ, tag, max_pages, delay, session, log, seen, out, extra=""):
         got += len(batch)
         served += len(cards)
         log(f"  morizon {typ}/{tag} page {page}: +{len(batch)}")
-        # Stop on an empty PAGE, not an empty batch. A price band re-sorts the
-        # results, so its first pages are often ads the unbanded pass already
-        # took while later pages hold new ones — breaking on "nothing new here"
-        # would silently abandon the band at page 1.
         if not cards:
             break
         page += 1
         time.sleep(delay)
-    # Same 200-page wall as gratka (bisected 2026-08-08), same blind spot: the
-    # 404 looks like the end of the results. morizon's own count is phrased
-    # "ponad 9000" and rounds to whole thousands, so it is a lower bound —
-    # which is still enough to prove truncation. See the note in gratka._walk
-    # for why a banded search is judged on pages rather than on that total, and
-    # for what `served` is doing on the row.
     if stopped == coverage.OK and page >= PORTAL_PAGE_WALL:
         stopped = coverage.PORTAL_CAP
     elif stopped == coverage.OK and not extra and coverage.short_of_total(got, total):
@@ -188,13 +162,11 @@ def _walk(base, typ, tag, max_pages, delay, session, log, seen, out, extra=""):
                         kept_keys=kept_keys, error=error,
                         http_status=http_status)
 
-
 def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
            types=("house", "flat"), banded=True):
     session = session or requests.Session()
     out = []
     cov = []
-    # One retry budget for the whole portal — see bands.Pacer.
     pacer = bands.Pacer("morizon", delay=delay, log=log)
     for typ, bases in SEARCH.items():
         if typ not in types:
@@ -203,8 +175,6 @@ def scrape(max_pages: int = 50, delay: float = 0.7, session=None, log=print,
         for base in bases:
             tag = base.rstrip("/").split("/")[-1]
             pacer.pause()
-            # a refused first search leaves nothing to subdivide, so it gets
-            # the same one bounded retry a band does
             row = pacer.attempt(tag, lambda: _walk(base, typ, tag, max_pages,
                                                    delay, session, log, seen, out))
             row["role"] = coverage.PARENT

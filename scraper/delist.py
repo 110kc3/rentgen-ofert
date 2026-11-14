@@ -36,16 +36,12 @@ HEADERS = {
     "Accept-Language": "pl-PL,pl;q=0.9,en;q=0.8",
 }
 
-GRACE_DAYS = 7          # unseen for this long -> candidate for verification
+GRACE_DAYS = 7
 DEFAULT_MAX_CHECKS = 300
-MAX_WORKERS = 8         # as photomatch: the same portals, a tenth of the volume
-# A liveness probe that has not answered in this long has told us what it is
-# going to tell us. The old 20 s was the shared scraper timeout, appropriate
-# for a search page we need the contents of and much too patient for a yes/no.
+MAX_WORKERS = 8
 TIMEOUT = 8
-BUDGET_S = 600          # backstop; at 8 workers the phase should be ~5 min
+BUDGET_S = 600
 
-# Portal-specific "this ad is dead" markers on pages that still return 200.
 _GONE_MARKERS = re.compile(
     r"og[łl]oszenie\s+(?:jest\s+)?(?:nieaktualne|niedost[ęe]pne|archiwalne|wygas[łl]o|zako[ńn]czone)"
     r"|oferta\s+(?:jest\s+)?(?:nieaktualna|archiwalna|niedost[ęe]pna|zako[ńn]czona)"
@@ -53,11 +49,9 @@ _GONE_MARKERS = re.compile(
     r"|\"availability\"\s*:\s*\"[^\"]*(?:OutOfStock|SoldOut|Discontinued)",
     re.I)
 
-# Redirect landing on a search/index page (portal dumped us off the dead ad).
 _INDEX_URL = re.compile(
     r"/(?:oferty|ogloszenia|nieruchomosci|mieszkania|domy|wyniki|d/oferty)/?(?:$|\?)"
     r"|/[a-z-]+\.nieruchomosci-online\.pl/?$")
-
 
 def last_seen(rec) -> str:
     """Last day the property was seen LIVE. Status-carrying observations (e.g.
@@ -67,7 +61,6 @@ def last_seen(rec) -> str:
     obs = rec.get("observations") or []
     return max((o.get("date") or "" for o in obs if not o.get("status")),
                default=rec.get("first_seen") or "")
-
 
 def is_gone(url: str, session, timeout: float = TIMEOUT) -> bool | None:
     """True = confirmed gone, False = still live, None = could not tell."""
@@ -79,13 +72,12 @@ def is_gone(url: str, session, timeout: float = TIMEOUT) -> bool | None:
     if r.status_code in (404, 410):
         return True
     if r.history and _INDEX_URL.search(r.url or ""):
-        return True          # redirected off the ad onto an index page
+        return True
     if r.status_code != 200:
         return None
     if _GONE_MARKERS.search(r.text or ""):
         return True
     return False
-
 
 def sweep(records, today: str, session, active_urls=None,
           max_checks: int = DEFAULT_MAX_CHECKS, grace_days: int = GRACE_DAYS,
@@ -115,20 +107,20 @@ def sweep(records, today: str, session, active_urls=None,
         urls = {o.get("url") for o in rec.get("observations") or []}
         if urls & active_urls or seen == today:
             if rec.get("delisted"):
-                del rec["delisted"]          # resurfaced (visibly live right now)
+                del rec["delisted"]
             continue
         if seen >= cutoff:
-            continue                          # too recent to conclude anything
+            continue
         if rec.get("delisted"):
-            continue                          # already concluded
+            continue
         if rec.get("development"):
-            continue    # a vanished developer ad = unit type sold out, not "the flat sold"
+            continue
         url = next((o.get("url") for o in reversed(rec.get("observations") or [])
                     if o.get("url")), None)
         if url:
             candidates.append((seen, url, rec))
 
-    candidates.sort(key=lambda c: (c[0], c[1]))   # oldest unseen first (never compare the rec dicts)
+    candidates.sort(key=lambda c: (c[0], c[1]))
     todo = candidates[:max_checks]
     deadline = time.monotonic() + budget_s if budget_s else None
 

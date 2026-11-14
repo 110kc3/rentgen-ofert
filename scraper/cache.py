@@ -57,35 +57,31 @@ import os
 import pathlib
 
 VERSION = 2
-MAX_AGE_DAYS = 21     # drop a URL we haven't seen in this many days
-MISS_RETRIES = 3      # empty results tolerated before "this ad has no photos"
-MISS_RECHECK_DAYS = 7 # ... and how long that verdict stands before re-probing
+MAX_AGE_DAYS = 21
+MISS_RETRIES = 3
+MISS_RECHECK_DAYS = 7
 
-HASH_BYTES = 32       # dHash is 256-bit (photomatch.dhash at size=16)
-
+HASH_BYTES = 32
 
 def pack(h: int) -> str:
     """256-bit hash -> 44-char base64 (vs ~78 chars as a decimal string)."""
     return base64.b64encode(int(h).to_bytes(HASH_BYTES, "big")).decode("ascii")
-
 
 def unpack(s) -> int:
     """Read a hash in either encoding: v2 base64, or a v1 decimal string."""
     if isinstance(s, int):
         return s
     text = str(s)
-    if text.lstrip("-").isdigit():        # v1
+    if text.lstrip("-").isdigit():
         return int(text)
     return int.from_bytes(base64.b64decode(text), "big")
-
 
 def _paths(path):
     """(gzipped path, legacy plain-json path) for a configured cache path."""
     p = pathlib.Path(path)
     if p.suffix == ".gz":
-        return p, p.with_suffix("")       # …json.gz -> …json
+        return p, p.with_suffix("")
     return p.with_name(p.name + ".gz"), p
-
 
 def _to_v2(data: dict) -> dict:
     """Re-encode v1 decimal-string hashes in place. One pass, then never again."""
@@ -102,7 +98,6 @@ def _to_v2(data: dict) -> dict:
     data["version"] = VERSION
     return data
 
-
 def load(path) -> dict:
     gz, plain = _paths(path)
     for p, opener in ((gz, gzip.open), (plain, open)):
@@ -115,24 +110,19 @@ def load(path) -> dict:
             continue
     return {"version": VERSION, "entries": {}}
 
-
 def save(path, cache) -> None:
     gz, plain = _paths(path)
     cache["version"] = VERSION
     gz.parent.mkdir(parents=True, exist_ok=True)
-    tmp = gz.with_name(gz.name + ".tmp")   # atomic: never leave a truncated cache
+    tmp = gz.with_name(gz.name + ".tmp")
     with gzip.open(tmp, "wt", encoding="utf-8") as fh:
         json.dump(cache, fh, ensure_ascii=False, separators=(",", ":"))
     os.replace(tmp, gz)
-    # a v1 file left behind would be stale AND huge — the whole point is to stop
-    # pushing it
     if plain != gz and plain.exists():
         plain.unlink()
 
-
 def _hashes(entry):
     return entry.get("h", entry.get("hashes")) or []
-
 
 def get(cache, url, today: str = None):
     """Cached photo hashes for ``url``.
@@ -151,12 +141,11 @@ def get(cache, url, today: str = None):
         except (TypeError, ValueError):
             return None
     if entry.get("miss", 0) < MISS_RETRIES:
-        return None                        # still inside the retry allowance
+        return None
     tried = entry.get("tried") or entry.get("seen")
     if today and tried and _days_between(tried, today) >= MISS_RECHECK_DAYS:
-        return None                        # verdict has aged out — probe again
+        return None
     return []
-
 
 def _days_between(a: str, b: str) -> int:
     try:
@@ -164,12 +153,10 @@ def _days_between(a: str, b: str) -> int:
     except Exception:
         return 0
 
-
 def get_urls(cache, url):
     """Cached source image URLs for ``url`` (may be [] for old entries)."""
     entry = cache.get("entries", {}).get(url)
     return list(entry.get("urls") or []) if entry else []
-
 
 def get_scope(cache, url) -> str:
     """``cover`` for a search-card hash, otherwise ``gallery``.
@@ -179,7 +166,6 @@ def get_scope(cache, url) -> str:
     """
     entry = cache.get("entries", {}).get(url) or {}
     return "cover" if entry.get("scope") == "cover" else "gallery"
-
 
 def put(cache, url, hashes, today: str, image_urls=None, scope=None) -> None:
     """Store a photo result for ``url``, stamped as seen ``today``.
@@ -195,12 +181,8 @@ def put(cache, url, hashes, today: str, image_urls=None, scope=None) -> None:
     if not hashes:
         prev = entries.get(url) or {}
         if _hashes(prev):
-            return          # had photos before; a blank read now is a blip
+            return
         next_scope = "cover" if scope == "cover" else "gallery"
-        # Gallery and cover are independent ways to obtain evidence. Three old
-        # detail-page failures say nothing about the newly available card CDN;
-        # reset the allowance when changing path instead of immediately
-        # believing the first cover failure.
         previous_misses = (prev.get("miss") or 0) if (
             prev and get_scope(cache, url) == next_scope
         ) else 0
@@ -217,13 +199,11 @@ def put(cache, url, hashes, today: str, image_urls=None, scope=None) -> None:
         entry["scope"] = "cover"
     entries[url] = entry
 
-
 def touch(cache, url, today: str) -> None:
     """Mark an existing entry as seen today so pruning keeps it."""
     entry = cache.get("entries", {}).get(url)
     if entry:
         entry["seen"] = today
-
 
 def prune(cache, today: str, max_age_days: int = MAX_AGE_DAYS) -> int:
     """Drop entries not seen within ``max_age_days``. Returns how many removed."""
@@ -237,7 +217,6 @@ def prune(cache, today: str, max_age_days: int = MAX_AGE_DAYS) -> int:
     for u in stale:
         del entries[u]
     return len(stale)
-
 
 def backlog(cache) -> dict:
     """Return the persisted ``url -> first deferred date`` map.
@@ -260,7 +239,6 @@ def backlog(cache) -> dict:
             continue
         clean[str(url)] = date
     return clean
-
 
 def update_backlog(cache, deferred_urls, today: str) -> dict:
     """Replace the budget backlog and return its compact persisted summary.

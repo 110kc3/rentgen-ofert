@@ -6,7 +6,6 @@ from scripts.deployment_dry_run import build
 from scripts import versioned_storage as storage
 from test_validate_data import _compact_dataset, _dataset
 
-
 @pytest.fixture
 def inputs(tmp_path):
     data = tmp_path / "data"
@@ -15,7 +14,6 @@ def inputs(tmp_path):
         path.mkdir(parents=True)
         fixture(path)
         (path / "rcnstats.json").write_text("{}")
-    # Disabled pilot trees are neither validated nor included in the candidate.
     disabled = data / "malopolskie"
     disabled.mkdir()
     (disabled / "meta.json").write_text("not publishable")
@@ -24,11 +22,9 @@ def inputs(tmp_path):
     mapping = {"slaskie": {"pointer_url": "https://objects.example/slaskie/current.json"}}
     return data, store, mapping, version
 
-
 def _catalog(output):
     document = json.loads((output / "site/data/regions.json").read_bytes())
     return {entry["slug"]: entry for entry in document["regions"]}
-
 
 def test_mixed_artifact_omits_external_payload_and_uses_verified_metadata(inputs, tmp_path):
     data, store, mapping, version = inputs
@@ -54,10 +50,8 @@ def test_mixed_artifact_omits_external_payload_and_uses_verified_metadata(inputs
     assert '"contentUrl":' + json.dumps(url + "/index.json") in ld
     assert result["pages_bytes"] == sum(path.stat().st_size for path in (output / "site").rglob("*") if path.is_file())
     assert json.loads((output / "report.json").read_text()) == result
-    # The builder does not change either the local sources or mirror pointer.
     assert (data / "slaskie/history.json.gz").is_file()
     assert json.loads((store / "slaskie/current.json").read_text())["version"] == version
-
 
 def test_pointer_advancement_does_not_change_a_generated_catalog(inputs, tmp_path):
     data, store, mapping, version = inputs
@@ -78,7 +72,6 @@ def test_pointer_advancement_does_not_change_a_generated_catalog(inputs, tmp_pat
     pinned = tmp_path / "pinned"
     build(data_root=data, store=store, storage_map={"slaskie": mapping["slaskie"] | {"version": version}}, output=pinned)
     assert _catalog(pinned)["slaskie"]["storage"]["version"] == version
-
 
 @pytest.mark.parametrize("failure", ["missing shard", "changed bytes", "partial pointer", "missing pointer"])
 def test_incomplete_or_corrupt_upload_cannot_create_candidate_artifact(inputs, tmp_path, failure):
@@ -102,14 +95,12 @@ def test_incomplete_or_corrupt_upload_cannot_create_candidate_artifact(inputs, t
     assert not list(tmp_path.glob(".rentgen-deployment-*"))
     assert (previous / "site/data/regions.json").read_bytes() == original
 
-
 def test_broken_pages_sibling_aborts_whole_mixed_artifact(inputs, tmp_path):
     data, store, mapping, _ = inputs
     (data / "opolskie/d/00.json").unlink()
     with pytest.raises(ValueError, match="detail shard"):
         build(data_root=data, store=store, storage_map=mapping, output=tmp_path / "result")
     assert not (tmp_path / "result").exists()
-
 
 def test_local_only_artifact_still_validates_and_keeps_both_regions(inputs, tmp_path):
     data, _, _, _ = inputs
@@ -119,7 +110,6 @@ def test_local_only_artifact_still_validates_and_keeps_both_regions(inputs, tmp_
     assert all(value["backend"] == "pages" for value in report["regions"].values())
     assert (output / "site/data/slaskie/a/00.json").is_file()
     assert not (output / "site/data/slaskie/history.json.gz").exists()
-
 
 @pytest.mark.parametrize("mapping", [
     {"malopolskie": {"pointer_url": "https://objects.example/current.json"}},
@@ -133,7 +123,6 @@ def test_disabled_unknown_and_invalid_mapping_are_refused(inputs, tmp_path, mapp
     with pytest.raises(ValueError):
         build(data_root=data, store=store, storage_map=mapping, output=tmp_path / "result")
     assert not (tmp_path / "result").exists()
-
 
 def test_existing_output_and_input_trees_are_never_overwritten(inputs, tmp_path):
     data, store, mapping, _ = inputs

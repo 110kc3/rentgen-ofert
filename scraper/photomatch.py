@@ -31,8 +31,8 @@ from concurrent.futures import ThreadPoolExecutor
 import requests
 from PIL import Image
 
-MAX_IMAGES = 5          # gallery images hashed per listing
-PHOTO_THRESHOLD = 40    # max dHash hamming for "same photo"
+MAX_IMAGES = 5
+PHOTO_THRESHOLD = 40
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -40,7 +40,6 @@ HEADERS = {
     ),
     "Accept-Language": "pl-PL,pl;q=0.9,en;q=0.8",
 }
-
 
 def dhash(image_bytes, size: int = 16) -> int:
     """256-bit difference hash (16x16) of an image."""
@@ -55,12 +54,8 @@ def dhash(image_bytes, size: int = 16) -> int:
             bit += 1
     return h
 
-
 def hamming(a: int, b: int) -> int:
     return bin(a ^ b).count("1")
-
-
-# ---- per-portal gallery extraction -----------------------------------------
 
 def _otodom(html):
     m = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', html, re.S)
@@ -68,7 +63,6 @@ def _otodom(html):
         return []
     ad = json.loads(m.group(1))["props"]["pageProps"].get("ad") or {}
     return [i.get("large") or i.get("medium") for i in (ad.get("images") or []) if i]
-
 
 def _olx(html):
     urls = re.findall(r'https://[a-z]+\.apollo\.olxcdn\.com:?\d*/v1/files/[^"\\\s]+', html)
@@ -80,42 +74,18 @@ def _olx(html):
             out.append(u)
     return out
 
-
-# ---- the gratka/morizon CDN ------------------------------------------------
-#
-# gratka and morizon are one database behind two frontends, and their image CDN
-# says so: both serve `<host>/thumb/<base64>/<rendition>/<slug>.jpg`, where the
-# base64 decodes to the SAME origin URL on `d-gr.cdngr.pl` carrying gratka's own
-# ad id. Three consequences, all of them load-bearing:
-#
-#   1. The host moved to `img*.staticmorizon.com.pl` at some point and morizon
-#      matched nothing for however long — 0 of 9 505 morizon cards in the
-#      2026-08-08 run had a single hash, so morizon could never merge with
-#      anything and shipped ~7 000 duplicate cards. Hence the fixtures: this
-#      regex has now broken twice, and a host list is not a spec.
-#   2. The five URLs a gallery shows first are the xs/s/m/l/og renditions of ONE
-#      photo, so a plain first-five slice hashed one photo five times. Dedupe by
-#      origin, then take one rendition each.
-#   3. Blog teasers ride the same `/thumb/` path and their slug ends `.jpg` too,
-#      so a host-only pattern silently hashes stock article art. Only origins
-#      under `d-gr.cdngr.pl/kadry/` are listing photos.
 _CDN_THUMB = re.compile(
     r'https://(?:thumbs\.cdngr\.pl|img\d*\.staticmorizon\.com\.pl|img\d*\.morizon\.pl)'
     r'/thumb/([A-Za-z0-9+/=]+)/[^"\s\\)]+')
-# the origin path holds gratka's ad id: .../gr-ogl/1e/0f/48557359_1546700385.jpg
 _ORIGIN_AD = re.compile(r'd-gr\.cdngr\.pl/kadry/[^?"\s]*?/gr-ogl/(?:[^/]+/)*(\d+)_\d+')
-# rendition preference: hash the biggest one available for a given origin
 _RENDITION_RANK = ("og_image", "3x2_l", "3x2_m", "3x2_s", "3x2_xs")
-
 
 def _decode_origin(b64: str):
     """The origin URL a `/thumb/<base64>/` CDN link wraps, or None."""
     try:
-        # urlsafe- and padding-tolerant: the CDN pads, but don't rely on it
         return base64.b64decode(b64 + "=" * (-len(b64) % 4)).decode("utf-8", "replace")
     except Exception:
         return None
-
 
 def gratka_ad_id(url: str):
     """gratka's ad id embedded in a gratka/morizon thumb URL, or None.
@@ -134,7 +104,6 @@ def gratka_ad_id(url: str):
     hit = _ORIGIN_AD.search(origin) if origin else None
     return hit.group(1) if hit else None
 
-
 def _cdn_gallery(html):
     """Listing photos from a gratka/morizon page: one URL per distinct origin."""
     by_origin = {}
@@ -142,7 +111,7 @@ def _cdn_gallery(html):
         url = m.group(0)
         origin = _decode_origin(m.group(1))
         if not origin or "d-gr.cdngr.pl/kadry/" not in origin:
-            continue          # blog teaser / agency logo, not this listing
+            continue
         by_origin.setdefault(origin, []).append(url)
 
     def best(urls):
@@ -152,22 +121,17 @@ def _cdn_gallery(html):
 
     return [best(urls) for urls in by_origin.values()]
 
-
 _gratka = _cdn_gallery
 _morizon = _cdn_gallery
 
-
 _NOL_SKIP = re.compile(r'contact|logo|avatar|agent|baner|stopka|ikona|placeholder', re.I)
-
 
 def _nol(html):
     urls = re.findall(r'https://i\.st-nieruchomosci-online\.pl/[^"\s]+?\.(?:jpg|jpeg|webp)', html)
     return [u for u in dict.fromkeys(urls) if not _NOL_SKIP.search(u)]
 
-
 _EXTRACTORS = {"otodom": _otodom, "olx": _olx, "gratka": _gratka,
                "morizon": _morizon, "nieruchomosci-online": _nol}
-
 
 def gallery_urls(listing, session) -> list:
     extractor = _EXTRACTORS.get(listing.get("source"))
@@ -179,7 +143,6 @@ def gallery_urls(listing, session) -> list:
         return [u for u in extractor(r.text) if u][:MAX_IMAGES]
     except Exception:
         return []
-
 
 def _hash_urls(image_urls, session) -> tuple:
     hashes, fetched_urls = [], []
@@ -193,17 +156,14 @@ def _hash_urls(image_urls, session) -> tuple:
             continue
     return hashes, fetched_urls
 
-
 def listing_hashes(listing, session) -> tuple:
     """(hashes, image_urls) for a listing's detail-page gallery."""
     return _hash_urls(gallery_urls(listing, session), session)
-
 
 def cover_hashes(listing, session) -> tuple:
     """Hash only the search-card cover for a bounded critical first pass."""
     image = listing.get("image")
     return _hash_urls([image] if image else [], session)
-
 
 def prioritize(listings, cache=None, today=None):
     """Return ``(ordered listings, correctness-critical URL set)``.
@@ -259,11 +219,11 @@ def prioritize(listings, cache=None, today=None):
     def fetch_state(listing):
         url = listing.get("url")
         if listing.get("_identified_by") or not url:
-            return (0, "")                 # already settled / nothing to fetch
+            return (0, "")
         entry = entries.get(url)
         if entry:
             if entry.get("h") or entry.get("hashes"):
-                return (0, "")             # positive cache hit
+                return (0, "")
             cached = cachemod.get(cache, url, today)
             needs_first_cover = (
                 url in critical_urls
@@ -271,15 +231,15 @@ def prioritize(listings, cache=None, today=None):
                 and cachemod.get_scope(cache, url) != "cover"
             )
             if cached is not None and not needs_first_cover:
-                return (0, "")             # believed negative for this path
+                return (0, "")
         if url in deferred:
-            return (1, deferred[url])       # oldest budget work first
+            return (1, deferred[url])
         if (url in critical_urls and listing.get("image")
                 and cachemod.get_scope(cache, url) != "cover"):
-            return (2, "")                 # gallery tried; cover never attempted
+            return (2, "")
         if not entry:
-            return (2, "")                 # never attempted
-        return (3, "")                     # retry a prior empty response last
+            return (2, "")
+        return (3, "")
 
     def key(listing):
         url = listing.get("url") or ""
@@ -294,7 +254,6 @@ def prioritize(listings, cache=None, today=None):
         )
 
     return sorted(listings, key=key), critical_urls
-
 
 def attach_hashes(listings, max_workers: int = 8, session=None, log=print,
                   cache=None, today=None, budget_s=None, critical_urls=None):
@@ -346,22 +305,11 @@ def attach_hashes(listings, max_workers: int = 8, session=None, log=print,
     def work(l):
         url = l.get("url")
         if l.get("_identified_by"):
-            # Already identified by portal id, so its photos would answer a
-            # question nobody is asking. `_build` unions its twin's hashes onto
-            # the property, so nothing downstream goes without.
             return (l, None, [], "identified")
         if cache is not None and url:
-            # `[]` is a HIT meaning "known to have no photos for us", None means
-            # "not cached, go fetch" — `if cached:` would conflate them and
-            # re-fetch every photo-less ad forever, which is exactly the bug
-            # that let morizon eat the photo budget.
             cached = cachemod.get(cache, url, today)
             if cached is not None:
                 scope = cachemod.get_scope(cache, url)
-                # Empty gallery results predate the cover-first path and do not
-                # prove that the already-scraped card image is inaccessible.
-                # Only a scoped cover miss may suppress another critical cover
-                # attempt for MISS_RECHECK_DAYS.
                 needs_first_cover = (
                     cached == []
                     and url in critical_urls
@@ -372,9 +320,6 @@ def attach_hashes(listings, max_workers: int = 8, session=None, log=print,
                     return (l, cached, cachemod.get_urls(cache, url),
                             f"cached_{scope}")
         if deadline is not None and time.monotonic() > deadline:
-            # None, not [] — an ad we never tried must not be written back as a
-            # photo miss, or a few budget-starved runs would teach the cache
-            # that half the region has no photos
             return (l, None, [], "deferred")
         if url in critical_urls and l.get("image"):
             hashes, img_urls = cover_hashes(l, session)
