@@ -1,6 +1,6 @@
 # Current queue — rentgen-ofert
 
-Updated 2026-11-04. This file owns accepted work and the next-session handoff.
+Updated 2026-11-14. This file owns accepted work and the next-session handoff.
 [Development history](docs/HISTORY.md) preserves the former diary and unselected
 ideas. [POLAND_ROLLOUT.md](POLAND_ROLLOUT.md) owns expansion and capacity gates;
 its historical task lists do not authorize additional work.
@@ -8,6 +8,17 @@ its historical task lists do not authorize additional work.
 ## Current — 2026-11-04
 
 Last completed slice: adopted canonical AGENTS.md, mirror CLAUDE.md, and agent-instructions CI workflow (`6e0ca66`). Fixed root sys.path in region_storage, schedule_region, and scout_regions for standalone CLI execution (`715fe4f`); 535 tests pass.
+
+### Production status — 2026-11-14
+
+**Data has not been published since November 4** (`data-slaskie` `7f48b4d`,
+`data-opolskie` `8e448df`). Every sampled scrape since `715fe4f` fails at the
+offline test gate on `test_schedule_region_cli_imports_cleanly`, which passes
+locally and fails in Actions; green runs are hourly no-ops. The stability clock
+remains at zero and the accepted item below cannot pass until the gate is
+repaired. Evidence and nine numbered, unselected proposals are in the
+[November 14 triage](docs/audits/2026-11-14-triage.md). The repair itself is not
+yet accepted work.
 
 ### Accepted next work
 
@@ -296,3 +307,215 @@ publication. Leave guards active and preserve prior data on failure; no manual
 dispatch selected. This documentation-only handoff matches neither push workflow.
 Two-region fresh-RCN acceptance and the stability cohort remain open. The newest
 checkpoint above supersedes earlier same-day publication/maintenance counts.
+
+## Review findings and proposals — 2026-11-14 (not accepted work)
+
+Later the same day `8d66a01` replaced the nonexistent README `--dry-run` command
+(B4) and restored the coverage caveat (part of B6). The
+[November 14 triage](docs/audits/2026-11-14-triage.md) prioritises these findings
+alongside the production freeze; it does not select any of them.
+
+These are unselected review proposals. They do not change, reorder or extend the
+accepted queue above; nothing here is authorized implementation until the owner
+selects it.
+
+Reviewed 2026-11-14 by Claude Code against commit `9fc89c5`. Read-only review:
+nothing was fixed and no file other than this one was changed. Run in a scratch
+`git archive` copy with the repo's `.venv` (Python 3.11.2):
+`python -m pytest -q -p no:cacheprovider` → exit 0, **538 passed** in 41.5 s;
+`node --check` on every `site/*.js`, `scripts/*.mjs` and `tests/*.cjs` → all pass;
+`python3 -m site.build` (the AGENTS.md build command) → exit 1. Synthetic
+reproduction scripts exercised `history`, `normalize`, `overrides`, `delist` and
+`discountOf` from `site/app.js` offline. Not checked: no scraper, portal, RCN,
+ULDK/UUG or geoportal request was made; no live payload, browser check, CI run or
+`data-<region>` branch was inspected; `scripts/update-summary.mjs` and the
+per-portal n-online/Morizon parsers were only skimmed.
+
+Comment-removal commit `9fc89c5`: no functional collateral damage found. No
+`# type: ignore`, `noqa`, `pragma`, `fmt`, shebang or encoding line was removed;
+CSS colours, URLs, regexes, docstrings and test assertions are intact (only
+trailing assertion comments went). Losses are documentary: the county-list
+source URL in `scraper/identity.py`, the regeneration command in
+`scripts/og-card.html`, the rationale for `[hidden] { display:none !important }`
+in `site/styles.css`, and the README's coverage caveats (see B6).
+
+### Bugs
+
+- [ ] **B1 (Medium) — same-size neighbours produce a fake price-drop badge and
+  pollute the "discount" sort.** `scraper/normalize.py:507-509` sets
+  `prev_price = min(others' prices)` for every member of a 2–3-listing same
+  area/rooms/locality group, even when the other listing is *more* expensive;
+  `site/app.js:779-786` (`discountOf`) then treats `prev_price` as an earlier
+  price of this card. Scenario: two 51.2 m² 2-room flats in one town at
+  300 000 and 420 000 zł → the cheaper card shows "▼ −29% (−120 000 zł)" and
+  ranks at the top of the discount sort, although its price never changed.
+  REPRODUCED (synthetic `link_same_size` + `discountOf`: pct 28.6).
+  Acceptance: a card's discount uses only its own observed earlier prices;
+  `also_listed` prices never become `prev_price`; a regression test covers the pair.
+- [ ] **B2 (Medium) — price history mixes portals, so a one-day source gap
+  reads as a price change.** `scraper/history.py:260-272` builds
+  `price_history` from the minimum price across *all* offer URLs per date.
+  Scenario: Otodom 500 000 + Gratka 520 000 on day 1, Otodom missed on day 2
+  (partial Otodom coverage is a known state), both back on day 3 → published
+  trail `500 000 → 520 000 → 500 000`, shown on the card as a price history.
+  REPRODUCED (synthetic `history.update`, one record, three days).
+  Acceptance: a missing offer on a date does not create a trail point; the
+  trail changes only when an observed URL's own price changes.
+- [ ] **B3 (Medium) — an archived-ad observation dates the delisting on the
+  harvest day, not the last live day, which shifts the RCN "sold" window.**
+  `scraper/history.py:316-320` sets `delisted = today`, while
+  `scraper/delist.py:142` uses the last live date. Scenario: last live
+  observation 2026-08-10, n-online archive harvest matches it on 2026-11-14 →
+  `delisted` 2026-11-14; the sold window (`rcn.py` −60/+400 days) starts
+  2026-09-15, so a deed dated 2026-08-20 is never attached, and the archive card
+  shows a delisting date three months late. REPRODUCED (synthetic; the URL-sweep
+  path on the same record yields 2026-08-10). Existing tests
+  (`tests/test_history.py:121`, `tests/test_bugfixes.py:30`) encode the current
+  date, so this needs an owner decision. Acceptance: both lifecycle paths
+  produce the same `delisted` date for the same evidence, with tests updated.
+- [ ] **B4 (Medium) — the README "dry-run" command runs a full live scrape.**
+  `README.md:21` documents `python3 -m scraper.main --region slaskie --dry-run`,
+  but `scraper/main.py:78`/`357` never reads `argv`; region comes only from
+  `RENTGEN_REGION`. Scenario: a reader follows Quick Start and starts a
+  multi-hour crawl of all five portals plus RCN from their own IP, outside the
+  `rentgen-scrape` concurrency lock, writing `site/data/` and `cache/`.
+  CODE-READING ONLY (not executed, as it would contact portals).
+  Acceptance: either the flags exist and `--dry-run` makes no network request,
+  or the README stops advertising them.
+- [ ] **B5 (Medium) — a malformed `overrides.json` silently drops every pin,
+  and `pin()` then overwrites the file.** `scraper/overrides.py:32-38` returns
+  `{}` on any exception; `pin()` (`:45-52`) saves the result. Scenario: a hand
+  edit leaves a trailing comma → CI (which `update.yml` triggers on
+  `overrides.json` pushes) runs without any manual address, and the next
+  `rcncheck --pin` rewrites the file with only the new entry. REPRODUCED
+  (synthetic: two pins plus a trailing comma → file contains one entry after
+  `pin()`). Acceptance: invalid JSON fails loudly in `load()` and in the offline
+  test gate; `pin()` refuses to save over an unreadable file.
+- [ ] **B6 (Low) — README and AGENTS.md claim more than the code does.**
+  `AGENTS.md:18` gives `python3 -m site.build` as the build command (no such
+  module; exit 1, reproduced) and `AGENTS.md:16` says Python 3.11 while CI uses
+  3.12. `README.md:5` lists OLX as an aggregated source, but OLX has been
+  blocked at zero in every recent audit (e.g. `docs/audits/2026-10-22-cohort-checkpoint.md:48`);
+  `9fc89c5` removed the "coverage remains partial; OLX blocked" caveat.
+  `README.md:18` serves `site/` locally, which has no `site/data/` on `main`,
+  so the page shows no listings. REPRODUCED (build command) / CODE-READING
+  (others). Acceptance: AGENTS/README commands run as written and the README
+  states current source coverage and RCN matching limits.
+- [ ] **B7 (Low) — site-only pushes deploy with no test gate.**
+  `.github/workflows/deploy.yml` (push on `site/**`, `scripts/update-summary.mjs`,
+  `scripts/templates/**`) runs catalog validation and rendering but no pytest or
+  Node tests; the JS/browser-loading tests only run inside `update.yml`, whose
+  push paths exclude `site/**` (other than `regions.json`). Scenario: a broken
+  `site/app.js` edit (as `9fc89c5` touched 112 lines of it) is published to
+  Pages without any check. CODE-READING ONLY. Acceptance: deploy runs at least
+  the offline Python+Node suite (no portal traffic) before `upload-pages-artifact`.
+- [ ] **B8 (Low) — the delist sweep probes only one URL of a multi-portal
+  property.** `scraper/delist.py:118-119` takes the last observation URL.
+  Scenario: a property merged from Otodom and n-online drops out of both scrapes
+  (Otodom coverage is partial); the n-online ad expired but the Otodom ad is
+  live → record marked delisted, appears in the archive as withdrawn and becomes
+  eligible for a "sold" deed claim. It self-heals only if a later scrape sees a
+  URL again. CODE-READING ONLY. Acceptance: a record is delisted only when every
+  known non-archived URL is confirmed gone (or the remaining ones are unknown
+  and documented as such).
+
+### Next development tasks
+
+- [ ] **T1 — Frozen synthetic demo dataset (still missing).** Why: the site
+  cannot be shown or tested without live portals and the `data-<region>`
+  branches; B6's local-serve instruction shows an empty page. Generate a small
+  synthetic region (fake addresses/URLs, all lifecycle states, one RCN match per
+  confidence level) through `payload.build`, validate it with
+  `scripts/validate_data.py`, and serve it with one command. Effort: M (1–2 days).
+  Acceptance: `README` Quick Start renders listings, archive, map and stats
+  offline; the dataset passes the validator in CI.
+- [ ] **T2 — Data-lifecycle diagram (still missing).** Why: the identity →
+  history → delist/archive → RCN → payload → orphan branch → overlay → Pages
+  chain spans ~10 modules and three workflows; B2/B3/B8 all sit at its seams.
+  One diagram (Mermaid in `docs/`) with each state transition and its evidence.
+  Effort: S. Acceptance: every `delisted`/`archived`/`sold` transition in code
+  maps to one arrow, linked from README.
+- [ ] **T3 — Reliability case study (still missing).** Why: the audits hold
+  strong evidence (source-volume guard refusing a Gratka outage, RCN export
+  fallback, capped retries, atomic regional storage) but it is spread over 11
+  dated files and the trimmed README no longer tells it. One page with failure
+  mode → guard → evidence run link. Effort: S. Acceptance: each guard cites the
+  run or audit that proved it.
+- [ ] **T4 — Deploy test gate and fixture freshness check.** Covers B7 and adds
+  a check that each portal fixture still exercises its parser's current
+  required fields. Effort: S. Acceptance: deploy fails on a broken `app.js` in a
+  test branch; no network access in the gate.
+- [ ] **T5 — Lifecycle property tests.** Why: B1–B3 passed 538 tests because
+  tests assert single steps. Add multi-day scenario tests (source gap, archive
+  after long absence, relist, multi-portal delisting) over `history`, `delist`,
+  `rcn.match` and `link_same_size`. Effort: M. Acceptance: each scenario asserts
+  the published card fields (`price_history`, `prev_price`, `delisted`, `sales`).
+- [ ] **T6 — Restore lost provenance as Markdown.** The county-list source,
+  og-card regeneration command and `[hidden]` rationale removed in `9fc89c5`
+  belong in `docs/`, per the no-comments rule. Effort: XS. Acceptance: each has
+  a documented home.
+
+### Feature ideas
+
+Deferred by `POLAND_ROLLOUT.md` (auctions, rentals/yield, new portals, agency
+statistics, alerts, card sparklines) are deliberately excluded. All ideas are
+static/self-service and add no portal traffic.
+
+- [ ] **F1 — Property permalink.** Problem: a buyer cannot send one property's
+  timeline and RCN comparison to a partner; filters are shareable, single cards
+  are not. A `#p=<detail key>` link opens that card (current or archive).
+  Effort: S. Worked if: links survive a data refresh for current cards and
+  resolve to the archive card after delisting.
+- [ ] **F2 — Printable negotiation sheet.** Problem: the RCN gap and price
+  history are useful at a viewing, offline. A print stylesheet/"Drukuj" view for
+  one card: price trail, deeds nearby, confidence, sources, dates. Effort: S.
+  Worked if: one A4 page in Chromium print preview with all evidence and source
+  links.
+- [ ] **F3 — "Why this match" on RCN claims.** Problem: confidence labels
+  (`wysoka`/`średnia`) do not say whether the match came from street+number,
+  parcel, or a unique decimal area, and the matcher's limits are now absent
+  from the README. Publish the match basis from `rcn._score` and show it beside
+  the confidence. Effort: S–M. Worked if: every sale claim shows its basis and
+  the validator rejects claims without one.
+- [ ] **F4 — CSV export of the filtered view.** Problem: analysts and buyers
+  copy cards by hand. Client-side CSV of visible rows (price, m², zł/m², town,
+  RCN gap, first seen, URL). Effort: S. Worked if: the export matches the grid
+  count and opens correctly in a spreadsheet with Polish characters.
+- [ ] **F5 — Time-on-market filter.** Problem: long-listed properties signal
+  negotiation room; `first_seen` is already on every card but not filterable.
+  (Related to an unselected historical sort idea in `docs/HISTORY.md`.) Effort:
+  XS. Worked if: a "na rynku > N dni" filter matches a manual count on the
+  frozen demo dataset (T1).
+- [ ] **F6 — Compare up to four properties.** Problem: buyers shortlist across
+  portals. A tab-local comparison table (price, m², zł/m², RCN gap, price trail,
+  days on market) kept in `localStorage`. Effort: M. Worked if: comparison
+  survives reload and uses only already-published fields.
+
+### Unverified suspicions
+
+- `normalize.to_float` concatenates every digit and dot it finds: `"120 m2"` →
+  1202, `"ok. 50"` → 0.5, `"1,5 mln"` → 1.5. Function behaviour is reproduced;
+  whether Gratka/Morizon card text ever contains such strings was not checked
+  (fixtures show `"273 m²"`, `"7 pokoi"`).
+- `delist._GONE_MARKERS` searches the whole page body; a live portal page that
+  embeds "oferta nieaktualna" in i18n bundles or related-ad widgets would be
+  marked gone. Not checked against real pages.
+- `scout.yml` pins `actions/checkout@v7`, `setup-python@v7`,
+  `upload-artifact@v7` while the other workflows use v4/v5; manual-only, not
+  verified to resolve.
+- Gratka `_walk` records `kept_keys` identical to `served_keys`, so its coverage
+  "kept" figure cannot show filtering losses (cosmetic unless relied on).
+- Dates are UTC (`dt.date.today()` on runners); the hourly Opolskie check can
+  record a Polish-calendar day early/late around midnight. Impact not measured.
+
+### Already recorded elsewhere (still open)
+
+- Fresh healthy two-region RCN acceptance and the seven-day / three-cycle
+  stability cohort (queue above; `docs/audits/2026-10-22-cohort-checkpoint.md`).
+- OLX blocked on GitHub-hosted runners; Otodom/Morizon coverage partial
+  (audits 2026-10-21/22).
+- Source-continuity guard does not detect gradual decline (October 21 repair
+  section above).
+- Storage/provider selection and expansion beyond two regions are owner-gated
+  (`POLAND_ROLLOUT.md`, `docs/STORAGE.md`).
+- Archive entries have no map coordinates (known gap in `docs/HISTORY.md`).
