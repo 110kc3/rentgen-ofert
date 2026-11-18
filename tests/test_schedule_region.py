@@ -2,6 +2,7 @@
 import copy
 import datetime as dt
 import json
+import os
 import subprocess
 import sys
 import urllib.error
@@ -142,8 +143,13 @@ def test_attempt_reader_does_not_assume_api_order_or_ignore_incomplete_pages(mon
 
 
 def test_schedule_region_cli_imports_cleanly():
+    environment_without_github_context = {
+        key: value for key, value in os.environ.items()
+        if not key.startswith("GITHUB_")
+    }
     proc = subprocess.run([sys.executable, "scripts/schedule_region.py"],
-                          capture_output=True, text=True)
+                          capture_output=True, text=True,
+                          env=environment_without_github_context)
     assert "ModuleNotFoundError" not in proc.stderr
     assert "KeyError" in proc.stderr
 
