@@ -1,0 +1,21 @@
+name: Publication freshness
+
+on:
+  schedule:
+    - cron: "41 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  freshness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fail when an enabled region's publication is overdue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -m scripts.check_freshness

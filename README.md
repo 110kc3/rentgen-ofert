@@ -12,6 +12,10 @@ Polish real estate sale listing aggregator and market intelligence engine, combi
 blocked on GitHub-hosted runners and Otodom/Morizon coverage is partial. See
 [`TODO.md`](TODO.md) and the latest [audits](docs/audits/) for current counts.
 
+The `Publication freshness` workflow runs `python3 -m scripts.check_freshness`
+every six hours and fails when an enabled region has not published within its
+cadence, so a silent freeze shows as a red run instead of green no-op updates.
+
 ## Quick Start
 
 ```bash
