@@ -479,7 +479,7 @@ def link_same_size(properties):
     """Flag the same flat listed more than once via the one thing that can't
     change on a re-post: floor area. Properties sharing exact area + rooms +
     locality that photo-dedup kept apart are very likely the same flat re-listed
-    (photos swapped). Sets `relisted`, `prev_price`, `also_listed`. Big clusters
+    (photos swapped). Sets `relisted` and `also_listed`. Big clusters
     (developments of identical units) are skipped to avoid false positives."""
     groups = defaultdict(list)
     for p in properties:
@@ -504,7 +504,4 @@ def link_same_size(properties):
             p["also_listed"] = [{"price": o.get("price"), "url": o.get("url"),
                                  "source": o.get("source"), "first_seen": o.get("first_seen")}
                                 for o in others]
-            cheaper = [o.get("price") for o in others if o.get("price") is not None]
-            if cheaper and p.get("prev_price") is None:
-                p["prev_price"] = min(cheaper)
     return properties

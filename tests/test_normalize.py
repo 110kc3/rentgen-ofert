@@ -243,3 +243,22 @@ def test_cross_size_different_photos_stay_apart():
     b = _l(source="olx", source_id="2", url="u2", type="house",
            area=280.0, price=999000, locality="Gliwice", phashes=[(1 << 64) - 1])
     assert len(dedupe([a, b])) == 2
+
+def _same_size_neighbour(url, price, **kw):
+    return dict(type="flat", area=51.2, rooms=2, locality="Gliwice", street=None,
+                floor=None, url=url, source="otodom", price=price, **kw)
+
+def test_same_size_neighbour_price_is_not_an_earlier_price():
+    cheap = _same_size_neighbour("cheap", 300000)
+    pricey = _same_size_neighbour("pricey", 420000)
+    link_same_size([cheap, pricey])
+    assert cheap["relisted"] and pricey["relisted"]
+    assert cheap["also_listed"][0]["price"] == 420000
+    assert cheap.get("prev_price") is None
+    assert pricey.get("prev_price") is None
+
+def test_same_size_link_keeps_own_history_price():
+    own = _same_size_neighbour("own", 300000, prev_price=330000)
+    other = _same_size_neighbour("other", 250000)
+    link_same_size([own, other])
+    assert own["prev_price"] == 330000
