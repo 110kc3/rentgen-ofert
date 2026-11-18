@@ -1,37 +1,72 @@
 # Current queue — rentgen-ofert
 
-Updated 2026-11-14. This file owns accepted work and the next-session handoff.
+Updated 2026-11-18. This file owns accepted work and the next-session handoff.
 [Development history](docs/HISTORY.md) preserves the former diary and unselected
 ideas. [POLAND_ROLLOUT.md](POLAND_ROLLOUT.md) owns expansion and capacity gates;
 its historical task lists do not authorize additional work.
 
-## Current — 2026-11-04
+## Current — 2026-11-18
 
-Last completed slice: adopted canonical AGENTS.md, mirror CLAUDE.md, and agent-instructions CI workflow (`6e0ca66`). Fixed root sys.path in region_storage, schedule_region, and scout_regions for standalone CLI execution (`715fe4f`); 535 tests pass.
+Last completed slice: the owner selected triage items 1, 3, 4, 5, 7 and 8 from the
+[November 14 triage](docs/audits/2026-11-14-triage.md). All six are implemented;
+561 offline tests pass locally both with and without `GITHUB_EVENT_NAME=schedule`.
 
-### Production status — 2026-11-14
+- [x] **1 — Test gate unblocked.** `test_schedule_region_cli_imports_cleanly` now
+  runs the CLI with every `GITHUB_*` variable removed, so it no longer depends on
+  the Actions environment that froze publication from November 4.
+- [x] **3 — Staleness alarm.** `scripts/check_freshness.py` and the
+  `Publication freshness` workflow (every six hours, read-only) fail when an
+  enabled region's `meta.updated` is older than its cadence allows (twice daily
+  36 h, daily 48 h, every 72 h 120 h, weekly 9 days) or is unreadable. Run
+  locally against production on November 18 it reported both regions stale
+  (Śląskie 340 h, Opolskie 348 h) and exited 1.
+- [x] **4 — Review section reconciled** below: fixed findings are checked with
+  their commit; the rest stay unselected proposals.
+- [x] **5 — Fake price-drop badge (B1).** `link_same_size` no longer copies a
+  same-size neighbour's price into `prev_price`; only the card's own history sets it.
+- [x] **7 — Deploy test gate (B7).** `deploy.yml` runs the offline pytest suite and
+  `node --check` on every `site/*.js`, `scripts/*.mjs` and `tests/*.cjs` before
+  uploading the Pages artifact.
+- [x] **8 — Malformed `overrides.json` (B5).** `overrides.load` raises
+  `OverridesError` on invalid JSON, a non-object document or a non-object entry;
+  a missing file is still empty. `pin()` therefore refuses to overwrite an
+  unreadable file, and the offline gate loads the repository copy.
 
-**Data has not been published since November 4** (`data-slaskie` `7f48b4d`,
-`data-opolskie` `8e448df`). Every sampled scrape since `715fe4f` fails at the
-offline test gate on `test_schedule_region_cli_imports_cleanly`, which passes
-locally and fails in Actions; green runs are hourly no-ops. The stability clock
-remains at zero and the accepted item below cannot pass until the gate is
-repaired. Evidence and nine numbered, unselected proposals are in the
-[November 14 triage](docs/audits/2026-11-14-triage.md). The repair itself is not
-yet accepted work.
+### Production status — 2026-11-18
+
+Data was last published November 4 (`data-slaskie` `7f48b4d`, `data-opolskie`
+`8e448df`); `Update listings` still failed at the offline gate on November 18 before
+this push. Because this push changes `scraper/` and `tests/`, `update.yml` starts a
+code-update scrape of the default region (Śląskie) on push; that is the existing
+push trigger, not a manual dispatch. Its continuity check compares against a
+fourteen-day-old baseline and may refuse publication. Whether to override is an
+owner decision; nothing was overridden.
 
 ### Accepted next work
 
 - [ ] Verify next scheduled automatic publication across Śląskie and Opolskie cohorts (scheduled scrapes and deploy workflows) without manual workflow dispatch.
+  Triage item 2 acceptance: scrape and deploy runs are green with real,
+  non-skipped steps; strict continuity passes without override; the new data ref
+  is recorded here. The `Publication freshness` workflow should turn green once
+  both regions have published.
 
 ### Owner actions / blocked
 
 - Storage & expansion provider selection: S3/R2 object storage infrastructure selection remains unselected by owner; planning-only phase complete.
 - Two-region stability clock: observe scheduled publications; new region addition remains blocked pending 7-day stability clock.
+- Decide whether to override the source-continuity guard if the first post-freeze
+  publication is refused against the November 4 baseline.
+- Remaining triage proposals stay unselected: 6 (B2/B3 history and delisting
+  date; B3 changes behaviour that existing tests encode) and 9 (demo dataset,
+  diagram, case study, features).
 
 ### Pending verification
 
-- Commit `6e0ca66` pushed to `origin/main`; [Actions runs](https://github.com/110kc3/rentgen-ofert/actions) pending observation next session.
+- Commit `6e0ca66` verified: [Agent instructions run 41917039541](https://github.com/110kc3/rentgen-ofert/actions/runs/41917039541) passed.
+- The November 18 triage-repair commit on `main`: check its push-triggered
+  `Update listings` and `Deploy site` runs, the next `Publication freshness`
+  run and the next 06:00/18:00 UTC scheduled scrape in
+  [Actions](https://github.com/110kc3/rentgen-ofert/actions).
 
 ### History / deferred
 
@@ -310,10 +345,11 @@ checkpoint above supersedes earlier same-day publication/maintenance counts.
 
 ## Review findings and proposals — 2026-11-14 (not accepted work)
 
-Later the same day `8d66a01` replaced the nonexistent README `--dry-run` command
-(B4) and restored the coverage caveat (part of B6). The
-[November 14 triage](docs/audits/2026-11-14-triage.md) prioritises these findings
-alongside the production freeze; it does not select any of them.
+Reconciled 2026-11-18. `8d66a01` (November 14) fixed B4 and the README part of
+B6. The owner then selected triage items 1, 3, 4, 5, 7 and 8, which fixed B1, B5 and
+B7 on November 18. Checked items below are done; every unchecked item is still an
+unselected proposal. The [November 14 triage](docs/audits/2026-11-14-triage.md)
+keeps the original prioritisation.
 
 These are unselected review proposals. They do not change, reorder or extend the
 accepted queue above; nothing here is authorized implementation until the owner
@@ -341,7 +377,7 @@ in `site/styles.css`, and the README's coverage caveats (see B6).
 
 ### Bugs
 
-- [ ] **B1 (Medium) — same-size neighbours produce a fake price-drop badge and
+- [x] **B1 (Medium) — same-size neighbours produce a fake price-drop badge and
   pollute the "discount" sort.** `scraper/normalize.py:507-509` sets
   `prev_price = min(others' prices)` for every member of a 2–3-listing same
   area/rooms/locality group, even when the other listing is *more* expensive;
@@ -352,6 +388,7 @@ in `site/styles.css`, and the README's coverage caveats (see B6).
   REPRODUCED (synthetic `link_same_size` + `discountOf`: pct 28.6).
   Acceptance: a card's discount uses only its own observed earlier prices;
   `also_listed` prices never become `prev_price`; a regression test covers the pair.
+  FIXED 2026-11-18: `link_same_size` no longer sets `prev_price`; regression tests in `tests/test_normalize.py`.
 - [ ] **B2 (Medium) — price history mixes portals, so a one-day source gap
   reads as a price change.** `scraper/history.py:260-272` builds
   `price_history` from the minimum price across *all* offer URLs per date.
@@ -373,7 +410,7 @@ in `site/styles.css`, and the README's coverage caveats (see B6).
   (`tests/test_history.py:121`, `tests/test_bugfixes.py:30`) encode the current
   date, so this needs an owner decision. Acceptance: both lifecycle paths
   produce the same `delisted` date for the same evidence, with tests updated.
-- [ ] **B4 (Medium) — the README "dry-run" command runs a full live scrape.**
+- [x] **B4 (Medium) — the README "dry-run" command runs a full live scrape.**
   `README.md:21` documents `python3 -m scraper.main --region slaskie --dry-run`,
   but `scraper/main.py:78`/`357` never reads `argv`; region comes only from
   `RENTGEN_REGION`. Scenario: a reader follows Quick Start and starts a
@@ -382,7 +419,8 @@ in `site/styles.css`, and the README's coverage caveats (see B6).
   CODE-READING ONLY (not executed, as it would contact portals).
   Acceptance: either the flags exist and `--dry-run` makes no network request,
   or the README stops advertising them.
-- [ ] **B5 (Medium) — a malformed `overrides.json` silently drops every pin,
+  FIXED 2026-11-14 in `8d66a01`: the README documents the real env-driven run.
+- [x] **B5 (Medium) — a malformed `overrides.json` silently drops every pin,
   and `pin()` then overwrites the file.** `scraper/overrides.py:32-38` returns
   `{}` on any exception; `pin()` (`:45-52`) saves the result. Scenario: a hand
   edit leaves a trailing comma → CI (which `update.yml` triggers on
@@ -391,6 +429,7 @@ in `site/styles.css`, and the README's coverage caveats (see B6).
   (synthetic: two pins plus a trailing comma → file contains one entry after
   `pin()`). Acceptance: invalid JSON fails loudly in `load()` and in the offline
   test gate; `pin()` refuses to save over an unreadable file.
+  FIXED 2026-11-18: strict `overrides.load`, `pin()` refuses to save over an unreadable file; tests in `tests/test_history.py`.
 - [ ] **B6 (Low) — README and AGENTS.md claim more than the code does.**
   `AGENTS.md:18` gives `python3 -m site.build` as the build command (no such
   module; exit 1, reproduced) and `AGENTS.md:16` says Python 3.11 while CI uses
@@ -401,7 +440,9 @@ in `site/styles.css`, and the README's coverage caveats (see B6).
   so the page shows no listings. REPRODUCED (build command) / CODE-READING
   (others). Acceptance: AGENTS/README commands run as written and the README
   states current source coverage and RCN matching limits.
-- [ ] **B7 (Low) — site-only pushes deploy with no test gate.**
+  PARTLY FIXED in `8d66a01`: README coverage caveat restored. Still open:
+  `AGENTS.md` build command and Python version, README local-serve data.
+- [x] **B7 (Low) — site-only pushes deploy with no test gate.**
   `.github/workflows/deploy.yml` (push on `site/**`, `scripts/update-summary.mjs`,
   `scripts/templates/**`) runs catalog validation and rendering but no pytest or
   Node tests; the JS/browser-loading tests only run inside `update.yml`, whose
@@ -409,6 +450,7 @@ in `site/styles.css`, and the README's coverage caveats (see B6).
   `site/app.js` edit (as `9fc89c5` touched 112 lines of it) is published to
   Pages without any check. CODE-READING ONLY. Acceptance: deploy runs at least
   the offline Python+Node suite (no portal traffic) before `upload-pages-artifact`.
+  FIXED 2026-11-18: `deploy.yml` runs pytest and `node --check` before upload; contract test in `tests/test_update_workflow.py`.
 - [ ] **B8 (Low) — the delist sweep probes only one URL of a multi-portal
   property.** `scraper/delist.py:118-119` takes the last observation URL.
   Scenario: a property merged from Otodom and n-online drops out of both scrapes
@@ -445,6 +487,8 @@ in `site/styles.css`, and the README's coverage caveats (see B6).
   a check that each portal fixture still exercises its parser's current
   required fields. Effort: S. Acceptance: deploy fails on a broken `app.js` in a
   test branch; no network access in the gate.
+  The deploy gate part shipped with B7 on 2026-11-18; the fixture freshness
+  check is still open.
 - [ ] **T5 — Lifecycle property tests.** Why: B1–B3 passed 538 tests because
   tests assert single steps. Add multi-day scenario tests (source gap, archive
   after long absence, relist, multi-portal delisting) over `history`, `delist`,
