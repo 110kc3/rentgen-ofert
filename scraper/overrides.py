@@ -29,12 +29,24 @@ FIELDS = ("street", "nr", "locality", "rooms", "floor", "plot_area", "area",
           "dzialka_id", "x", "y")
 
 
+class OverridesError(ValueError):
+    pass
+
+
 def load(path=PATH) -> dict:
-    try:
-        data = json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
-        return data if isinstance(data, dict) else {}
-    except Exception:
+    path = pathlib.Path(path)
+    if not path.exists():
         return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise OverridesError(f"{path} is unreadable: {exc}") from exc
+    if not isinstance(data, dict):
+        raise OverridesError(f"{path} must contain a JSON object keyed by listing URL")
+    malformed = [url for url, fields in data.items() if not isinstance(fields, dict)]
+    if malformed:
+        raise OverridesError(f"{path} has non-object entries for: {', '.join(malformed)}")
+    return data
 
 
 def save(overrides: dict, path=PATH) -> None:

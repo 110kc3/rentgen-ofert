@@ -322,3 +322,27 @@ def test_overrides_pin_and_apply(tmp_path):
     assert records[0]["manual"] is True
     assert overrides.apply(records, {"https://x/unknown": {"nr": "5"}},
                            log=lambda *a: None) == 0
+
+
+@pytest.mark.parametrize("content", ['{"https://otodom.pl/a1": {"nr": "1"},}',
+                                     '["https://otodom.pl/a1"]',
+                                     '{"https://otodom.pl/a1": "Asnyka 11"}'])
+def test_malformed_overrides_fail_loudly_and_are_not_overwritten(tmp_path, content):
+    from scraper import overrides
+    path = tmp_path / "overrides.json"
+    path.write_text(content, encoding="utf-8")
+    with pytest.raises(overrides.OverridesError):
+        overrides.load(path)
+    with pytest.raises(overrides.OverridesError):
+        overrides.pin("https://otodom.pl/new", path=path, nr="2")
+    assert path.read_text(encoding="utf-8") == content
+
+
+def test_missing_overrides_file_is_empty(tmp_path):
+    from scraper import overrides
+    assert overrides.load(tmp_path / "absent.json") == {}
+
+
+def test_repository_overrides_file_is_valid():
+    from scraper import overrides
+    assert isinstance(overrides.load(), dict)
