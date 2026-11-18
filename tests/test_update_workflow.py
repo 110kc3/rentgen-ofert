@@ -48,3 +48,10 @@ def test_noop_schedule_cannot_deploy():
     assert '.conclusion == "success"' in workflow
     assert '.name == "Push refreshed data (single-commit per-region data branch)"' in workflow
     assert workflow.index("  deploy:") < workflow.index("group: rentgen-pages")
+
+def test_deploy_runs_offline_tests_before_publishing_pages():
+    workflow = (ROOT / ".github/workflows/deploy.yml").read_text(encoding="utf-8")
+    tests = workflow.index("python -m pytest -q")
+    syntax = workflow.index('node --check "$script"')
+    upload = workflow.index("actions/upload-pages-artifact")
+    assert tests < upload and syntax < upload
