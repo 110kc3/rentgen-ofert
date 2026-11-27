@@ -1,0 +1,23 @@
+{
+ "by_type": {
+  "flat": {
+   "archived": 5778,
+   "capped": [],
+   "current": 1009,
+   "failed": [],
+   "pages": 255
+  },
+  "house": {
+   "archived": 2026,
+   "capped": [],
+   "current": 561,
+   "failed": [],
+   "pages": 145
+  }
+ },
+ "complete": true,
+ "records": 7804,
+ "refreshed": "2026-11-27",
+ "region": "opolskie",
+ "schema": 2
+}
