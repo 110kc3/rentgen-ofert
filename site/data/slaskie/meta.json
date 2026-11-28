@@ -1,0 +1,3078 @@
+{
+ "updated": "2026-11-28T03:51:17+00:00",
+ "count": 35058,
+ "raw": 55314,
+ "by_source": {
+  "otodom": 16326,
+  "olx": 1678,
+  "gratka": 13260,
+  "morizon": 13260,
+  "nieruchomosci-online": 10790
+ },
+ "by_type": {
+  "house": 7908,
+  "flat": 27150
+ },
+ "relisted": 7465,
+ "geocoded": 23552,
+ "archive": 5590,
+ "rcn": {
+  "records": 68993,
+  "no_location_yet": 14803,
+  "no_deed_candidates": 15267,
+  "candidates_rejected": 34445,
+  "matched": 4478
+ },
+ "rcn_health": {
+  "status": "healthy",
+  "fetched": "2026-11-25",
+  "counts": {
+   "lokale": 343816,
+   "budynki": 657211
+  },
+  "error": null,
+  "source": {
+   "kind": "gugik_exports",
+   "files": {
+    "lokale": {
+     "url": "https://opendata.geoportal.gov.pl/InneDane/latest_exports/rcn_transakcje_ceny/PARQUET/24_transakcje_ceny_lokale.parquet",
+     "sha256": "42c49ab04323d755e8335e46767fd7efe76ef7ed403f603fbbf44e76ba44c333",
+     "bytes": 38257221,
+     "rows": 473938
+    },
+    "budynki": {
+     "url": "https://opendata.geoportal.gov.pl/InneDane/latest_exports/rcn_transakcje_ceny/PARQUET/24_transakcje_ceny_budynki.parquet",
+     "sha256": "d7432f2ff143419db0436c29bcb7b1ef020158246895b1ddf0d8a7d17db5db8a",
+     "bytes": 92514713,
+     "rows": 1277660
+    }
+   },
+   "wfs_error": "RCN lokale: changing/inconsistent total (473987 -> 1990, offset 0, returned 1990)"
+  }
+ },
+ "rcn_stats": {
+  "towns": 66,
+  "gap_pairs": 203
+ },
+ "sold_confirmed": 236,
+ "health": "partial",
+ "coverage": {
+  "schema": 2,
+  "status": "partial",
+  "by_source": {
+   "gratka": {
+    "status": "partial",
+    "searches": 12,
+    "pages": 584,
+    "listings": 13260,
+    "served_unique": 13260,
+    "kept_unique": 13260,
+    "current": 13260,
+    "archived": 0,
+    "truncated": 0,
+    "issues": 0,
+    "types": {
+     "flat": {
+      "status": "partial",
+      "searches": 11,
+      "pages": 510,
+      "served_unique": 10696,
+      "kept_unique": 10696,
+      "current": 10696,
+      "archived": 0,
+      "issues": 0,
+      "reasons": [
+       "partition_total_shortfall"
+      ],
+      "portal_total": 10710,
+      "pct": 99.9,
+      "partitions": {
+       "axis": "price",
+       "leaves": 10,
+       "complete": 10,
+       "failed": [],
+       "capped": [],
+       "missing": [],
+       "unaccounted": 13
+      }
+     },
+     "house": {
+      "status": "healthy",
+      "searches": 1,
+      "pages": 74,
+      "served_unique": 2564,
+      "kept_unique": 2564,
+      "current": 2564,
+      "archived": 0,
+      "issues": 0,
+      "portal_total": 2565,
+      "pct": 100.0
+     }
+    },
+    "reasons": [
+     "partition_total_shortfall"
+    ],
+    "portal_total": 13275,
+    "pct": 99.9
+   },
+   "morizon": {
+    "status": "partial",
+    "searches": 12,
+    "pages": 584,
+    "listings": 13260,
+    "served_unique": 13260,
+    "kept_unique": 13260,
+    "current": 13260,
+    "archived": 0,
+    "truncated": 0,
+    "issues": 0,
+    "types": {
+     "flat": {
+      "status": "partial",
+      "searches": 11,
+      "pages": 510,
+      "served_unique": 10696,
+      "kept_unique": 10696,
+      "current": 10696,
+      "archived": 0,
+      "issues": 0,
+      "reasons": [
+       "partition_total_shortfall"
+      ],
+      "portal_total": 10710,
+      "pct": 99.9,
+      "partitions": {
+       "axis": "price",
+       "leaves": 10,
+       "complete": 10,
+       "failed": [],
+       "capped": [],
+       "missing": [],
+       "unaccounted": 13
+      }
+     },
+     "house": {
+      "status": "healthy",
+      "searches": 1,
+      "pages": 74,
+      "served_unique": 2564,
+      "kept_unique": 2564,
+      "current": 2564,
+      "archived": 0,
+      "issues": 0,
+      "portal_total": 2565,
+      "pct": 100.0
+     }
+    },
+    "reasons": [
+     "partition_total_shortfall"
+    ],
+    "portal_total": 13275,
+    "pct": 99.9
+   },
+   "nieruchomosci-online": {
+    "status": "healthy",
+    "searches": 2,
+    "pages": 575,
+    "listings": 10790,
+    "served_unique": 15932,
+    "kept_unique": 15932,
+    "current": 10790,
+    "archived": 5142,
+    "truncated": 0,
+    "issues": 0,
+    "types": {
+     "flat": {
+      "status": "healthy",
+      "searches": 1,
+      "pages": 378,
+      "served_unique": 8316,
+      "kept_unique": 8316,
+      "current": 8316,
+      "archived": 0,
+      "issues": 0,
+      "partitions": {
+       "axis": "town",
+       "leaves": 60,
+       "complete": 60,
+       "failed": [],
+       "capped": [],
+       "missing": [],
+       "details": {
+        "katowice": {
+         "requests": 51,
+         "pages": 51,
+         "served_current": 1612,
+         "served_archived": 85,
+         "new_current": 1612,
+         "new_archived": 0,
+         "archive_start": 49,
+         "stop": "archive_boundary"
+        },
+        "gliwice": {
+         "requests": 19,
+         "pages": 19,
+         "served_current": 565,
+         "served_archived": 73,
+         "new_current": 565,
+         "new_archived": 0,
+         "archive_start": 17,
+         "stop": "archive_boundary"
+        },
+        "zabrze": {
+         "requests": 10,
+         "pages": 10,
+         "served_current": 290,
+         "served_archived": 65,
+         "new_current": 290,
+         "new_archived": 0,
+         "archive_start": 8,
+         "stop": "archive_boundary"
+        },
+        "bytom": {
+         "requests": 12,
+         "pages": 12,
+         "served_current": 334,
+         "served_archived": 71,
+         "new_current": 319,
+         "new_archived": 0,
+         "archive_start": 10,
+         "stop": "archive_boundary"
+        },
+        "sosnowiec": {
+         "requests": 15,
+         "pages": 15,
+         "served_current": 484,
+         "served_archived": 79,
+         "new_current": 463,
+         "new_archived": 0,
+         "archive_start": 13,
+         "stop": "archive_boundary"
+        },
+        "czestochowa": {
+         "requests": 32,
+         "pages": 32,
+         "served_current": 1049,
+         "served_archived": 68,
+         "new_current": 1049,
+         "new_archived": 0,
+         "archive_start": 31,
+         "stop": "archive_boundary"
+        },
+        "tychy": {
+         "requests": 8,
+         "pages": 8,
+         "served_current": 211,
+         "served_archived": 66,
+         "new_current": 208,
+         "new_archived": 0,
+         "archive_start": 6,
+         "stop": "archive_boundary"
+        },
+        "rybnik": {
+         "requests": 12,
+         "pages": 12,
+         "served_current": 296,
+         "served_archived": 83,
+         "new_current": 296,
+         "new_archived": 0,
+         "archive_start": 10,
+         "stop": "archive_boundary"
+        },
+        "dabrowa-gornicza": {
+         "requests": 7,
+         "pages": 7,
+         "served_current": 165,
+         "served_archived": 73,
+         "new_current": 144,
+         "new_archived": 0,
+         "archive_start": 5,
+         "stop": "archive_boundary"
+        },
+        "bielsko-biala": {
+         "requests": 24,
+         "pages": 24,
+         "served_current": 771,
+         "served_archived": 74,
+         "new_current": 771,
+         "new_archived": 0,
+         "archive_start": 22,
+         "stop": "archive_boundary"
+        },
+        "ruda-slaska": {
+         "requests": 8,
+         "pages": 8,
+         "served_current": 220,
+         "served_archived": 71,
+         "new_current": 205,
+         "new_archived": 0,
+         "archive_start": 6,
+         "stop": "archive_boundary"
+        },
+        "jastrzebie-zdroj": {
+         "requests": 9,
+         "pages": 9,
+         "served_current": 245,
+         "served_archived": 98,
+         "new_current": 245,
+         "new_archived": 0,
+         "archive_start": 7,
+         "stop": "archive_boundary"
+        },
+        "jaworzno": {
+         "requests": 4,
+         "pages": 4,
+         "served_current": 69,
+         "served_archived": 66,
+         "new_current": 69,
+         "new_archived": 0,
+         "archive_start": 2,
+         "stop": "archive_boundary"
+        },
+        "chorzow": {
+         "requests": 11,
+         "pages": 11,
+         "served_current": 294,
+         "served_archived": 85,
+         "new_current": 279,
+         "new_archived": 0,
+         "archive_start": 9,
+         "stop": "archive_boundary"
+        },
+        "myslowice": {
+         "requests": 6,
+         "pages": 6,
+         "served_current": 132,
+         "served_archived": 73,
+         "new_current": 126,
+         "new_archived": 0,
+         "archive_start": 4,
+         "stop": "archive_boundary"
+        },
+        "siemianowice-slaskie": {
+         "requests": 5,
+         "pages": 5,
+         "served_current": 92,
+         "served_archived": 69,
+         "new_current": 80,
+         "new_archived": 0,
+         "archive_start": 3,
+         "stop": "archive_boundary"
+        },
+        "tarnowskie-gory": {
+         "requests": 7,
+         "pages": 7,
+         "served_current": 153,
+         "served_archived": 75,
+         "new_current": 150,
+         "new_archived": 0,
+         "archive_start": 5,
+         "stop": "archive_boundary"
+        },
+        "bedzin": {
+         "requests": 6,
+         "pages": 6,
+         "served_current": 105,
+         "served_archived": 70,
+         "new_current": 102,
+         "new_archived": 0,
+         "archive_start": 4,
+         "stop": "archive_boundary"
+        },
+        "piekary-slaskie": {
+         "requests": 4,
+         "pages": 4,
+         "served_current": 39,
+         "served_archived": 107,
+         "new_current": 39,
+         "new_archived": 0,
+         "archive_start": 2,
+         "stop": "archive_boundary"
+        },
+        "raciborz": {
+         "requests": 4,
+         "pages": 4,
+         "served_current": 45,
+         "served_archived": 90,
+         "new_current": 45,
+         "new_archived": 0,
+         "archive_start": 2,
+         "stop": "archive_boundary"
+        },
+        "swietochlowice": {
+         "requests": 5,
+         "pages": 5,
+         "served_current": 78,
+         "served_archived": 81,
+         "new_current": 78,
+         "new_archived": 0,
+         "archive_start": 3,
+         "stop": "archive_boundary"
+        },
+        "zory": {
+         "requests": 5,
+         "pages": 5,
+         "served_current": 97,
+         "served_archived": 48,
+         "new_current": 97,
+         "new_archived": 0,
+         "archive_start": 3,
+         "stop": "archive_boundary"
+        },
+        "wodzislaw-slaski": {
+         "requests": 6,
+         "pages": 6,
+         "served_current": 101,
+         "served_archived": 104,
+         "new_current": 101,
+         "new_archived": 0,
+         "archive_start": 4,
+         "stop": "archive_boundary"
+        },
+        "mikolow": {
+         "requests": 4,
+         "pages": 4,
+         "served_current": 49,
+         "served_archived": 76,
+         "new_current": 48,
+         "new_archived": 0,
+         "archive_start": 2,
+         "stop": "archive_boundary"
+        },
+        "knurow": {
+         "requests": 3,
+         "pages": 3,
+         "served_current": 31,
+         "served_archived": 68,
+         "new_current": 22,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "archive_boundary"
+        },
+        "czeladz": {
+         "requests": 4,
+         "pages": 4,
+         "served_current": 56,
+         "served_archived": 90,
+         "new_current": 56,
+         "new_archived": 0,
+         "archive_start": 2,
+         "stop": "archive_boundary"
+        },
+        "lubliniec": {
+         "requests": 3,
+         "pages": 3,
+         "served_current": 24,
+         "served_archived": 40,
+         "new_current": 24,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "pszczyna": {
+         "requests": 4,
+         "pages": 4,
+         "served_current": 40,
+         "served_archived": 73,
+         "new_current": 40,
+         "new_archived": 0,
+         "archive_start": 2,
+         "stop": "archive_boundary"
+        },
+        "czechowice-dziedzice": {
+         "requests": 4,
+         "pages": 4,
+         "served_current": 48,
+         "served_archived": 71,
+         "new_current": 48,
+         "new_archived": 0,
+         "archive_start": 2,
+         "stop": "archive_boundary"
+        },
+        "zawiercie": {
+         "requests": 3,
+         "pages": 3,
+         "served_current": 29,
+         "served_archived": 85,
+         "new_current": 29,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "archive_boundary"
+        },
+        "cieszyn": {
+         "requests": 5,
+         "pages": 5,
+         "served_current": 88,
+         "served_archived": 67,
+         "new_current": 88,
+         "new_archived": 0,
+         "archive_start": 3,
+         "stop": "archive_boundary"
+        },
+        "myszkow": {
+         "requests": 3,
+         "pages": 3,
+         "served_current": 19,
+         "served_archived": 88,
+         "new_current": 19,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "archive_boundary"
+        },
+        "klobuck": {
+         "requests": 3,
+         "pages": 3,
+         "served_current": 11,
+         "served_archived": 56,
+         "new_current": 11,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "bierun": {
+         "requests": 3,
+         "pages": 3,
+         "served_current": 12,
+         "served_archived": 96,
+         "new_current": 6,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "laziska-gorne": {
+         "requests": 3,
+         "pages": 3,
+         "served_current": 29,
+         "served_archived": 109,
+         "new_current": 21,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "archive_boundary"
+        },
+        "rydultowy": {
+         "requests": 3,
+         "pages": 3,
+         "served_current": 28,
+         "served_archived": 76,
+         "new_current": 28,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "archive_boundary"
+        },
+        "orzesze": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 7,
+         "served_archived": 25,
+         "new_current": 2,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "pyskowice": {
+         "requests": 3,
+         "pages": 3,
+         "served_current": 14,
+         "served_archived": 58,
+         "new_current": 14,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "ornontowice": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 10,
+         "served_archived": 32,
+         "new_current": 4,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "zbroslawice": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 0,
+         "served_archived": 1,
+         "new_current": 0,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "pilchowice": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 3,
+         "served_archived": 3,
+         "new_current": 3,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "gieraltowice": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 3,
+         "served_archived": 3,
+         "new_current": 0,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "sosnicowice": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 0,
+         "served_archived": 7,
+         "new_current": 0,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "toszek": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 1,
+         "served_archived": 5,
+         "new_current": 1,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "rudziniec": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 1,
+         "served_archived": 6,
+         "new_current": 1,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "wielowies": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 0,
+         "served_archived": 3,
+         "new_current": 0,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "rzeczyce": {
+         "requests": 1,
+         "pages": 1,
+         "served_current": 0,
+         "served_archived": 0,
+         "new_current": 0,
+         "new_archived": 0,
+         "stop": "end"
+        },
+        "ustron": {
+         "requests": 7,
+         "pages": 7,
+         "served_current": 175,
+         "served_archived": 77,
+         "new_current": 175,
+         "new_archived": 0,
+         "archive_start": 5,
+         "stop": "archive_boundary"
+        },
+        "szczyrk": {
+         "requests": 4,
+         "pages": 4,
+         "served_current": 72,
+         "served_archived": 90,
+         "new_current": 72,
+         "new_archived": 0,
+         "archive_start": 2,
+         "stop": "archive_boundary"
+        },
+        "siewierz": {
+         "requests": 4,
+         "pages": 4,
+         "served_current": 72,
+         "served_archived": 84,
+         "new_current": 72,
+         "new_archived": 0,
+         "archive_start": 2,
+         "stop": "archive_boundary"
+        },
+        "swierklaniec": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 16,
+         "served_archived": 21,
+         "new_current": 8,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "wisla": {
+         "requests": 4,
+         "pages": 4,
+         "served_current": 40,
+         "served_archived": 110,
+         "new_current": 40,
+         "new_archived": 0,
+         "archive_start": 2,
+         "stop": "archive_boundary"
+        },
+        "zywiec": {
+         "requests": 3,
+         "pages": 3,
+         "served_current": 38,
+         "served_archived": 74,
+         "new_current": 33,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "archive_boundary"
+        },
+        "lodygowice": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 1,
+         "served_archived": 13,
+         "new_current": 1,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "jaworze": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 18,
+         "served_archived": 14,
+         "new_current": 18,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "blachownia": {
+         "requests": 3,
+         "pages": 3,
+         "served_current": 18,
+         "served_archived": 49,
+         "new_current": 18,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "czerwionka-leszczyny": {
+         "requests": 4,
+         "pages": 4,
+         "served_current": 40,
+         "served_archived": 70,
+         "new_current": 37,
+         "new_archived": 0,
+         "archive_start": 2,
+         "stop": "archive_boundary"
+        },
+        "buczkowice": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 27,
+         "served_archived": 0,
+         "new_current": 21,
+         "new_archived": 0,
+         "stop": "end"
+        },
+        "skoczow": {
+         "requests": 3,
+         "pages": 3,
+         "served_current": 23,
+         "served_archived": 72,
+         "new_current": 23,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "archive_boundary"
+        },
+        "kozieglowy": {
+         "requests": 1,
+         "pages": 1,
+         "served_current": 0,
+         "served_archived": 0,
+         "new_current": 0,
+         "new_archived": 0,
+         "stop": "end"
+        }
+       }
+      },
+      "archive_harvest": {
+       "mode": "partial",
+       "stop_reason": "rate_limited",
+       "complete": false,
+       "refreshed": "2026-11-21",
+       "records": 40397,
+       "pending": 57,
+       "cycle_records": 0,
+       "cycle_started": "2026-11-28",
+       "seconds": 224.3,
+       "budget_seconds": 900.0,
+       "requests": 155,
+       "errors": []
+      }
+     },
+     "house": {
+      "status": "healthy",
+      "searches": 1,
+      "pages": 197,
+      "served_unique": 7616,
+      "kept_unique": 7616,
+      "current": 2474,
+      "archived": 5142,
+      "issues": 0,
+      "partitions": {
+       "axis": "town",
+       "leaves": 60,
+       "complete": 60,
+       "failed": [],
+       "capped": [],
+       "missing": [],
+       "details": {
+        "katowice": {
+         "requests": 5,
+         "pages": 5,
+         "served_current": 128,
+         "served_archived": 78,
+         "new_current": 128,
+         "new_archived": 0,
+         "archive_start": 3,
+         "stop": "archive_boundary"
+        },
+        "gliwice": {
+         "requests": 5,
+         "pages": 5,
+         "served_current": 102,
+         "served_archived": 99,
+         "new_current": 102,
+         "new_archived": 0,
+         "archive_start": 3,
+         "stop": "archive_boundary"
+        },
+        "zabrze": {
+         "requests": 4,
+         "pages": 4,
+         "served_current": 47,
+         "served_archived": 114,
+         "new_current": 44,
+         "new_archived": 0,
+         "archive_start": 2,
+         "stop": "archive_boundary"
+        },
+        "bytom": {
+         "requests": 4,
+         "pages": 4,
+         "served_current": 50,
+         "served_archived": 115,
+         "new_current": 41,
+         "new_archived": 0,
+         "archive_start": 2,
+         "stop": "archive_boundary"
+        },
+        "sosnowiec": {
+         "requests": 4,
+         "pages": 4,
+         "served_current": 57,
+         "served_archived": 95,
+         "new_current": 51,
+         "new_archived": 0,
+         "archive_start": 2,
+         "stop": "archive_boundary"
+        },
+        "czestochowa": {
+         "requests": 11,
+         "pages": 11,
+         "served_current": 357,
+         "served_archived": 79,
+         "new_current": 357,
+         "new_archived": 0,
+         "archive_start": 9,
+         "stop": "archive_boundary"
+        },
+        "tychy": {
+         "requests": 4,
+         "pages": 4,
+         "served_current": 65,
+         "served_archived": 100,
+         "new_current": 62,
+         "new_archived": 0,
+         "archive_start": 2,
+         "stop": "archive_boundary"
+        },
+        "rybnik": {
+         "requests": 5,
+         "pages": 5,
+         "served_current": 117,
+         "served_archived": 84,
+         "new_current": 114,
+         "new_archived": 0,
+         "archive_start": 3,
+         "stop": "archive_boundary"
+        },
+        "dabrowa-gornicza": {
+         "requests": 4,
+         "pages": 4,
+         "served_current": 77,
+         "served_archived": 86,
+         "new_current": 71,
+         "new_archived": 0,
+         "archive_start": 2,
+         "stop": "archive_boundary"
+        },
+        "bielsko-biala": {
+         "requests": 6,
+         "pages": 6,
+         "served_current": 150,
+         "served_archived": 87,
+         "new_current": 150,
+         "new_archived": 0,
+         "archive_start": 4,
+         "stop": "archive_boundary"
+        },
+        "ruda-slaska": {
+         "requests": 3,
+         "pages": 3,
+         "served_current": 45,
+         "served_archived": 105,
+         "new_current": 37,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "archive_boundary"
+        },
+        "jastrzebie-zdroj": {
+         "requests": 4,
+         "pages": 4,
+         "served_current": 54,
+         "served_archived": 104,
+         "new_current": 54,
+         "new_archived": 0,
+         "archive_start": 2,
+         "stop": "archive_boundary"
+        },
+        "jaworzno": {
+         "requests": 4,
+         "pages": 4,
+         "served_current": 50,
+         "served_archived": 109,
+         "new_current": 47,
+         "new_archived": 0,
+         "archive_start": 2,
+         "stop": "archive_boundary"
+        },
+        "chorzow": {
+         "requests": 3,
+         "pages": 3,
+         "served_current": 52,
+         "served_archived": 152,
+         "new_current": 31,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "archive_boundary"
+        },
+        "myslowice": {
+         "requests": 4,
+         "pages": 4,
+         "served_current": 46,
+         "served_archived": 116,
+         "new_current": 43,
+         "new_archived": 0,
+         "archive_start": 2,
+         "stop": "archive_boundary"
+        },
+        "siemianowice-slaskie": {
+         "requests": 3,
+         "pages": 3,
+         "served_current": 42,
+         "served_archived": 119,
+         "new_current": 33,
+         "new_archived": 0,
+         "archive_start": 2,
+         "stop": "archive_boundary"
+        },
+        "tarnowskie-gory": {
+         "requests": 5,
+         "pages": 5,
+         "served_current": 88,
+         "served_archived": 104,
+         "new_current": 88,
+         "new_archived": 0,
+         "archive_start": 3,
+         "stop": "archive_boundary"
+        },
+        "bedzin": {
+         "requests": 3,
+         "pages": 3,
+         "served_current": 39,
+         "served_archived": 83,
+         "new_current": 28,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "archive_boundary"
+        },
+        "piekary-slaskie": {
+         "requests": 3,
+         "pages": 3,
+         "served_current": 42,
+         "served_archived": 156,
+         "new_current": 39,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "archive_boundary"
+        },
+        "raciborz": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 14,
+         "served_archived": 25,
+         "new_current": 14,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "swietochlowice": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 15,
+         "served_archived": 24,
+         "new_current": 2,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "zory": {
+         "requests": 4,
+         "pages": 4,
+         "served_current": 68,
+         "served_archived": 88,
+         "new_current": 68,
+         "new_archived": 0,
+         "archive_start": 2,
+         "stop": "archive_boundary"
+        },
+        "wodzislaw-slaski": {
+         "requests": 3,
+         "pages": 3,
+         "served_current": 40,
+         "served_archived": 80,
+         "new_current": 40,
+         "new_archived": 0,
+         "archive_start": 2,
+         "stop": "archive_boundary"
+        },
+        "mikolow": {
+         "requests": 4,
+         "pages": 4,
+         "served_current": 50,
+         "served_archived": 100,
+         "new_current": 41,
+         "new_archived": 0,
+         "archive_start": 2,
+         "stop": "archive_boundary"
+        },
+        "knurow": {
+         "requests": 3,
+         "pages": 3,
+         "served_current": 30,
+         "served_archived": 92,
+         "new_current": 18,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "czeladz": {
+         "requests": 3,
+         "pages": 3,
+         "served_current": 39,
+         "served_archived": 82,
+         "new_current": 12,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "lubliniec": {
+         "requests": 3,
+         "pages": 3,
+         "served_current": 21,
+         "served_archived": 59,
+         "new_current": 21,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "pszczyna": {
+         "requests": 3,
+         "pages": 3,
+         "served_current": 27,
+         "served_archived": 128,
+         "new_current": 27,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "archive_boundary"
+        },
+        "czechowice-dziedzice": {
+         "requests": 3,
+         "pages": 3,
+         "served_current": 40,
+         "served_archived": 116,
+         "new_current": 36,
+         "new_archived": 0,
+         "archive_start": 2,
+         "stop": "archive_boundary"
+        },
+        "zawiercie": {
+         "requests": 3,
+         "pages": 3,
+         "served_current": 28,
+         "served_archived": 127,
+         "new_current": 28,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "archive_boundary"
+        },
+        "cieszyn": {
+         "requests": 3,
+         "pages": 3,
+         "served_current": 38,
+         "served_archived": 83,
+         "new_current": 38,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "archive_boundary"
+        },
+        "myszkow": {
+         "requests": 4,
+         "pages": 4,
+         "served_current": 42,
+         "served_archived": 115,
+         "new_current": 42,
+         "new_archived": 0,
+         "archive_start": 2,
+         "stop": "archive_boundary"
+        },
+        "klobuck": {
+         "requests": 3,
+         "pages": 3,
+         "served_current": 25,
+         "served_archived": 93,
+         "new_current": 25,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "bierun": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 18,
+         "served_archived": 23,
+         "new_current": 10,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "laziska-gorne": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 11,
+         "served_archived": 26,
+         "new_current": 11,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "rydultowy": {
+         "requests": 3,
+         "pages": 3,
+         "served_current": 40,
+         "served_archived": 121,
+         "new_current": 40,
+         "new_archived": 0,
+         "archive_start": 2,
+         "stop": "archive_boundary"
+        },
+        "orzesze": {
+         "requests": 3,
+         "pages": 3,
+         "served_current": 40,
+         "served_archived": 122,
+         "new_current": 29,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "archive_boundary"
+        },
+        "pyskowice": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 9,
+         "served_archived": 32,
+         "new_current": 6,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "ornontowice": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 10,
+         "served_archived": 30,
+         "new_current": 4,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "zbroslawice": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 14,
+         "served_archived": 25,
+         "new_current": 10,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "pilchowice": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 9,
+         "served_archived": 24,
+         "new_current": 3,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "gieraltowice": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 2,
+         "served_archived": 22,
+         "new_current": 1,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "sosnicowice": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 10,
+         "served_archived": 29,
+         "new_current": 10,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "toszek": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 1,
+         "served_archived": 26,
+         "new_current": 1,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "rudziniec": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 0,
+         "served_archived": 23,
+         "new_current": 0,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "wielowies": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 7,
+         "served_archived": 15,
+         "new_current": 7,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "rzeczyce": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 0,
+         "served_archived": 10,
+         "new_current": 0,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "ustron": {
+         "requests": 4,
+         "pages": 4,
+         "served_current": 80,
+         "served_archived": 79,
+         "new_current": 80,
+         "new_archived": 0,
+         "archive_start": 3,
+         "stop": "archive_boundary"
+        },
+        "szczyrk": {
+         "requests": 4,
+         "pages": 4,
+         "served_current": 56,
+         "served_archived": 103,
+         "new_current": 56,
+         "new_archived": 0,
+         "archive_start": 2,
+         "stop": "archive_boundary"
+        },
+        "siewierz": {
+         "requests": 3,
+         "pages": 3,
+         "served_current": 13,
+         "served_archived": 105,
+         "new_current": 10,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "swierklaniec": {
+         "requests": 3,
+         "pages": 3,
+         "served_current": 40,
+         "served_archived": 81,
+         "new_current": 35,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "wisla": {
+         "requests": 3,
+         "pages": 3,
+         "served_current": 39,
+         "served_archived": 79,
+         "new_current": 35,
+         "new_archived": 0,
+         "archive_start": 2,
+         "stop": "archive_boundary"
+        },
+        "zywiec": {
+         "requests": 3,
+         "pages": 3,
+         "served_current": 41,
+         "served_archived": 80,
+         "new_current": 41,
+         "new_archived": 0,
+         "archive_start": 2,
+         "stop": "archive_boundary"
+        },
+        "lodygowice": {
+         "requests": 3,
+         "pages": 3,
+         "served_current": 40,
+         "served_archived": 79,
+         "new_current": 40,
+         "new_archived": 0,
+         "archive_start": 2,
+         "stop": "end"
+        },
+        "jaworze": {
+         "requests": 3,
+         "pages": 3,
+         "served_current": 33,
+         "served_archived": 108,
+         "new_current": 28,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "archive_boundary"
+        },
+        "blachownia": {
+         "requests": 3,
+         "pages": 3,
+         "served_current": 26,
+         "served_archived": 87,
+         "new_current": 20,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "czerwionka-leszczyny": {
+         "requests": 3,
+         "pages": 3,
+         "served_current": 33,
+         "served_archived": 80,
+         "new_current": 15,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "buczkowice": {
+         "requests": 2,
+         "pages": 2,
+         "served_current": 18,
+         "served_archived": 21,
+         "new_current": 17,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "skoczow": {
+         "requests": 3,
+         "pages": 3,
+         "served_current": 18,
+         "served_archived": 98,
+         "new_current": 18,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        },
+        "kozieglowy": {
+         "requests": 3,
+         "pages": 3,
+         "served_current": 15,
+         "served_archived": 53,
+         "new_current": 15,
+         "new_archived": 0,
+         "archive_start": 1,
+         "stop": "end"
+        }
+       }
+      },
+      "archive_harvest": {
+       "mode": "partial",
+       "stop_reason": "rate_limited",
+       "complete": false,
+       "refreshed": "2026-11-21",
+       "records": 9523,
+       "pending": 46,
+       "cycle_records": 5142,
+       "cycle_started": "2026-11-28",
+       "seconds": 224.3,
+       "budget_seconds": 900.0,
+       "requests": 155,
+       "errors": [
+        {
+         "type": "house",
+         "town": "myslowice",
+         "page": 3,
+         "http_status": 429
+        }
+       ]
+      }
+     }
+    },
+    "seen": 15932,
+    "archive_harvest": {
+     "mode": "partial",
+     "records": 49920,
+     "complete": false,
+     "pending": 103,
+     "cycle_records": 5142,
+     "seconds": 224.3,
+     "budget_seconds": 900.0,
+     "requests": 155,
+     "cycle_started": "2026-11-28",
+     "stop_reason": "rate_limited",
+     "failed_requests": 1,
+     "refreshed": "2026-11-21"
+    }
+   },
+   "olx": {
+    "status": "partial",
+    "searches": 200,
+    "pages": 1003,
+    "listings": 1678,
+    "served_unique": 7487,
+    "kept_unique": 1678,
+    "current": 1678,
+    "archived": 0,
+    "truncated": 31,
+    "issues": 31,
+    "types": {
+     "flat": {
+      "status": "partial",
+      "searches": 113,
+      "pages": 824,
+      "served_unique": 5717,
+      "kept_unique": 1364,
+      "current": 1364,
+      "archived": 0,
+      "issues": 21,
+      "reasons": [
+       "incomplete_searches",
+       "partition_total_shortfall",
+       "coverage_shortfall"
+      ],
+      "portal_total": 9793,
+      "pct": 58.4,
+      "partitions": {
+       "axis": "price",
+       "leaves": 21,
+       "complete": 0,
+       "failed": [],
+       "capped": [],
+       "missing": [],
+       "unaccounted": 92
+      }
+     },
+     "house": {
+      "status": "partial",
+      "searches": 87,
+      "pages": 179,
+      "served_unique": 1770,
+      "kept_unique": 314,
+      "current": 314,
+      "archived": 0,
+      "issues": 10,
+      "reasons": [
+       "incomplete_searches",
+       "partition_total_shortfall",
+       "coverage_shortfall"
+      ],
+      "portal_total": 2961,
+      "pct": 59.8,
+      "partitions": {
+       "axis": "price",
+       "leaves": 10,
+       "complete": 0,
+       "failed": [],
+       "capped": [],
+       "missing": [],
+       "unaccounted": 12
+      }
+     }
+    },
+    "reasons": [
+     "coverage_shortfall",
+     "incomplete_searches",
+     "partition_total_shortfall"
+    ],
+    "seen": 7487,
+    "portal_total": 12754,
+    "pct": 58.7
+   },
+   "otodom": {
+    "status": "partial",
+    "searches": 2,
+    "pages": 264,
+    "listings": 16326,
+    "served_unique": 16452,
+    "kept_unique": 16326,
+    "current": 16326,
+    "archived": 0,
+    "truncated": 1,
+    "issues": 1,
+    "types": {
+     "flat": {
+      "status": "partial",
+      "searches": 1,
+      "pages": 200,
+      "served_unique": 11931,
+      "kept_unique": 11815,
+      "current": 11815,
+      "archived": 0,
+      "issues": 1,
+      "reasons": [
+       "incomplete_searches",
+       "coverage_shortfall"
+      ],
+      "portal_total": 18168,
+      "pct": 65.7
+     },
+     "house": {
+      "status": "healthy",
+      "searches": 1,
+      "pages": 64,
+      "served_unique": 4521,
+      "kept_unique": 4511,
+      "current": 4511,
+      "archived": 0,
+      "issues": 0,
+      "portal_total": 4546,
+      "pct": 99.5
+     }
+    },
+    "reasons": [
+     "coverage_shortfall",
+     "incomplete_searches"
+    ],
+    "seen": 16452,
+    "portal_total": 22714,
+    "pct": 72.4
+   }
+  },
+  "issues": [
+   {
+    "source": "olx",
+    "type": "flat",
+    "pages": 25,
+    "listings": 34,
+    "stopped": "end",
+    "served": 593,
+    "tag": "0-200k",
+    "portal_pages": 25,
+    "portal_total": 1000,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 0,
+     "hi": 200000,
+     "depth": 0,
+     "label": "0-200k"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "flat",
+    "pages": 5,
+    "listings": 0,
+    "stopped": "end",
+    "served": 114,
+    "tag": "1M-1500k",
+    "portal_pages": 5,
+    "portal_total": 177,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 1000000,
+     "hi": 1500000,
+     "depth": 0,
+     "label": "1M-1500k"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "flat",
+    "pages": 2,
+    "listings": 0,
+    "stopped": "end",
+    "served": 27,
+    "tag": "1500k-3M",
+    "portal_pages": 2,
+    "portal_total": 51,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 1500000,
+     "hi": 3000000,
+     "depth": 0,
+     "label": "1500k-3M"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "flat",
+    "pages": 1,
+    "listings": 0,
+    "stopped": "end",
+    "served": 3,
+    "tag": "3M+",
+    "portal_pages": 1,
+    "portal_total": 6,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 3000000,
+     "hi": null,
+     "depth": 0,
+     "label": "3M+"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "flat",
+    "pages": 20,
+    "listings": 3,
+    "stopped": "end",
+    "served": 469,
+    "tag": "400k-450k",
+    "portal_pages": 20,
+    "portal_total": 781,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 400000,
+     "hi": 450000,
+     "depth": 1,
+     "label": "400k-450k"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "flat",
+    "pages": 21,
+    "listings": 5,
+    "stopped": "end",
+    "served": 490,
+    "tag": "450k-500k",
+    "portal_pages": 21,
+    "portal_total": 822,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 450000,
+     "hi": 500000,
+     "depth": 1,
+     "label": "450k-500k"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "flat",
+    "pages": 18,
+    "listings": 2,
+    "stopped": "end",
+    "served": 428,
+    "tag": "500k-575k",
+    "portal_pages": 18,
+    "portal_total": 714,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 500000,
+     "hi": 575000,
+     "depth": 1,
+     "label": "500k-575k"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "flat",
+    "pages": 15,
+    "listings": 1,
+    "stopped": "end",
+    "served": 353,
+    "tag": "575k-650k",
+    "portal_pages": 15,
+    "portal_total": 579,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 575000,
+     "hi": 650000,
+     "depth": 1,
+     "label": "575k-650k"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "flat",
+    "pages": 9,
+    "listings": 0,
+    "stopped": "end",
+    "served": 206,
+    "tag": "650k-725k",
+    "portal_pages": 9,
+    "portal_total": 354,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 650000,
+     "hi": 725000,
+     "depth": 1,
+     "label": "650k-725k"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "flat",
+    "pages": 8,
+    "listings": 0,
+    "stopped": "end",
+    "served": 175,
+    "tag": "725k-800k",
+    "portal_pages": 8,
+    "portal_total": 283,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 725000,
+     "hi": 800000,
+     "depth": 1,
+     "label": "725k-800k"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "flat",
+    "pages": 5,
+    "listings": 0,
+    "stopped": "end",
+    "served": 126,
+    "tag": "800k-900k",
+    "portal_pages": 5,
+    "portal_total": 195,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 800000,
+     "hi": 900000,
+     "depth": 1,
+     "label": "800k-900k"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "flat",
+    "pages": 4,
+    "listings": 0,
+    "stopped": "end",
+    "served": 70,
+    "tag": "900k-1M",
+    "portal_pages": 4,
+    "portal_total": 124,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 900000,
+     "hi": 1000000,
+     "depth": 1,
+     "label": "900k-1M"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "flat",
+    "pages": 10,
+    "listings": 1,
+    "stopped": "end",
+    "served": 227,
+    "tag": "200k-225k",
+    "portal_pages": 10,
+    "portal_total": 394,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 200000,
+     "hi": 225000,
+     "depth": 2,
+     "label": "200k-225k"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "flat",
+    "pages": 17,
+    "listings": 3,
+    "stopped": "end",
+    "served": 394,
+    "tag": "225k-250k",
+    "portal_pages": 17,
+    "portal_total": 653,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 225000,
+     "hi": 250000,
+     "depth": 2,
+     "label": "225k-250k"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "flat",
+    "pages": 14,
+    "listings": 5,
+    "stopped": "end",
+    "served": 325,
+    "tag": "250k-275k",
+    "portal_pages": 14,
+    "portal_total": 549,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 250000,
+     "hi": 275000,
+     "depth": 2,
+     "label": "250k-275k"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "flat",
+    "pages": 19,
+    "listings": 5,
+    "stopped": "end",
+    "served": 448,
+    "tag": "275k-300k",
+    "portal_pages": 19,
+    "portal_total": 757,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 275000,
+     "hi": 300000,
+     "depth": 2,
+     "label": "275k-300k"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "flat",
+    "pages": 12,
+    "listings": 1,
+    "stopped": "end",
+    "served": 286,
+    "tag": "300k-325k",
+    "portal_pages": 12,
+    "portal_total": 455,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 300000,
+     "hi": 325000,
+     "depth": 2,
+     "label": "300k-325k"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "flat",
+    "pages": 16,
+    "listings": 2,
+    "stopped": "end",
+    "served": 373,
+    "tag": "325k-350k",
+    "portal_pages": 16,
+    "portal_total": 628,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 325000,
+     "hi": 350000,
+     "depth": 2,
+     "label": "325k-350k"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "flat",
+    "pages": 16,
+    "listings": 3,
+    "stopped": "end",
+    "served": 392,
+    "tag": "375k-400k",
+    "portal_pages": 16,
+    "portal_total": 624,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 375000,
+     "hi": 400000,
+     "depth": 2,
+     "label": "375k-400k"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "flat",
+    "pages": 8,
+    "listings": 0,
+    "stopped": "end",
+    "served": 189,
+    "tag": "350k-362k",
+    "portal_pages": 8,
+    "portal_total": 297,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 350000,
+     "hi": 362500,
+     "depth": 3,
+     "label": "350k-362k"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "flat",
+    "pages": 7,
+    "listings": 0,
+    "stopped": "end",
+    "served": 169,
+    "tag": "362k-375k",
+    "portal_pages": 7,
+    "portal_total": 266,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 362500,
+     "hi": 375000,
+     "depth": 3,
+     "label": "362k-375k"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "house",
+    "pages": 2,
+    "listings": 4,
+    "stopped": "end",
+    "served": 50,
+    "tag": "0-200k",
+    "portal_pages": 2,
+    "portal_total": 78,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 0,
+     "hi": 200000,
+     "depth": 0,
+     "label": "0-200k"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "house",
+    "pages": 4,
+    "listings": 4,
+    "stopped": "end",
+    "served": 75,
+    "tag": "200k-300k",
+    "portal_pages": 4,
+    "portal_total": 127,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 200000,
+     "hi": 300000,
+     "depth": 0,
+     "label": "200k-300k"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "house",
+    "pages": 6,
+    "listings": 10,
+    "stopped": "end",
+    "served": 131,
+    "tag": "300k-400k",
+    "portal_pages": 6,
+    "portal_total": 208,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 300000,
+     "hi": 400000,
+     "depth": 0,
+     "label": "300k-400k"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "house",
+    "pages": 5,
+    "listings": 6,
+    "stopped": "end",
+    "served": 122,
+    "tag": "400k-500k",
+    "portal_pages": 5,
+    "portal_total": 199,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 400000,
+     "hi": 500000,
+     "depth": 0,
+     "label": "400k-500k"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "house",
+    "pages": 10,
+    "listings": 16,
+    "stopped": "end",
+    "served": 234,
+    "tag": "500k-650k",
+    "portal_pages": 10,
+    "portal_total": 380,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 500000,
+     "hi": 650000,
+     "depth": 0,
+     "label": "500k-650k"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "house",
+    "pages": 14,
+    "listings": 12,
+    "stopped": "end",
+    "served": 345,
+    "tag": "650k-800k",
+    "portal_pages": 14,
+    "portal_total": 544,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 650000,
+     "hi": 800000,
+     "depth": 0,
+     "label": "650k-800k"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "house",
+    "pages": 13,
+    "listings": 5,
+    "stopped": "end",
+    "served": 330,
+    "tag": "800k-1M",
+    "portal_pages": 13,
+    "portal_total": 510,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 800000,
+     "hi": 1000000,
+     "depth": 0,
+     "label": "800k-1M"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "house",
+    "pages": 14,
+    "listings": 7,
+    "stopped": "end",
+    "served": 302,
+    "tag": "1M-1500k",
+    "portal_pages": 14,
+    "portal_total": 534,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 1000000,
+     "hi": 1500000,
+     "depth": 0,
+     "label": "1M-1500k"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "house",
+    "pages": 9,
+    "listings": 5,
+    "stopped": "end",
+    "served": 199,
+    "tag": "1500k-3M",
+    "portal_pages": 9,
+    "portal_total": 327,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 1500000,
+     "hi": 3000000,
+     "depth": 0,
+     "label": "1500k-3M"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "house",
+    "pages": 2,
+    "listings": 0,
+    "stopped": "end",
+    "served": 31,
+    "tag": "3M+",
+    "portal_pages": 2,
+    "portal_total": 42,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 3000000,
+     "hi": null,
+     "depth": 0,
+     "label": "3M+"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "otodom",
+    "type": "flat",
+    "pages": 200,
+    "listings": 11815,
+    "stopped": "cap",
+    "served": 12691,
+    "tag": "slaskie",
+    "portal_pages": 253,
+    "portal_total": 18168,
+    "role": "parent",
+    "issue": "our_cap"
+   }
+  ],
+  "truncated": [
+   {
+    "source": "olx",
+    "type": "flat",
+    "pages": 25,
+    "listings": 34,
+    "stopped": "end",
+    "served": 593,
+    "tag": "0-200k",
+    "portal_pages": 25,
+    "portal_total": 1000,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 0,
+     "hi": 200000,
+     "depth": 0,
+     "label": "0-200k"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "flat",
+    "pages": 5,
+    "listings": 0,
+    "stopped": "end",
+    "served": 114,
+    "tag": "1M-1500k",
+    "portal_pages": 5,
+    "portal_total": 177,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 1000000,
+     "hi": 1500000,
+     "depth": 0,
+     "label": "1M-1500k"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "flat",
+    "pages": 2,
+    "listings": 0,
+    "stopped": "end",
+    "served": 27,
+    "tag": "1500k-3M",
+    "portal_pages": 2,
+    "portal_total": 51,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 1500000,
+     "hi": 3000000,
+     "depth": 0,
+     "label": "1500k-3M"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "flat",
+    "pages": 1,
+    "listings": 0,
+    "stopped": "end",
+    "served": 3,
+    "tag": "3M+",
+    "portal_pages": 1,
+    "portal_total": 6,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 3000000,
+     "hi": null,
+     "depth": 0,
+     "label": "3M+"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "flat",
+    "pages": 20,
+    "listings": 3,
+    "stopped": "end",
+    "served": 469,
+    "tag": "400k-450k",
+    "portal_pages": 20,
+    "portal_total": 781,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 400000,
+     "hi": 450000,
+     "depth": 1,
+     "label": "400k-450k"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "flat",
+    "pages": 21,
+    "listings": 5,
+    "stopped": "end",
+    "served": 490,
+    "tag": "450k-500k",
+    "portal_pages": 21,
+    "portal_total": 822,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 450000,
+     "hi": 500000,
+     "depth": 1,
+     "label": "450k-500k"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "flat",
+    "pages": 18,
+    "listings": 2,
+    "stopped": "end",
+    "served": 428,
+    "tag": "500k-575k",
+    "portal_pages": 18,
+    "portal_total": 714,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 500000,
+     "hi": 575000,
+     "depth": 1,
+     "label": "500k-575k"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "flat",
+    "pages": 15,
+    "listings": 1,
+    "stopped": "end",
+    "served": 353,
+    "tag": "575k-650k",
+    "portal_pages": 15,
+    "portal_total": 579,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 575000,
+     "hi": 650000,
+     "depth": 1,
+     "label": "575k-650k"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "flat",
+    "pages": 9,
+    "listings": 0,
+    "stopped": "end",
+    "served": 206,
+    "tag": "650k-725k",
+    "portal_pages": 9,
+    "portal_total": 354,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 650000,
+     "hi": 725000,
+     "depth": 1,
+     "label": "650k-725k"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "flat",
+    "pages": 8,
+    "listings": 0,
+    "stopped": "end",
+    "served": 175,
+    "tag": "725k-800k",
+    "portal_pages": 8,
+    "portal_total": 283,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 725000,
+     "hi": 800000,
+     "depth": 1,
+     "label": "725k-800k"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "flat",
+    "pages": 5,
+    "listings": 0,
+    "stopped": "end",
+    "served": 126,
+    "tag": "800k-900k",
+    "portal_pages": 5,
+    "portal_total": 195,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 800000,
+     "hi": 900000,
+     "depth": 1,
+     "label": "800k-900k"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "flat",
+    "pages": 4,
+    "listings": 0,
+    "stopped": "end",
+    "served": 70,
+    "tag": "900k-1M",
+    "portal_pages": 4,
+    "portal_total": 124,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 900000,
+     "hi": 1000000,
+     "depth": 1,
+     "label": "900k-1M"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "flat",
+    "pages": 10,
+    "listings": 1,
+    "stopped": "end",
+    "served": 227,
+    "tag": "200k-225k",
+    "portal_pages": 10,
+    "portal_total": 394,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 200000,
+     "hi": 225000,
+     "depth": 2,
+     "label": "200k-225k"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "flat",
+    "pages": 17,
+    "listings": 3,
+    "stopped": "end",
+    "served": 394,
+    "tag": "225k-250k",
+    "portal_pages": 17,
+    "portal_total": 653,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 225000,
+     "hi": 250000,
+     "depth": 2,
+     "label": "225k-250k"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "flat",
+    "pages": 14,
+    "listings": 5,
+    "stopped": "end",
+    "served": 325,
+    "tag": "250k-275k",
+    "portal_pages": 14,
+    "portal_total": 549,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 250000,
+     "hi": 275000,
+     "depth": 2,
+     "label": "250k-275k"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "flat",
+    "pages": 19,
+    "listings": 5,
+    "stopped": "end",
+    "served": 448,
+    "tag": "275k-300k",
+    "portal_pages": 19,
+    "portal_total": 757,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 275000,
+     "hi": 300000,
+     "depth": 2,
+     "label": "275k-300k"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "flat",
+    "pages": 12,
+    "listings": 1,
+    "stopped": "end",
+    "served": 286,
+    "tag": "300k-325k",
+    "portal_pages": 12,
+    "portal_total": 455,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 300000,
+     "hi": 325000,
+     "depth": 2,
+     "label": "300k-325k"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "flat",
+    "pages": 16,
+    "listings": 2,
+    "stopped": "end",
+    "served": 373,
+    "tag": "325k-350k",
+    "portal_pages": 16,
+    "portal_total": 628,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 325000,
+     "hi": 350000,
+     "depth": 2,
+     "label": "325k-350k"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "flat",
+    "pages": 16,
+    "listings": 3,
+    "stopped": "end",
+    "served": 392,
+    "tag": "375k-400k",
+    "portal_pages": 16,
+    "portal_total": 624,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 375000,
+     "hi": 400000,
+     "depth": 2,
+     "label": "375k-400k"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "flat",
+    "pages": 8,
+    "listings": 0,
+    "stopped": "end",
+    "served": 189,
+    "tag": "350k-362k",
+    "portal_pages": 8,
+    "portal_total": 297,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 350000,
+     "hi": 362500,
+     "depth": 3,
+     "label": "350k-362k"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "flat",
+    "pages": 7,
+    "listings": 0,
+    "stopped": "end",
+    "served": 169,
+    "tag": "362k-375k",
+    "portal_pages": 7,
+    "portal_total": 266,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 362500,
+     "hi": 375000,
+     "depth": 3,
+     "label": "362k-375k"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "house",
+    "pages": 2,
+    "listings": 4,
+    "stopped": "end",
+    "served": 50,
+    "tag": "0-200k",
+    "portal_pages": 2,
+    "portal_total": 78,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 0,
+     "hi": 200000,
+     "depth": 0,
+     "label": "0-200k"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "house",
+    "pages": 4,
+    "listings": 4,
+    "stopped": "end",
+    "served": 75,
+    "tag": "200k-300k",
+    "portal_pages": 4,
+    "portal_total": 127,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 200000,
+     "hi": 300000,
+     "depth": 0,
+     "label": "200k-300k"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "house",
+    "pages": 6,
+    "listings": 10,
+    "stopped": "end",
+    "served": 131,
+    "tag": "300k-400k",
+    "portal_pages": 6,
+    "portal_total": 208,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 300000,
+     "hi": 400000,
+     "depth": 0,
+     "label": "300k-400k"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "house",
+    "pages": 5,
+    "listings": 6,
+    "stopped": "end",
+    "served": 122,
+    "tag": "400k-500k",
+    "portal_pages": 5,
+    "portal_total": 199,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 400000,
+     "hi": 500000,
+     "depth": 0,
+     "label": "400k-500k"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "house",
+    "pages": 10,
+    "listings": 16,
+    "stopped": "end",
+    "served": 234,
+    "tag": "500k-650k",
+    "portal_pages": 10,
+    "portal_total": 380,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 500000,
+     "hi": 650000,
+     "depth": 0,
+     "label": "500k-650k"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "house",
+    "pages": 14,
+    "listings": 12,
+    "stopped": "end",
+    "served": 345,
+    "tag": "650k-800k",
+    "portal_pages": 14,
+    "portal_total": 544,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 650000,
+     "hi": 800000,
+     "depth": 0,
+     "label": "650k-800k"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "house",
+    "pages": 13,
+    "listings": 5,
+    "stopped": "end",
+    "served": 330,
+    "tag": "800k-1M",
+    "portal_pages": 13,
+    "portal_total": 510,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 800000,
+     "hi": 1000000,
+     "depth": 0,
+     "label": "800k-1M"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "house",
+    "pages": 14,
+    "listings": 7,
+    "stopped": "end",
+    "served": 302,
+    "tag": "1M-1500k",
+    "portal_pages": 14,
+    "portal_total": 534,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 1000000,
+     "hi": 1500000,
+     "depth": 0,
+     "label": "1M-1500k"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "house",
+    "pages": 9,
+    "listings": 5,
+    "stopped": "end",
+    "served": 199,
+    "tag": "1500k-3M",
+    "portal_pages": 9,
+    "portal_total": 327,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 1500000,
+     "hi": 3000000,
+     "depth": 0,
+     "label": "1500k-3M"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "olx",
+    "type": "house",
+    "pages": 2,
+    "listings": 0,
+    "stopped": "end",
+    "served": 31,
+    "tag": "3M+",
+    "portal_pages": 2,
+    "portal_total": 42,
+    "role": "partition",
+    "partition": {
+     "axis": "price",
+     "lo": 3000000,
+     "hi": null,
+     "depth": 0,
+     "label": "3M+"
+    },
+    "issue": "short_total"
+   },
+   {
+    "source": "otodom",
+    "type": "flat",
+    "pages": 200,
+    "listings": 11815,
+    "stopped": "cap",
+    "served": 12691,
+    "tag": "slaskie",
+    "portal_pages": 253,
+    "portal_total": 18168,
+    "role": "parent",
+    "issue": "our_cap"
+   }
+  ]
+ },
+ "photos": {
+  "schema": 3,
+  "enabled": true,
+  "listings": 60456,
+  "heuristic_fallback_enabled": false,
+  "critical": 44142,
+  "history_only": 8187,
+  "cache_hits": 51293,
+  "cover_cache_hits": 24509,
+  "gallery_cache_hits": 26784,
+  "fetched": 1036,
+  "cover_fetched": 62,
+  "gallery_fetched": 974,
+  "with_photos": 49318,
+  "identified": 8127,
+  "deferred": 0,
+  "critical_deferred": 0,
+  "critical_with_photos": 41740,
+  "critical_without_photos": 2402,
+  "unresolved_size_groups": 14,
+  "unresolved_size_listings": 33,
+  "history_deferred": 0,
+  "backlog": {
+   "count": 0,
+   "oldest": null,
+   "age_days": 0
+  }
+ },
+ "runtime": {
+  "seconds": 9305.1,
+  "phases": {
+   "scrape_otodom": 501.7,
+   "scrape_olx": 4331.5,
+   "scrape_gratka": 1152.5,
+   "scrape_morizon": 1210.7,
+   "scrape_nieruchomosci-online": 1450.7,
+   "photos": 35.0,
+   "dedupe": 263.7,
+   "history_prepare": 15.7,
+   "delist": 51.5,
+   "history_update": 81.6,
+   "rcn": 132.8,
+   "geo": 8.8,
+   "write": 68.8,
+   "total": 9305.1
+  }
+ },
+ "errors": [
+  "otodom flat/slaskie: stopped at our page cap (200 of 253 the portal has) — collected 11931 of 18168 (65.7%), kept 11815 — raise RENTGEN_MAX_PAGES or subdivide the search",
+  "olx house/katowice: search ended cleanly but short of the portal's own count — collected 64 of 120 (53.3%), kept 2 — subdivide it",
+  "olx house/gliwice: search ended cleanly but short of the portal's own count — collected 34 of 66 (51.5%), kept 5 — subdivide it",
+  "olx house/zabrze: search ended cleanly but short of the portal's own count — collected 28 of 52 (53.8%), kept 1 — subdivide it",
+  "olx house/bytom: search ended cleanly but short of the portal's own count — collected 26 of 36 (72.2%), kept 5 — subdivide it",
+  "olx house/sosnowiec: search ended cleanly but short of the portal's own count — collected 25 of 46 (54.3%), kept 3 — subdivide it",
+  "olx house/czestochowa: search ended cleanly but short of the portal's own count — collected 102 of 169 (60.4%), kept 7 — subdivide it",
+  "olx house/tychy: search ended cleanly but short of the portal's own count — collected 45 of 64 (70.3%), kept 5 — subdivide it",
+  "olx house/rybnik: search ended cleanly but short of the portal's own count — collected 72 of 106 (67.9%), kept 11 — subdivide it",
+  "olx house/dabrowa-gornicza: search ended cleanly but short of the portal's own count — collected 34 of 65 (52.3%), kept 5 — subdivide it",
+  "olx house/bielsko-biala: search ended cleanly but short of the portal's own count — collected 58 of 98 (59.2%), kept 8 — subdivide it",
+  "olx house/ruda-slaska: search ended cleanly but short of the portal's own count — collected 17 of 27 (63.0%), kept 4 — subdivide it",
+  "olx house/jastrzebie-zdroj: search ended cleanly but short of the portal's own count — collected 17 of 36 (47.2%), kept 2 — subdivide it",
+  "olx house/jaworzno: search ended cleanly but short of the portal's own count — collected 26 of 39 (66.7%), kept 5 — subdivide it",
+  "olx house/chorzow: search ended cleanly but short of the portal's own count — collected 14 of 26 (53.8%), kept 5 — subdivide it",
+  "olx house/myslowice: search ended cleanly but short of the portal's own count — collected 33 of 50 (66.0%), kept 2 — subdivide it",
+  "olx house/siemianowice-slaskie: search ended cleanly but short of the portal's own count — collected 6 of 14 (42.9%), kept 1 — subdivide it",
+  "olx house/tarnowskie-gory: search ended cleanly but short of the portal's own count — collected 28 of 50 (56.0%), kept 4 — subdivide it",
+  "olx house/bedzin: search ended cleanly but short of the portal's own count — collected 10 of 24 (41.7%), kept 2 — subdivide it",
+  "olx house/piekary-slaskie: search ended cleanly but short of the portal's own count — collected 19 of 26 (73.1%), kept 0 — subdivide it",
+  "olx house/raciborz: search ended cleanly but short of the portal's own count — collected 20 of 28 (71.4%), kept 4 — subdivide it",
+  "olx house/swietochlowice: search ended cleanly but short of the portal's own count — collected 6 of 10 (60.0%), kept 0 — subdivide it",
+  "olx house/zory: search ended cleanly but short of the portal's own count — collected 42 of 63 (66.7%), kept 12 — subdivide it",
+  "olx house/wodzislaw-slaski: search ended cleanly but short of the portal's own count — collected 18 of 29 (62.1%), kept 4 — subdivide it",
+  "olx house/mikolow: search ended cleanly but short of the portal's own count — collected 55 of 80 (68.8%), kept 22 — subdivide it",
+  "olx house/knurow: search ended cleanly but short of the portal's own count — collected 9 of 13 (69.2%), kept 4 — subdivide it",
+  "olx house/czeladz: search ended cleanly but short of the portal's own count — collected 8 of 22 (36.4%), kept 2 — subdivide it",
+  "olx house/lubliniec: search ended cleanly but short of the portal's own count — collected 13 of 24 (54.2%), kept 2 — subdivide it",
+  "olx house/pszczyna: search ended cleanly but short of the portal's own count — collected 14 of 18 (77.8%), kept 2 — subdivide it",
+  "olx house/czechowice-dziedzice: search ended cleanly but short of the portal's own count — collected 12 of 19 (63.2%), kept 2 — subdivide it",
+  "olx house/zawiercie: search ended cleanly but short of the portal's own count — collected 10 of 27 (37.0%), kept 0 — subdivide it",
+  "olx house/cieszyn: search ended cleanly but short of the portal's own count — collected 12 of 22 (54.5%), kept 2 — subdivide it",
+  "olx house/myszkow: search ended cleanly but short of the portal's own count — collected 13 of 26 (50.0%), kept 4 — subdivide it",
+  "olx house/klobuck: search ended cleanly but short of the portal's own count — collected 9 of 10 (90.0%), kept 2 — subdivide it",
+  "olx house/bierun: search ended cleanly but short of the portal's own count — collected 5 of 7 (71.4%), kept 2 — subdivide it",
+  "olx house/laziska-gorne: search ended cleanly but short of the portal's own count — collected 6 of 7 (85.7%), kept 1 — subdivide it",
+  "olx house/rydultowy: search ended cleanly but short of the portal's own count — collected 19 of 30 (63.3%), kept 2 — subdivide it",
+  "olx house/orzesze: search ended cleanly but short of the portal's own count — collected 22 of 33 (66.7%), kept 7 — subdivide it",
+  "olx house/pyskowice: search ended cleanly but short of the portal's own count — collected 7 of 12 (58.3%), kept 0 — subdivide it",
+  "olx house/zbroslawice: search ended cleanly but short of the portal's own count — collected 1 of 4 (25.0%), kept 0 — subdivide it",
+  "olx house/sosnicowice: search ended cleanly but short of the portal's own count — collected 6 of 9 (66.7%), kept 0 — subdivide it",
+  "olx house/toszek: portal refused to serve past page 0 — collected 0 of 1 (0.0%) — subdivision is the only way to see the rest",
+  "olx house/toszek/1M-1500k: portal refused to serve past page 0 — collected 0 of 1 (0.0%) — subdivision is the only way to see the rest",
+  "olx house/toszek/1250k-1500k: portal refused to serve past page 0 — collected 0 of 1 (0.0%) — subdivision is the only way to see the rest",
+  "olx house/toszek/1250k-1375k: portal refused to serve past page 0 — collected 0 of 1 (0.0%) — subdivision is the only way to see the rest",
+  "olx house/toszek/1250k-1312k: portal refused to serve past page 0 — collected 0 of 1 (0.0%) — subdivision is the only way to see the rest",
+  "olx house/rudziniec: search ended cleanly but short of the portal's own count — collected 1 of 2 (50.0%), kept 0 — subdivide it",
+  "olx house/wielowies: search ended cleanly but short of the portal's own count — collected 2 of 3 (66.7%), kept 0 — subdivide it",
+  "olx house/blachownia: search ended cleanly but short of the portal's own count — collected 10 of 15 (66.7%), kept 1 — subdivide it",
+  "olx house/buczkowice: search ended cleanly but short of the portal's own count — collected 3 of 5 (60.0%), kept 0 — subdivide it",
+  "olx house/czerwionka-leszczyny: search ended cleanly but short of the portal's own count — collected 11 of 15 (73.3%), kept 2 — subdivide it",
+  "olx house/jaworze: search ended cleanly but short of the portal's own count — collected 7 of 13 (53.8%), kept 2 — subdivide it",
+  "olx house/lodygowice: search ended cleanly but short of the portal's own count — collected 35 of 39 (89.7%), kept 28 — subdivide it",
+  "olx house/siewierz: search ended cleanly but short of the portal's own count — collected 5 of 8 (62.5%), kept 1 — subdivide it",
+  "olx house/skoczow: search ended cleanly but short of the portal's own count — collected 5 of 8 (62.5%), kept 1 — subdivide it",
+  "olx house/swierklaniec: search ended cleanly but short of the portal's own count — collected 6 of 11 (54.5%), kept 0 — subdivide it",
+  "olx house/szczyrk: search ended cleanly but short of the portal's own count — collected 13 of 20 (65.0%), kept 2 — subdivide it",
+  "olx house/ustron: search ended cleanly but short of the portal's own count — collected 12 of 26 (46.2%), kept 1 — subdivide it",
+  "olx house/wisla: search ended cleanly but short of the portal's own count — collected 7 of 13 (53.8%), kept 0 — subdivide it",
+  "olx house/zywiec: search ended cleanly but short of the portal's own count — collected 13 of 20 (65.0%), kept 3 — subdivide it",
+  "olx house/0-200k: search ended cleanly but short of the portal's own count — collected 48 of 78 (61.5%), kept 20 — subdivide it",
+  "olx house/200k-300k: search ended cleanly but short of the portal's own count — collected 69 of 127 (54.3%), kept 19 — subdivide it",
+  "olx house/300k-400k: search ended cleanly but short of the portal's own count — collected 131 of 208 (63.0%), kept 54 — subdivide it",
+  "olx house/400k-500k: search ended cleanly but short of the portal's own count — collected 113 of 199 (56.8%), kept 30 — subdivide it",
+  "olx house/500k-650k: search ended cleanly but short of the portal's own count — collected 226 of 380 (59.5%), kept 40 — subdivide it",
+  "olx house/650k-800k: search ended cleanly but short of the portal's own count — collected 309 of 544 (56.8%), kept 49 — subdivide it",
+  "olx house/800k-1M: search ended cleanly but short of the portal's own count — collected 313 of 510 (61.4%), kept 32 — subdivide it",
+  "olx house/1M-1500k: search ended cleanly but short of the portal's own count — collected 287 of 534 (53.7%), kept 31 — subdivide it",
+  "olx house/1500k-3M: search ended cleanly but short of the portal's own count — collected 182 of 327 (55.7%), kept 31 — subdivide it",
+  "olx house/3M+: search ended cleanly but short of the portal's own count — collected 30 of 42 (71.4%), kept 1 — subdivide it",
+  "olx flat/katowice: portal refused to serve past page 25 — collected 612 of 1652 (37.0%), kept 85 — subdivision is the only way to see the rest",
+  "olx flat/katowice/0-200k: search ended cleanly but short of the portal's own count — collected 18 of 28 (64.3%), kept 8 — subdivide it",
+  "olx flat/katowice/200k-300k: search ended cleanly but short of the portal's own count — collected 75 of 137 (54.7%), kept 23 — subdivide it",
+  "olx flat/katowice/300k-400k: search ended cleanly but short of the portal's own count — collected 177 of 306 (57.8%), kept 46 — subdivide it",
+  "olx flat/katowice/400k-500k: search ended cleanly but short of the portal's own count — collected 197 of 377 (52.3%), kept 24 — subdivide it",
+  "olx flat/katowice/500k-650k: search ended cleanly but short of the portal's own count — collected 202 of 370 (54.6%), kept 19 — subdivide it",
+  "olx flat/katowice/650k-800k: search ended cleanly but short of the portal's own count — collected 120 of 189 (63.5%), kept 4 — subdivide it",
+  "olx flat/katowice/800k-1M: search ended cleanly but short of the portal's own count — collected 66 of 135 (48.9%), kept 6 — subdivide it",
+  "olx flat/katowice/1M-1500k: search ended cleanly but short of the portal's own count — collected 47 of 76 (61.8%), kept 4 — subdivide it",
+  "olx flat/katowice/1500k-3M: search ended cleanly but short of the portal's own count — collected 21 of 40 (52.5%), kept 2 — subdivide it",
+  "olx flat/katowice/3M+: search ended cleanly but short of the portal's own count — collected 2 of 3 (66.7%), kept 0 — subdivide it",
+  "olx flat/gliwice: search ended cleanly but short of the portal's own count — collected 334 of 589 (56.7%), kept 90 — subdivide it",
+  "olx flat/zabrze: search ended cleanly but short of the portal's own count — collected 228 of 407 (56.0%), kept 57 — subdivide it",
+  "olx flat/bytom: search ended cleanly but short of the portal's own count — collected 327 of 579 (56.5%), kept 89 — subdivide it",
+  "olx flat/sosnowiec: search ended cleanly but short of the portal's own count — collected 366 of 661 (55.4%), kept 85 — subdivide it",
+  "olx flat/czestochowa: search ended cleanly but short of the portal's own count — collected 511 of 828 (61.7%), kept 80 — subdivide it",
+  "olx flat/tychy: search ended cleanly but short of the portal's own count — collected 168 of 271 (62.0%), kept 44 — subdivide it",
+  "olx flat/rybnik: search ended cleanly but short of the portal's own count — collected 177 of 324 (54.6%), kept 36 — subdivide it",
+  "olx flat/dabrowa-gornicza: search ended cleanly but short of the portal's own count — collected 174 of 313 (55.6%), kept 49 — subdivide it",
+  "olx flat/bielsko-biala: search ended cleanly but short of the portal's own count — collected 318 of 578 (55.0%), kept 78 — subdivide it",
+  "olx flat/ruda-slaska: search ended cleanly but short of the portal's own count — collected 192 of 325 (59.1%), kept 58 — subdivide it",
+  "olx flat/jastrzebie-zdroj: search ended cleanly but short of the portal's own count — collected 123 of 218 (56.4%), kept 36 — subdivide it",
+  "olx flat/jaworzno: search ended cleanly but short of the portal's own count — collected 65 of 112 (58.0%), kept 19 — subdivide it",
+  "olx flat/chorzow: portal refused to serve past page 10 — collected 218 of 401 (54.4%), kept 36 — subdivision is the only way to see the rest",
+  "olx flat/chorzow/0-200k: search ended cleanly but short of the portal's own count — collected 26 of 53 (49.1%), kept 4 — subdivide it",
+  "olx flat/chorzow/200k-300k: search ended cleanly but short of the portal's own count — collected 69 of 139 (49.6%), kept 13 — subdivide it",
+  "olx flat/chorzow/300k-400k: search ended cleanly but short of the portal's own count — collected 47 of 89 (52.8%), kept 5 — subdivide it",
+  "olx flat/chorzow/400k-500k: search ended cleanly but short of the portal's own count — collected 31 of 52 (59.6%), kept 6 — subdivide it",
+  "olx flat/chorzow/500k-650k: search ended cleanly but short of the portal's own count — collected 23 of 36 (63.9%), kept 4 — subdivide it",
+  "olx flat/chorzow/650k-800k: search ended cleanly but short of the portal's own count — collected 11 of 20 (55.0%), kept 1 — subdivide it",
+  "olx flat/chorzow/800k-1M: search ended cleanly but short of the portal's own count — collected 4 of 5 (80.0%), kept 1 — subdivide it",
+  "olx flat/chorzow/1M-1500k: search ended cleanly but short of the portal's own count — collected 5 of 6 (83.3%), kept 0 — subdivide it",
+  "olx flat/myslowice: search ended cleanly but short of the portal's own count — collected 118 of 196 (60.2%), kept 16 — subdivide it",
+  "olx flat/siemianowice-slaskie: search ended cleanly but short of the portal's own count — collected 96 of 178 (53.9%), kept 18 — subdivide it",
+  "olx flat/tarnowskie-gory: search ended cleanly but short of the portal's own count — collected 82 of 141 (58.2%), kept 13 — subdivide it",
+  "olx flat/bedzin: search ended cleanly but short of the portal's own count — collected 98 of 162 (60.5%), kept 23 — subdivide it",
+  "olx flat/piekary-slaskie: search ended cleanly but short of the portal's own count — collected 46 of 72 (63.9%), kept 11 — subdivide it",
+  "olx flat/raciborz: search ended cleanly but short of the portal's own count — collected 58 of 101 (57.4%), kept 15 — subdivide it",
+  "olx flat/swietochlowice: search ended cleanly but short of the portal's own count — collected 94 of 157 (59.9%), kept 28 — subdivide it",
+  "olx flat/zory: search ended cleanly but short of the portal's own count — collected 78 of 121 (64.5%), kept 26 — subdivide it",
+  "olx flat/wodzislaw-slaski: search ended cleanly but short of the portal's own count — collected 61 of 98 (62.2%), kept 15 — subdivide it",
+  "olx flat/mikolow: search ended cleanly but short of the portal's own count — collected 34 of 67 (50.7%), kept 8 — subdivide it",
+  "olx flat/knurow: search ended cleanly but short of the portal's own count — collected 47 of 87 (54.0%), kept 16 — subdivide it",
+  "olx flat/czeladz: search ended cleanly but short of the portal's own count — collected 50 of 87 (57.5%), kept 11 — subdivide it",
+  "olx flat/lubliniec: search ended cleanly but short of the portal's own count — collected 29 of 47 (61.7%), kept 8 — subdivide it",
+  "olx flat/pszczyna: search ended cleanly but short of the portal's own count — collected 25 of 36 (69.4%), kept 7 — subdivide it",
+  "olx flat/czechowice-dziedzice: search ended cleanly but short of the portal's own count — collected 38 of 67 (56.7%), kept 14 — subdivide it",
+  "olx flat/zawiercie: search ended cleanly but short of the portal's own count — collected 62 of 108 (57.4%), kept 31 — subdivide it",
+  "olx flat/cieszyn: search ended cleanly but short of the portal's own count — collected 29 of 49 (59.2%), kept 12 — subdivide it",
+  "olx flat/myszkow: search ended cleanly but short of the portal's own count — collected 22 of 29 (75.9%), kept 14 — subdivide it",
+  "olx flat/klobuck: search ended cleanly but short of the portal's own count — collected 6 of 7 (85.7%), kept 4 — subdivide it",
+  "olx flat/bierun: search ended cleanly but short of the portal's own count — collected 4 of 9 (44.4%), kept 2 — subdivide it",
+  "olx flat/laziska-gorne: search ended cleanly but short of the portal's own count — collected 11 of 18 (61.1%), kept 5 — subdivide it",
+  "olx flat/rydultowy: search ended cleanly but short of the portal's own count — collected 11 of 18 (61.1%), kept 2 — subdivide it",
+  "olx flat/orzesze: search ended cleanly but short of the portal's own count — collected 1 of 4 (25.0%) — subdivide it",
+  "olx flat/pyskowice: search ended cleanly but short of the portal's own count — collected 11 of 24 (45.8%), kept 9 — subdivide it",
+  "olx flat/ornontowice: search ended cleanly but short of the portal's own count — collected 7 of 8 (87.5%), kept 1 — subdivide it",
+  "olx flat/toszek: search ended cleanly but short of the portal's own count — collected 5 of 7 (71.4%), kept 0 — subdivide it",
+  "olx flat/blachownia: search ended cleanly but short of the portal's own count — collected 9 of 16 (56.2%), kept 0 — subdivide it",
+  "olx flat/buczkowice: search ended cleanly but short of the portal's own count — collected 1 of 3 (33.3%), kept 0 — subdivide it",
+  "olx flat/czerwionka-leszczyny: search ended cleanly but short of the portal's own count — collected 28 of 40 (70.0%), kept 12 — subdivide it",
+  "olx flat/jaworze: search ended cleanly but short of the portal's own count — collected 1 of 3 (33.3%), kept 0 — subdivide it",
+  "olx flat/lodygowice: search ended cleanly but short of the portal's own count — collected 3 of 5 (60.0%), kept 2 — subdivide it",
+  "olx flat/siewierz: search ended cleanly but short of the portal's own count — collected 17 of 24 (70.8%), kept 2 — subdivide it",
+  "olx flat/skoczow: search ended cleanly but short of the portal's own count — collected 14 of 18 (77.8%), kept 5 — subdivide it",
+  "olx flat/szczyrk: search ended cleanly but short of the portal's own count — collected 21 of 40 (52.5%), kept 1 — subdivide it",
+  "olx flat/ustron: search ended cleanly but short of the portal's own count — collected 28 of 49 (57.1%), kept 3 — subdivide it",
+  "olx flat/wisla: search ended cleanly but short of the portal's own count — collected 19 of 26 (73.1%), kept 5 — subdivide it",
+  "olx flat/zywiec: search ended cleanly but short of the portal's own count — collected 33 of 50 (66.0%), kept 16 — subdivide it",
+  "olx flat/0-200k: search ended cleanly but short of the portal's own count — collected 551 of 1000 (55.1%), kept 202 — subdivide it",
+  "olx flat/1M-1500k: search ended cleanly but short of the portal's own count — collected 113 of 177 (63.8%), kept 8 — subdivide it",
+  "olx flat/1500k-3M: search ended cleanly but short of the portal's own count — collected 27 of 51 (52.9%), kept 3 — subdivide it",
+  "olx flat/3M+: search ended cleanly but short of the portal's own count — collected 3 of 6 (50.0%), kept 1 — subdivide it",
+  "olx flat/400k-450k: search ended cleanly but short of the portal's own count — collected 392 of 781 (50.2%), kept 81 — subdivide it",
+  "olx flat/450k-500k: search ended cleanly but short of the portal's own count — collected 455 of 822 (55.4%), kept 76 — subdivide it",
+  "olx flat/500k-575k: search ended cleanly but short of the portal's own count — collected 415 of 714 (58.1%), kept 64 — subdivide it",
+  "olx flat/575k-650k: search ended cleanly but short of the portal's own count — collected 321 of 579 (55.4%), kept 40 — subdivide it",
+  "olx flat/650k-725k: search ended cleanly but short of the portal's own count — collected 203 of 354 (57.3%), kept 23 — subdivide it",
+  "olx flat/725k-800k: search ended cleanly but short of the portal's own count — collected 167 of 283 (59.0%), kept 16 — subdivide it",
+  "olx flat/800k-900k: search ended cleanly but short of the portal's own count — collected 120 of 195 (61.5%), kept 10 — subdivide it",
+  "olx flat/900k-1M: search ended cleanly but short of the portal's own count — collected 70 of 124 (56.5%), kept 6 — subdivide it",
+  "olx flat/200k-225k: search ended cleanly but short of the portal's own count — collected 221 of 394 (56.1%), kept 68 — subdivide it",
+  "olx flat/225k-250k: search ended cleanly but short of the portal's own count — collected 371 of 653 (56.8%), kept 121 — subdivide it",
+  "olx flat/250k-275k: search ended cleanly but short of the portal's own count — collected 311 of 549 (56.6%), kept 101 — subdivide it",
+  "olx flat/275k-300k: search ended cleanly but short of the portal's own count — collected 413 of 757 (54.6%), kept 107 — subdivide it",
+  "olx flat/300k-325k: search ended cleanly but short of the portal's own count — collected 266 of 455 (58.5%), kept 72 — subdivide it",
+  "olx flat/325k-350k: search ended cleanly but short of the portal's own count — collected 356 of 628 (56.7%), kept 95 — subdivide it",
+  "olx flat/375k-400k: search ended cleanly but short of the portal's own count — collected 367 of 624 (58.8%), kept 93 — subdivide it",
+  "olx flat/350k-362k: search ended cleanly but short of the portal's own count — collected 180 of 297 (60.6%), kept 60 — subdivide it",
+  "olx flat/362k-375k: search ended cleanly but short of the portal's own count — collected 162 of 266 (60.9%), kept 45 — subdivide it"
+ ]
+}
